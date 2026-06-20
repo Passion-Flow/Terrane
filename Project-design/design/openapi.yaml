@@ -1,0 +1,215 @@
+# Terrane API stub（设计期手写，开发期 FastAPI 自动生成后 CI diff 校验以本文件为基线）
+# 对齐 03-api.md v1.1；统一信封/错误码/分页/Idempotency-Key 见 components
+openapi: 3.1.0
+info:
+  title: Terrane API
+  version: "1.0.0"
+  description: 前台业务 API（/api/v1）。后台 /admin-api/v1 与网关内部 /v1 另出 spec；MCP 面走 MCP 协议非 REST。
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+tags:
+  - {name: auth}
+  - {name: kb}
+  - {name: sources}
+  - {name: ingest}
+  - {name: pages}
+  - {name: search}
+  - {name: chat}
+  - {name: graph}
+  - {name: memory}
+  - {name: agents}
+  - {name: lint}
+  - {name: connectors}
+  - {name: audio}
+  - {name: keys}
+  - {name: mcp-servers}
+  - {name: reader}
+  - {name: notifications}
+  - {name: budget-usage}
+  - {name: misc}
+
+paths:
+  # ── auth ──
+  /auth/login: {post: {tags: [auth], security: [], summary: 登录（限速+锁定）, responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /auth/logout: {post: {tags: [auth], summary: 登出, responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /auth/register: {post: {tags: [auth], security: [], summary: 注册（防枚举）, responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /auth/reset: {post: {tags: [auth], security: [], summary: 重置密码（一次性 token）, responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /auth/2fa: {post: {tags: [auth], summary: TOTP 绑定/校验, responses: {"200": {$ref: "#/components/responses/OK"}}}}
+
+  # ── kb ──
+  /kb:
+    get: {tags: [kb], summary: 库列表（我的/共享/Workspace，含权限过滤）, responses: {"200": {$ref: "#/components/responses/Page"}}}
+    post: {tags: [kb], summary: 创建库（默认 private，初始化 Schema v1 + AGE graph + git 仓）, responses: {"201": {$ref: "#/components/responses/OK"}}}
+  /kb/{kbId}:
+    get: {tags: [kb], summary: 库详情, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}
+    patch: {tags: [kb], summary: 库设置（可见性/检索档位/git 镜像/阈值）, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}
+    delete:
+      tags: [kb]
+      summary: 删除库（硬删级联+git 销毁；body.confirm_name 必须等于库名）
+      parameters: [{$ref: "#/components/parameters/kbId"}]
+      responses: {"204": {description: deleted}, "422": {$ref: "#/components/responses/Err"}}
+  /kb/{kbId}/schema:
+    get: {tags: [kb], summary: Schema 版本链, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"200": {$ref: "#/components/responses/Page"}}}
+    post: {tags: [kb], summary: 提交新 Schema 版本（JSON Schema 校验，见 02 §3.1）, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"201": {$ref: "#/components/responses/OK"}}}
+  /kb/{kbId}/share:
+    post: {tags: [kb], summary: 共享邀请/角色变更（viewer|editor；站内通知+邮件）, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}
+    delete: {tags: [kb], summary: 移除成员, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"204": {description: removed}}}
+  /kb/{kbId}/export: {post: {tags: [kb], summary: 全量导出任务（Markdown+附件+图谱 JSON → export_jobs）, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"202": {$ref: "#/components/responses/OK"}}}}
+  /kb/{kbId}:transfer-owner: {post: {tags: [kb], summary: owner 转移（双方确认，审计）, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /kb/{kbId}/activity: {get: {tags: [kb], summary: 库日志时间线（log 页数据，游标分页）, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"200": {$ref: "#/components/responses/Page"}}}}
+  /kb/{kbId}/events:
+    get:
+      tags: [kb]
+      summary: SSE 库事件流（page.*/graph.*/ingest.stage/lint.ready，≤2s；事件枚举 03-api §3.5）
+      parameters: [{$ref: "#/components/parameters/kbId"}]
+      responses: {"200": {description: text/event-stream}}
+
+  # ── sources / ingest ──
+  /kb/{kbId}/sources:
+    get: {tags: [sources], summary: Raw 源列表（版本链/解析状态）, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"200": {$ref: "#/components/responses/Page"}}}
+    post: {tags: [sources], summary: 上传（multipart）或 URL 摄入；受预算闸门, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"202": {$ref: "#/components/responses/OK"}}}
+  /kb/{kbId}/sources:estimate: {post: {tags: [sources], summary: 摄入估价（D4 公式，区间 ±40%）, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /kb/{kbId}/sources:push:
+    post:
+      tags: [sources]
+      summary: Clipper/Sync 推送摄入（API Key ingest_write；幂等 content_hash）
+      security: [{apiKey: []}]
+      parameters: [{$ref: "#/components/parameters/kbId"}]
+      responses: {"202": {$ref: "#/components/responses/OK"}, "429": {$ref: "#/components/responses/Err"}}
+  /sources/{sourceId}:
+    get: {tags: [sources], summary: 源详情+解析产物指针, parameters: [{$ref: "#/components/parameters/sourceId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}
+    delete: {tags: [sources], summary: 硬删（级联 chunks/受影响子图重算）, parameters: [{$ref: "#/components/parameters/sourceId"}], responses: {"204": {description: deleted}}}
+  /sources/{sourceId}/toc: {get: {tags: [reader], summary: 伴读章节目录, parameters: [{$ref: "#/components/parameters/sourceId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /sources/{sourceId}/chapters/{n}: {get: {tags: [reader], summary: 伴读逐章正文（伴读会话带 context.chapter_locator）, parameters: [{$ref: "#/components/parameters/sourceId"}, {name: n, in: path, required: true, schema: {type: integer}}], responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /kb/{kbId}/ingest-jobs: {get: {tags: [ingest], summary: 摄入任务列表（阶段/账单/重试/取消入口）, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"200": {$ref: "#/components/responses/Page"}}}}
+  /ingest-jobs/{jobId}: {get: {tags: [ingest], summary: 任务详情（stage_detail+est/spent tokens）, parameters: [{name: jobId, in: path, required: true, schema: {type: string, format: uuid}}], responses: {"200": {$ref: "#/components/responses/OK"}}}}
+
+  # ── pages ──
+  /kb/{kbId}/pages: {get: {tags: [pages], summary: 页面树/索引, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"200": {$ref: "#/components/responses/Page"}}}}
+  /pages/{pageId}:
+    get: {tags: [pages], summary: 页面读取（物化投影+frontmatter+推断标注）, parameters: [{$ref: "#/components/parameters/pageId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}
+    put:
+      tags: [pages]
+      summary: 接管编辑保存（If-Match rev 乐观锁；人工事实回写图）
+      parameters: [{$ref: "#/components/parameters/pageId"}, {name: If-Match, in: header, required: true, schema: {type: string}}]
+      responses: {"200": {$ref: "#/components/responses/OK"}, "409": {$ref: "#/components/responses/Err"}}
+  /pages/{pageId}/revisions: {get: {tags: [pages], summary: 历史版本, parameters: [{$ref: "#/components/parameters/pageId"}], responses: {"200": {$ref: "#/components/responses/Page"}}}}
+  /pages/{pageId}/backlinks: {get: {tags: [pages], summary: 反链（wiki_links 缓存表）, parameters: [{$ref: "#/components/parameters/pageId"}], responses: {"200": {$ref: "#/components/responses/Page"}}}}
+  /pages/{pageId}:takeover: {post: {tags: [pages], summary: 进入接管编辑（页级锁）, parameters: [{$ref: "#/components/parameters/pageId"}], responses: {"200": {$ref: "#/components/responses/OK"}, "409": {$ref: "#/components/responses/Err"}}}}
+  /pages/{pageId}:release: {post: {tags: [pages], summary: 释放接管, parameters: [{$ref: "#/components/parameters/pageId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}}
+
+  # ── search / chat ──
+  /search:
+    post:
+      tags: [search]
+      summary: 混合检索（多库勾选；档位自适应路数；返回命中+locator）
+      security: [{sessionCookie: []}, {apiKey: []}]
+      responses: {"200": {$ref: "#/components/responses/OK"}}
+  /conversations:
+    get: {tags: [chat], summary: 会话列表, responses: {"200": {$ref: "#/components/responses/Page"}}}
+    post: {tags: [chat], summary: 新建会话（可带 kb_ids/chapter_locator）, responses: {"201": {$ref: "#/components/responses/OK"}}}
+  /conversations/{convId}/messages:
+    post:
+      tags: [chat]
+      summary: 发消息 → SSE 流（token/citation/tool_step/distill_suggest/done）
+      parameters: [{$ref: "#/components/parameters/convId"}]
+      responses: {"200": {description: text/event-stream}}
+  /conversations/{convId}:council: {post: {tags: [chat], summary: 议会模式（≥2 模型；独立作答→匿名互评→主席综合）, parameters: [{$ref: "#/components/parameters/convId"}], responses: {"200": {description: text/event-stream}}}}
+  /messages/{msgId}:distill: {post: {tags: [chat], summary: 回填为知识页（草案→确认；去重合并；可撤销）, parameters: [{name: msgId, in: path, required: true, schema: {type: string, format: uuid}}], responses: {"200": {$ref: "#/components/responses/OK"}}}}
+
+  # ── graph ──
+  /kb/{kbId}/graph/overview: {get: {tags: [graph], summary: 宇宙视图（NetworkX 预布局坐标，分页）, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"200": {$ref: "#/components/responses/Page"}}}}
+  /graph/neighborhood: {get: {tags: [graph], summary: 实体邻域（hops≤3，超时 5s）, parameters: [{name: entity, in: query, required: true, schema: {type: string}}, {name: hops, in: query, schema: {type: integer, maximum: 3}}], responses: {"200": {$ref: "#/components/responses/OK"}, "408": {$ref: "#/components/responses/Err"}}}}
+  /kb/{kbId}/graph:export: {post: {tags: [graph], summary: 图谱导出（JSON/交互式 HTML）, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"202": {$ref: "#/components/responses/OK"}}}}
+
+  # ── memory ──
+  /memory: {get: {tags: [memory], summary: 三类记忆列表（仅本人）, responses: {"200": {$ref: "#/components/responses/Page"}}}}
+  /memory/{memId}:
+    patch: {tags: [memory], summary: 编辑/置顶, parameters: [{$ref: "#/components/parameters/memId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}
+    delete: {tags: [memory], summary: 硬删（含时序图节点边）, parameters: [{$ref: "#/components/parameters/memId"}], responses: {"204": {description: deleted}}}
+  /memory/timeline: {get: {tags: [memory], summary: 记忆时间线, responses: {"200": {$ref: "#/components/responses/Page"}}}}
+  /memory/settings: {put: {tags: [memory], summary: 唤回阈值/每日上限/开关/时序层（用户级）, responses: {"200": {$ref: "#/components/responses/OK"}}}}
+
+  # ── agents / lint ──
+  /agent-tasks:
+    get: {tags: [agents], summary: 任务列表（即时/cron）, responses: {"200": {$ref: "#/components/responses/Page"}}}
+    post: {tags: [agents], summary: 创建（预算闸门前置）, responses: {"201": {$ref: "#/components/responses/OK"}, "402": {$ref: "#/components/responses/Err"}}}
+  /agent-tasks/{taskId}/runs: {get: {tags: [agents], summary: 运行历史, parameters: [{$ref: "#/components/parameters/taskId"}], responses: {"200": {$ref: "#/components/responses/Page"}}}}
+  /runs/{runId}: {get: {tags: [agents], summary: 步骤流（SSE）/详情, parameters: [{$ref: "#/components/parameters/runId"}], responses: {"200": {description: text/event-stream}}}}
+  /runs/{runId}:cancel: {post: {tags: [agents], summary: 中断, parameters: [{$ref: "#/components/parameters/runId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /runs/{runId}/diff: {get: {tags: [agents], summary: 写库 diff 审计（可回滚）, parameters: [{$ref: "#/components/parameters/runId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /kb/{kbId}/lint-reports: {get: {tags: [lint], summary: 体检报告列表, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"200": {$ref: "#/components/responses/Page"}}}}
+  /kb/{kbId}/lint:run: {post: {tags: [lint], summary: 手动触发体检（预算闸门）, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"202": {$ref: "#/components/responses/OK"}}}}
+  /lint-items/{itemId}:fix: {post: {tags: [lint], summary: 修复项（diff 预览→确认→可回滚）, parameters: [{name: itemId, in: path, required: true, schema: {type: string, format: uuid}}], responses: {"200": {$ref: "#/components/responses/OK"}}}}
+
+  # ── connectors / audio / keys / mcp-servers ──
+  /connectors:
+    get: {tags: [connectors], summary: 类型目录+实例列表+同步状态, responses: {"200": {$ref: "#/components/responses/Page"}}}
+    post: {tags: [connectors], summary: 创建实例（凭据进 vault）, responses: {"201": {$ref: "#/components/responses/OK"}}}
+  /connectors/{connId}:test: {post: {tags: [connectors], summary: 连通性测试, parameters: [{$ref: "#/components/parameters/connId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /connectors/{connId}:sync-now: {post: {tags: [connectors], summary: 立即同步, parameters: [{$ref: "#/components/parameters/connId"}], responses: {"202": {$ref: "#/components/responses/OK"}}}}
+  /kb/{kbId}/audio-overviews:
+    get: {tags: [audio], summary: 列表+产物下载指针, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"200": {$ref: "#/components/responses/Page"}}}
+    post: {tags: [audio], summary: 脚本预览→确认生成（TTS 未配置 503 TRN_OFFLINE_FEATURE_UNAVAILABLE）, parameters: [{$ref: "#/components/parameters/kbId"}], responses: {"202": {$ref: "#/components/responses/OK"}, "503": {$ref: "#/components/responses/Err"}}}
+  /keys:
+    get: {tags: [keys], summary: API Key 列表（prefix+last_used）, responses: {"200": {$ref: "#/components/responses/Page"}}}
+    post: {tags: [keys], summary: 创建（明文仅本响应一次；scope/rpm）, responses: {"201": {$ref: "#/components/responses/OK"}}}
+  /keys/{keyId}: {delete: {tags: [keys], summary: 吊销（即时生效）, parameters: [{$ref: "#/components/parameters/keyId"}], responses: {"204": {description: revoked}}}}
+  /mcp-servers:
+    get: {tags: [mcp-servers], summary: 第三方 MCP server 列表, responses: {"200": {$ref: "#/components/responses/Page"}}}
+    post: {tags: [mcp-servers], summary: 添加（URL+鉴权填表即用）, responses: {"201": {$ref: "#/components/responses/OK"}}}
+  /mcp-servers/{mcpId}:test: {post: {tags: [mcp-servers], summary: 连通+工具发现, parameters: [{$ref: "#/components/parameters/mcpId"}], responses: {"200": {$ref: "#/components/responses/OK"}}}}
+
+  # ── notifications / budget / misc ──
+  /notifications: {get: {tags: [notifications], summary: Bell 列表/已读, responses: {"200": {$ref: "#/components/responses/Page"}}}}
+  /notifications/stream: {get: {tags: [notifications], summary: SSE 通知流, responses: {"200": {description: text/event-stream}}}}
+  /notification-preferences: {put: {tags: [notifications], summary: 类型偏好, responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /budget: {get: {tags: [budget-usage], summary: 预算与消耗（库/WS 级）, responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /usage: {get: {tags: [budget-usage], summary: 用量明细/聚合（purpose/kb 维度）, responses: {"200": {$ref: "#/components/responses/Page"}}}}
+  /capabilities: {get: {tags: [misc], summary: 能力状态（脱敏：角色路由可用性/模型数/TTS 态——议会隐藏与置灰数据源）, responses: {"200": {$ref: "#/components/responses/OK"}}}}
+  /events:track: {post: {tags: [misc], summary: 本地埋点（product_events，永不外发）, responses: {"204": {description: tracked}}}}
+  /license/status:
+    get:
+      tags: [misc]
+      summary: License 状态（锁定态例外路由；锁定轮询 3s/激活 8s；激活动作仅 admin 面）
+      security: []
+      responses: {"200": {$ref: "#/components/responses/OK"}}
+
+components:
+  securitySchemes:
+    sessionCookie: {type: apiKey, in: cookie, name: terrane_session}
+    apiKey: {type: http, scheme: bearer, description: "trn_ 前缀 API Key；scopes: search_read/ingest_write/memory_rw/admin"}
+  parameters:
+    kbId: {name: kbId, in: path, required: true, schema: {type: string, format: uuid}}
+    sourceId: {name: sourceId, in: path, required: true, schema: {type: string, format: uuid}}
+    pageId: {name: pageId, in: path, required: true, schema: {type: string, format: uuid}}
+    convId: {name: convId, in: path, required: true, schema: {type: string, format: uuid}}
+    memId: {name: memId, in: path, required: true, schema: {type: string, format: uuid}}
+    taskId: {name: taskId, in: path, required: true, schema: {type: string, format: uuid}}
+    runId: {name: runId, in: path, required: true, schema: {type: string, format: uuid}}
+    connId: {name: connId, in: path, required: true, schema: {type: string, format: uuid}}
+    keyId: {name: keyId, in: path, required: true, schema: {type: string, format: uuid}}
+    mcpId: {name: mcpId, in: path, required: true, schema: {type: string, format: uuid}}
+  schemas:
+    Envelope:
+      type: object
+      required: [code, message, request_id]
+      properties:
+        code: {type: string, description: "TRN_* 业务码或基础码；成功 OK"}
+        message: {type: string, description: i18n code（后端不回已翻译文本）}
+        details: {type: object}
+        request_id: {type: string, format: uuid}
+        data: {description: 业务载荷}
+    PageEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            cursor: {type: string, nullable: true}
+            has_more: {type: boolean}
+  responses:
+    OK: {description: 成功, content: {application/json: {schema: {$ref: "#/components/schemas/Envelope"}}}}
+    Page: {description: 分页, content: {application/json: {schema: {$ref: "#/components/schemas/PageEnvelope"}}}}
+    Err: {description: "错误（TRN_* 见 terrane-shared/error-codes.yaml）", content: {application/json: {schema: {$ref: "#/components/schemas/Envelope"}}}}

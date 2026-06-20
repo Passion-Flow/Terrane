@@ -1,0 +1,12 @@
+{
+  "master": {
+    "key_id": "navtra-master",
+    "alg": "ed25519",
+    "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAnKvmjDDt+NVKYjwy+/n/7n+gl5vkSjOE3Pgqu2cvvfw=\n-----END PUBLIC KEY-----\n"
+  },
+  "edge_lease": {
+    "key_id": "navtra-edge-lease",
+    "alg": "ed25519",
+    "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAgO8h5CdMm+QP//IGgHvpg7EfE6ukVcduloWVkY5/nuM=\n-----END PUBLIC KEY-----\n"
+  }
+}

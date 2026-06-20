@@ -1,0 +1,92 @@
+# 前台 API
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: {{ .Release.Name }}-server }
+spec:
+  replicas: {{ .Values.replicas.server }}
+  selector: { matchLabels: { app: {{ .Release.Name }}-server } }
+  template:
+    metadata: { labels: { app: {{ .Release.Name }}-server } }
+    spec:
+      containers:
+        - name: server
+          image: "{{ .Values.image.registry }}/terrane-server:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["sh","-c","python -m alembic upgrade head && python main.py"]
+          env:
+            {{- include "terrane.pyenv" . | nindent 12 }}
+            - { name: DATABASE_NAME, value: terrane_main }
+          ports: [ { containerPort: 43001 } ]
+          readinessProbe: { httpGet: { path: /livez, port: 43001 }, initialDelaySeconds: 15 }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: {{ .Release.Name }}-server }
+spec: { selector: { app: {{ .Release.Name }}-server }, ports: [ { port: 43001, targetPort: 43001 } ] }
+---
+# 后台 API
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: {{ .Release.Name }}-admin-server }
+spec:
+  replicas: {{ .Values.replicas.adminServer }}
+  selector: { matchLabels: { app: {{ .Release.Name }}-admin-server } }
+  template:
+    metadata: { labels: { app: {{ .Release.Name }}-admin-server } }
+    spec:
+      containers:
+        - name: admin-server
+          image: "{{ .Values.image.registry }}/terrane-admin-server:{{ .Values.image.tag }}"
+          command: ["sh","-c","python -m app.cli migrate up && python main.py"]
+          env:
+            {{- include "terrane.pyenv" . | nindent 12 }}
+            - { name: DATABASE_NAME, value: terrane_admin }
+          ports: [ { containerPort: 43003 } ]
+          readinessProbe: { httpGet: { path: /livez, port: 43003 }, initialDelaySeconds: 15 }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: {{ .Release.Name }}-admin-server }
+spec: { selector: { app: {{ .Release.Name }}-admin-server }, ports: [ { port: 43003, targetPort: 43003 } ] }
+---
+# 网关
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: {{ .Release.Name }}-gateway }
+spec:
+  replicas: {{ .Values.replicas.gateway }}
+  selector: { matchLabels: { app: {{ .Release.Name }}-gateway } }
+  template:
+    metadata: { labels: { app: {{ .Release.Name }}-gateway } }
+    spec:
+      containers:
+        - name: gateway
+          image: "{{ .Values.image.registry }}/terrane-gateway:{{ .Values.image.tag }}"
+          ports: [ { containerPort: 43080 } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: {{ .Release.Name }}-gateway }
+spec: { selector: { app: {{ .Release.Name }}-gateway }, ports: [ { port: 43080, targetPort: 43080 } ] }
+---
+{{- range $svc := list "web" "admin-web" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: {{ $.Release.Name }}-{{ $svc }} }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: {{ $.Release.Name }}-{{ $svc }} } }
+  template:
+    metadata: { labels: { app: {{ $.Release.Name }}-{{ $svc }} } }
+    spec:
+      containers:
+        - name: {{ $svc }}
+          image: "{{ $.Values.image.registry }}/terrane-{{ $svc }}:{{ $.Values.image.tag }}"
+          ports: [ { containerPort: 80 } ]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: {{ $.Release.Name }}-{{ $svc }} }
+spec: { selector: { app: {{ $.Release.Name }}-{{ $svc }} }, ports: [ { port: 80, targetPort: 80 } ] }
+---
+{{- end }}

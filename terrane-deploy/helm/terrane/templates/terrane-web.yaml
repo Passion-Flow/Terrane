@@ -1,0 +1,149 @@
+# Front + admin web (nginx SPA) + the data-plane gateway. The web nginx upstreams are baked as
+# `terrane-server:43001` / `terrane-admin-server:43003`, so the Service names must match — install with
+# release name `terrane` (helm install terrane ...). The gateway carries its own license verifier-state
+# on the shared license PVC.
+{{- if .Values.gateway.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "terrane.fullname" . }}-gateway
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.gateway.replicas }}
+  selector: { matchLabels: { app: {{ include "terrane.fullname" . }}-gateway } }
+  strategy: { type: Recreate }
+  template:
+    metadata:
+      labels:
+        app: {{ include "terrane.fullname" . }}-gateway
+        {{- include "terrane.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.gateway.serviceAccountName }}
+      serviceAccountName: {{ .Values.gateway.serviceAccountName | quote }}
+      {{- end }}
+      {{- with (.Values.gateway.nodeSelector | default .Values.global.nodeSelector) }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gateway.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gateway.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: gateway
+          image: {{ include "terrane.image" .Values.gateway.image | quote }}
+          imagePullPolicy: {{ .Values.gateway.image.pullPolicy }}
+          env:
+            - name: TERRANE_LICENSE_STATE_PATH
+              value: /var/lib/terrane/license/state_gateway.json
+            {{- with .Values.gateway.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources: {{- toYaml .Values.gateway.resources | nindent 12 }}
+          volumeMounts:
+            - name: license
+              mountPath: /var/lib/terrane/license
+      volumes:
+        - name: license
+          persistentVolumeClaim: { claimName: {{ include "terrane.fullname" . }}-license }
+{{- end }}
+{{- if .Values.web.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "terrane.fullname" . }}-web
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  selector: { app: {{ include "terrane.fullname" . }}-web }
+  ports: [{ name: http, port: 80, targetPort: 80 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "terrane.fullname" . }}-web
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector: { matchLabels: { app: {{ include "terrane.fullname" . }}-web } }
+  template:
+    metadata:
+      labels:
+        app: {{ include "terrane.fullname" . }}-web
+        {{- include "terrane.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.web.serviceAccountName }}
+      serviceAccountName: {{ .Values.web.serviceAccountName | quote }}
+      {{- end }}
+      {{- with (.Values.web.nodeSelector | default .Values.global.nodeSelector) }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: web
+          image: {{ include "terrane.image" .Values.web.image | quote }}
+          imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+          ports: [{ name: http, containerPort: 80 }]
+          readinessProbe: { httpGet: { path: /, port: 80 }, initialDelaySeconds: 5 }
+          resources: {{- toYaml .Values.web.resources | nindent 12 }}
+{{- end }}
+{{- if .Values.adminWeb.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "terrane.fullname" . }}-admin-web
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  selector: { app: {{ include "terrane.fullname" . }}-admin-web }
+  ports: [{ name: http, port: 80, targetPort: 80 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "terrane.fullname" . }}-admin-web
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.adminWeb.replicas }}
+  selector: { matchLabels: { app: {{ include "terrane.fullname" . }}-admin-web } }
+  template:
+    metadata:
+      labels:
+        app: {{ include "terrane.fullname" . }}-admin-web
+        {{- include "terrane.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.adminWeb.serviceAccountName }}
+      serviceAccountName: {{ .Values.adminWeb.serviceAccountName | quote }}
+      {{- end }}
+      {{- with (.Values.adminWeb.nodeSelector | default .Values.global.nodeSelector) }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.adminWeb.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.adminWeb.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: admin-web
+          image: {{ include "terrane.image" .Values.adminWeb.image | quote }}
+          imagePullPolicy: {{ .Values.adminWeb.image.pullPolicy }}
+          ports: [{ name: http, containerPort: 80 }]
+          readinessProbe: { httpGet: { path: /, port: 80 }, initialDelaySeconds: 5 }
+          resources: {{- toYaml .Values.adminWeb.resources | nindent 12 }}
+{{- end }}

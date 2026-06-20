@@ -1,0 +1,548 @@
+{
+  "brand": {
+    "console": "Admin Console"
+  },
+  "locked": {
+    "message": "License activation required.",
+    "desc": "The Terrane Enterprise license for this deployment has not been activated. Activate it to continue.",
+    "expiredDesc": "The Terrane Enterprise license for this deployment has expired. Re-activate or contact the vendor to renew.",
+    "revokedDesc": "The license for this deployment has been revoked. Contact the vendor.",
+    "mismatchDesc": "The license is not bound to this deployment. Use a license that matches this Deployment ID."
+  },
+  "activate": {
+    "openButton": "Activate",
+    "modalTitle": "License activation",
+    "modalSubtitle": "Enter your license to activate the system.",
+    "method": "Activation method",
+    "online": "Online",
+    "offline": "Offline",
+    "deploymentId": "Deployment ID",
+    "deploymentIdHint": "Generated live from this machine's hardware (hard binding). Provide it to the vendor to issue your license.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "pasteLabel": "Offline license",
+    "pastePlaceholder": "Paste the offline license content…",
+    "codeLabel": "Online activation code",
+    "codePlaceholder": "Enter the online activation code",
+    "cancel": "Cancel",
+    "submit": "Activate",
+    "submitting": "Verifying…",
+    "success": "License activated"
+  },
+  "login": {
+    "title": "Hey, let's get started!",
+    "welcome": "👋 Welcome! Please sign in to access the admin console.",
+    "email": "Email",
+    "password": "Password",
+    "code": "2FA code",
+    "emailPlaceholder": "Your email",
+    "passwordPlaceholder": "Your password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "codeHint": "6-digit code",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
+  },
+  "changePassword": {
+    "title": "First sign-in · Change password",
+    "desc": "The factory super-admin password equals the email. Set a new password before entering the console.",
+    "current": "Current password",
+    "currentPlaceholder": "Factory password (= super-admin email)",
+    "next": "New password",
+    "nextPlaceholder": "Set a new password",
+    "confirm": "Confirm new password",
+    "confirmPlaceholder": "Re-enter the new password",
+    "policy": "At least 12 characters with 3 of: upper, lower, digit, symbol; must not equal your email.",
+    "mismatch": "The two passwords do not match.",
+    "submit": "Set and continue",
+    "submitting": "Saving…",
+    "cancel": "Sign out"
+  },
+  "wizard": {
+    "title": "Setup wizard",
+    "welcome": "Welcome, {name}. Finish a few basics to get started.",
+    "step": {
+      "license": "License",
+      "super_admin": "Super admin",
+      "email": "Email service",
+      "branding": "Branding",
+      "done": "Done"
+    },
+    "emailDesc": "Configure SMTP for verification, notification, and alert emails. Editable later in settings, or skip for now. Works with 163/QQ/Gmail/enterprise mail and any SMTP provider.",
+    "provider": "Email provider",
+    "providerPick": "Pick a provider to auto-fill…",
+    "smtpHost": "SMTP host",
+    "smtpPort": "Port",
+    "smtpEncryption": "Encryption",
+    "encAuto": "Auto (by port)",
+    "encSsl": "SSL/TLS (implicit, 465)",
+    "encStarttls": "STARTTLS (587)",
+    "encNone": "None (25)",
+    "smtpUser": "Username",
+    "smtpPass": "Password / auth code",
+    "smtpFromName": "From name",
+    "smtpFrom": "From address",
+    "fromLockedHint": "This provider requires the From address to equal the login username",
+    "allowInsecure": "Allow insecure TLS (only for internal self-signed certs)",
+    "testEmail": "Send test email",
+    "emailHint": {
+      "auth_failed": "Authentication failed: check username/password. Chinese mailboxes (163/QQ) need an authorization code, not the login password; Gmail/Outlook with 2FA need an app password or OAuth.",
+      "auth_or_tls_required": "Server requires authentication or encryption first. Provide credentials and choose SSL or STARTTLS.",
+      "from_not_allowed": "From address rejected: most providers require it to exactly match the login account. Set the From address to your login email.",
+      "temporary": "Server temporarily unavailable or rate-limiting. Retry shortly; reduce send rate if it persists.",
+      "rejected": "Message rejected by the server (often spam/policy). Review content, sending domain, and SPF/DKIM.",
+      "connect_failed": "Connection failed: check SMTP host, port, and encryption match (465→SSL, 587→STARTTLS), and network reachability.",
+      "tls_failed": "TLS handshake failed: certificate mismatch or wrong encryption mode. For internal self-signed certs, enable \"Allow insecure TLS\".",
+      "smtp_error": "Send failed. Check your SMTP configuration."
+    },
+    "brandingDesc": "Set the product name and accent color, applied across the app and admin console. Editable later in settings.",
+    "productName": "Product name",
+    "accent": "Accent color",
+    "loginSubtitle": "Login subtitle",
+    "skip": "Skip",
+    "saveNext": "Save and continue",
+    "back": "Back",
+    "skipFinish": "Skip and finish",
+    "finish": "Finish and enter",
+    "finishing": "Finishing…",
+    "savedEmail": "Email configuration saved",
+    "testSent": "Test email sent — check your inbox"
+  },
+  "admin": {
+    "logout": "Sign out",
+    "soon": "Soon",
+    "welcomeTitle": "Welcome back",
+    "welcomeDesc": "Signed in to the admin console, {name}. Business modules roll out in later stages.",
+    "role": "Role",
+    "permissions": "Permissions",
+    "roles": {
+      "super_admin": "Super admin",
+      "admin": "Admin",
+      "auditor": "Auditor"
+    },
+    "nav": {
+      "overview": "Overview",
+      "auditLogs": "Audit logs",
+      "workspaces": "Workspaces",
+      "members": "Members",
+      "channels": "Model channels",
+      "branding": "Branding",
+      "settings": "Settings",
+      "account": "Account Security",
+      "knowledgeBases": "Knowledge bases"
+    }
+  },
+  "channels": {
+    "title": "Model channels",
+    "desc": "Configure this deployment's LLM / embedding / rerank / web-search backends (the channel side of the gateway).",
+    "create": "New channel",
+    "createTitle": "New {p} channel",
+    "editTitle": "Edit channel",
+    "empty": "No channels yet. Click \"New channel\" and pick a provider type.",
+    "noKey": "No key",
+    "on": "Enabled",
+    "off": "Disabled",
+    "test": "Test connection",
+    "testing": "Testing…",
+    "testOk": "Connection OK",
+    "testErr": {
+      "auth_failed": "Auth failed: invalid key or no access",
+      "connect_failed": "Connect failed: Base URL/network unreachable",
+      "no_base_url": "Base URL is empty",
+      "failed": "Connection test failed"
+    },
+    "fName": "Name",
+    "fKind": "Purpose",
+    "fBaseUrl": "Base URL",
+    "fModel": "Model",
+    "fKey": "API Key",
+    "deleteTitle": "Delete channel",
+    "deleteDesc": "Delete model channel \"{name}\"? This cannot be undone.",
+    "col": {
+      "name": "Name",
+      "provider": "Provider",
+      "kind": "Purpose",
+      "model": "Model",
+      "status": "Status"
+    },
+    "kind": {
+      "chat": "Chat",
+      "embed": "Embed",
+      "rerank": "Rerank",
+      "web_search": "Web search",
+      "vl": "Multimodal (VL)",
+      "asr": "Speech (ASR)"
+    }
+  },
+  "account": {
+    "nav": {
+      "password": "Edit password"
+    },
+    "password": {
+      "title": "Edit password",
+      "desc": "Change your own admin sign-in password. A new session is issued on change — no re-login needed.",
+      "current": "Current password",
+      "next": "New password",
+      "confirm": "Confirm new password",
+      "policyHint": "Must meet the platform password policy (min length and character classes).",
+      "mismatch": "The two new passwords do not match.",
+      "saved": "Password changed"
+    }
+  },
+  "overview": {
+    "license": "License",
+    "product": "Product",
+    "subscription": "Subscription",
+    "daysLeft": "Days left",
+    "days": "{n} days",
+    "activeUntil": "Active until",
+    "licenseId": "License ID",
+    "recentAudit": "Recent activity",
+    "viewAll": "View all"
+  },
+  "license": {
+    "status": {
+      "active": "Active",
+      "expiring": "Expiring",
+      "expired": "Expired",
+      "revoked": "Revoked",
+      "binding_mismatch": "Binding mismatch",
+      "invalid_signature": "Invalid signature",
+      "locked": "Not activated"
+    }
+  },
+  "ws": {
+    "title": "Workspaces",
+    "desc": "All workspaces (personal/team) on the platform, with member counts and status.",
+    "searchPlaceholder": "Search by name or slug…",
+    "empty": "No workspaces yet.",
+    "create": "New workspace",
+    "createTitle": "Create workspace",
+    "fName": "Name",
+    "fNamePlaceholder": "e.g. Engineering team",
+    "fKind": "Kind",
+    "showMembers": "View members",
+    "addMember": "Add member",
+    "edit": "Edit",
+    "delete": "Delete",
+    "editTitle": "Edit workspace",
+    "deleteTitle": "Delete workspace",
+    "deleteDesc": "Delete workspace \"{name}\"? This cannot be undone and removes all its users and data.",
+    "col": {
+      "name": "Name",
+      "kind": "Kind",
+      "status": "Status",
+      "members": "Members",
+      "created": "Created"
+    },
+    "kind": {
+      "personal": "Personal",
+      "team": "Team"
+    },
+    "status": {
+      "active": "Active",
+      "suspended": "Suspended"
+    }
+  },
+  "members": {
+    "title": "Members",
+    "desc": "All registered front-end users, their workspace, role, and status.",
+    "searchPlaceholder": "Search by email or username…",
+    "empty": "No members yet.",
+    "never": "Never",
+    "create": "New member",
+    "createTitle": "Create member",
+    "createdTitle": "Member created",
+    "createdDesc": "Account created for {email} (ready to use, email verification skipped).",
+    "genPassword": "Auto-generated initial password",
+    "genPasswordHint": "Hand this to the user securely — it's shown only once.",
+    "fEmail": "Email",
+    "fUsername": "Username (optional)",
+    "fWorkspace": "Workspace",
+    "fWorkspacePick": "Pick a workspace…",
+    "fRole": "Role",
+    "fPassword": "Password (optional)",
+    "fPasswordPlaceholder": "Leave blank to auto-generate a strong password",
+    "edit": "Edit",
+    "resetPw": "Reset password",
+    "delete": "Delete",
+    "editTitle": "Edit member",
+    "resetTitle": "Reset password",
+    "resetDesc": "Generate a new strong password for {email}? The old password stops working immediately.",
+    "resetConfirm": "Reset",
+    "deleteTitle": "Delete member",
+    "deleteDesc": "Delete member \"{email}\"? This cannot be undone. A personal workspace will be removed too.",
+    "filteredByWs": "Showing members of this workspace only",
+    "clearWsFilter": "Clear filter",
+    "col": {
+      "user": "User",
+      "workspace": "Workspace",
+      "role": "Role",
+      "status": "Status",
+      "lastLogin": "Last login",
+      "created": "Registered"
+    },
+    "status": {
+      "active": "Active",
+      "disabled": "Disabled",
+      "pending": "Pending"
+    },
+    "role": {
+      "Owner": "Owner",
+      "Admin": "Admin",
+      "Editor": "Editor",
+      "Member": "Member",
+      "Reader": "Reader"
+    }
+  },
+  "operators": {
+    "title": "System Users",
+    "desc": "Accounts that can sign in to the admin console (Super Admin / Admin / Auditor), with roles and status.",
+    "searchPlaceholder": "Search by email or username…",
+    "empty": "No operators yet.",
+    "you": "(you)",
+    "create": "New operator",
+    "createTitle": "New operator",
+    "createdTitle": "Operator created",
+    "createdDesc": "Admin account created for {email}. They must change the initial password on first sign-in.",
+    "genPassword": "Auto-generated initial password",
+    "genPasswordHint": "Hand it over securely — shown only once; they must change it on first sign-in.",
+    "resetHint": "Hand it over securely — shown only once; they must change it on first sign-in.",
+    "fEmail": "Email",
+    "fUsername": "Username",
+    "fRole": "Role",
+    "fPassword": "Password (optional)",
+    "fPasswordPlaceholder": "Leave blank to auto-generate and force change on first sign-in",
+    "editTitle": "Edit operator",
+    "resetDesc": "Generate a new strong password for {email}? The old one stops working immediately and they must change it on first sign-in.",
+    "deleteTitle": "Delete operator",
+    "deleteDesc": "Delete operator \"{email}\"? This cannot be undone; all their sessions are revoked.",
+    "col": {
+      "user": "User",
+      "role": "Role",
+      "status": "Status",
+      "lastLogin": "Last login",
+      "created": "Created"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "desc": "Platform configuration — editable any time after the setup wizard.",
+    "nav": {
+      "operators": "System Users",
+      "email": "Email service",
+      "login": "Login settings",
+      "password": "Password policy",
+      "license": "License"
+    },
+    "license": {
+      "title": "License",
+      "desc": "View the current Terrane Enterprise license. To replace it, use the activation flow on the lock screen.",
+      "current": "License status",
+      "statusLabel": "Status",
+      "customer": "Customer",
+      "activeFrom": "Active from",
+      "clusterId": "Cluster ID",
+      "deploymentId": "Deployment ID",
+      "workspaces": "Workspaces (used / limit)",
+      "membersLimit": "Members limit",
+      "unlimited": "Unlimited"
+    },
+    "savedSecurity": "Saved",
+    "password": {
+      "title": "Password policy",
+      "desc": "Password complexity rules — applied to registration, password change, admin-created members, and resets."
+    },
+    "login": {
+      "title": "Login settings",
+      "desc": "Login protection and sessions — lockout, session lifetime, etc.; enforced across front and back ends."
+    },
+    "security": {
+      "title": "Security",
+      "desc": "Platform security policy — password rules, etc., enforced everywhere a password is set.",
+      "pwTitle": "Password policy",
+      "pwDesc": "Applies to registration, password change, admin-created members, and password resets.",
+      "minLength": "Minimum length",
+      "minLengthHint": "8–128 characters; 12+ recommended.",
+      "charClasses": "Character classes required",
+      "charClassesHint": "How many of upper / lower / digit / symbol must be present.",
+      "charClassesN": "{n, plural, one {# class} other {# classes}}",
+      "lockTitle": "Login protection",
+      "lockDesc": "Temporarily lock an account after repeated failed logins, to resist brute force.",
+      "lockThreshold": "Failure threshold",
+      "lockThresholdHint": "Lock after this many consecutive failures (3–50).",
+      "lockMinutes": "Lock duration (minutes)",
+      "lockMinutesHint": "How long the lock lasts before auto-release (1–1440 min).",
+      "sessionTitle": "Sessions",
+      "sessionDesc": "Maximum lifetime of a login session before re-authentication is required.",
+      "sessionDays": "Session lifetime (days)",
+      "sessionDaysHint": "1–365 days; 7 recommended."
+    },
+    "test": "Send test email",
+    "savedEmail": "Email settings saved",
+    "savedBranding": "Branding saved",
+    "testSent": "Test email sent — check your inbox",
+    "passwordKept": "Leave blank to keep the current password",
+    "supportUrl": "Support link",
+    "logo": "Logo",
+    "logoUpload": "Upload logo",
+    "logoRemove": "Remove",
+    "logoHint": "PNG/JPG/SVG/WebP, square recommended, ≤ 700KB; shown in the sidebar, login page, and browser icon.",
+    "logoTooLarge": "Image too large (must be ≤ 700KB). Please compress and retry.",
+    "email": {
+      "title": "Email service",
+      "desc": "SMTP for verification, notification, and alert emails. Works with 163/QQ/Gmail/enterprise mail and any SMTP provider."
+    },
+    "branding": {
+      "title": "Branding",
+      "desc": "Application title, logos, accent color and other white-label items, applied across the app and admin console.",
+      "appTitle": "Application title",
+      "appTitleUsage": "Shown in the browser tab and emails (50 chars max).",
+      "consoleLogo": "Console logo",
+      "consoleLogoUsage": "Shown in the top-left of the console/app. Any width × 40px; PNG/SVG, ≤ 700KB.",
+      "loginLogo": "Login page logo",
+      "loginLogoUsage": "Shown on the login page. Any width × 44px; PNG/SVG, ≤ 700KB.",
+      "favicon": "Favicon",
+      "faviconUsage": "Shown in the browser address bar. At least 32×32, 1:1; PNG/ICO/SVG, ≤ 700KB.",
+      "accentUsage": "Accent color for buttons, links and highlights.",
+      "subtitleUsage": "Subtitle shown under the login page title.",
+      "supportUsage": "Optional link for a support/help entry."
+    }
+  },
+  "audit": {
+    "title": "Audit logs",
+    "desc": "Immutable, append-only record of all admin-side changes (metadata only).",
+    "actionPlaceholder": "Filter by action, e.g. wizard. (trailing dot = prefix)",
+    "filter": "Filter",
+    "pageInfo": "Showing {from}–{to} of {total}",
+    "prev": "Previous",
+    "next": "Next",
+    "empty": "No audit entries yet.",
+    "col": {
+      "time": "Time",
+      "actor": "Actor",
+      "action": "Action",
+      "target": "Target",
+      "ip": "IP"
+    },
+    "actorType": {
+      "admin": "Operator",
+      "user": "User",
+      "system": "System"
+    },
+    "action": {
+      "wizard_email_configure": "Configure email service",
+      "wizard_branding_update": "Update branding",
+      "wizard_complete": "Complete setup wizard",
+      "workspace_create": "Create workspace",
+      "workspace_update": "Edit workspace",
+      "workspace_delete": "Delete workspace",
+      "user_create": "Create member",
+      "user_update": "Edit member",
+      "user_reset_password": "Reset password",
+      "user_delete": "Delete member",
+      "settings_email_update": "Update email service",
+      "settings_branding_update": "Update branding",
+      "settings_security_update": "Update security policy",
+      "operator_create": "Create operator",
+      "operator_update": "Edit operator",
+      "operator_reset_password": "Reset operator password",
+      "operator_delete": "Delete operator",
+      "channel_create": "Create model channel",
+      "channel_update": "Edit model channel",
+      "channel_delete": "Delete model channel"
+    },
+    "targetType": {
+      "setting": "Setting",
+      "branding": "Branding",
+      "user": "User",
+      "workspace": "Workspace",
+      "membership": "Member",
+      "operator": "Operator",
+      "channel": "Model channel"
+    },
+    "targetId": {
+      "email": "Email",
+      "wizard": "Wizard",
+      "login": "Login policy",
+      "password": "Password policy",
+      "branding": "Branding",
+      "data_retention": "Data retention"
+    }
+  },
+  "common": {
+    "loading": "Loading…",
+    "search": "Search",
+    "all": "All",
+    "cancel": "Cancel",
+    "create": "Create",
+    "creating": "Creating…",
+    "done": "Done",
+    "actions": "Actions",
+    "save": "Save",
+    "saving": "Saving…",
+    "delete": "Delete",
+    "confirmDeletePrompt": "Type the following exactly to confirm deletion:"
+  },
+  "pagination": {
+    "pageInfo": "Showing {from}–{to} of {total}",
+    "prev": "Previous",
+    "next": "Next"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "lang": {
+    "label": "Language"
+  },
+  "errors": {
+    "AUTH_INVALID_CREDENTIALS": "Incorrect email or password.",
+    "AUTH_ACCOUNT_LOCKED": "This account is locked due to too many failed attempts. Try again later.",
+    "AUTH_ACCOUNT_DISABLED": "This account has been disabled. Contact an administrator.",
+    "AUTH_2FA_REQUIRED": "Enter your two-factor authentication code.",
+    "AUTH_2FA_INVALID": "Invalid two-factor authentication code.",
+    "AUTH_PASSWORD_WEAK": "Password too weak: at least 12 chars with 3 character classes, and must not equal your email.",
+    "AUTH_PASSWORD_REUSED": "The new password must differ from the current password.",
+    "RATE_LIMIT_LOGIN_BLOCKED": "Too many sign-in attempts. Please try again later.",
+    "LICENSE_INVALID": "The license is invalid.",
+    "LICENSE_INVALID_SIGNATURE": "The license signature is invalid.",
+    "LICENSE_BINDING_MISMATCH": "The license is not bound to this deployment (Deployment ID mismatch).",
+    "LICENSE_EXPIRED": "The license has expired.",
+    "LICENSE_REVOKED": "The license has been revoked.",
+    "LICENSE_REQUIRED": "License activation required.",
+    "RATE_LIMIT_EXCEEDED": "Too many activation attempts. Please try again later.",
+    "AUTH_REQUIRED": "Replacing an active license requires super admin authentication.",
+    "VALIDATION_FAILED": "Request validation failed.",
+    "PERM_DENIED": "You don't have permission to perform this action.",
+    "WIZARD_ALREADY_DONE": "The setup wizard is already complete.",
+    "SYSTEM_UNAVAILABLE": "Service unavailable (e.g. SMTP connection failed). Check the configuration and retry.",
+    "NETWORK_ERROR": "Network request failed. Check your connection.",
+    "OPERATOR_SELF_FORBIDDEN": "You can't perform this action on your own signed-in account.",
+    "OPERATOR_LAST_SUPER_ADMIN": "Can't delete/disable/demote the last super admin.",
+    "SYSTEM_HTTP_ERROR": "System error. Please try again later."
+  },
+  "kbOverview": {
+    "title": "Knowledge bases",
+    "desc": "Platform overview of all workspace knowledge bases (read-only metadata).",
+    "searchPlaceholder": "Search name…",
+    "allVis": "All visibility",
+    "vis": {
+      "private": "Private",
+      "shared": "Shared",
+      "workspace": "Workspace"
+    },
+    "col": {
+      "name": "Name",
+      "workspace": "Workspace",
+      "visibility": "Visibility",
+      "sources": "Sources",
+      "status": "Status"
+    },
+    "empty": "No knowledge bases.",
+    "found": "{n} total",
+    "pageOf": "Page {x} of {y}"
+  }
+}

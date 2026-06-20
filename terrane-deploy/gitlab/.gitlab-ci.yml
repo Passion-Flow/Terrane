@@ -1,0 +1,122 @@
+# Terrane — GitLab CI/CD delivery artifact.
+# Stages: lint → build (frontends + 6 multi-arch images) → push (MANUAL) → deploy (MANUAL, Helm).
+# Images are NEVER pushed automatically — a human triggers `push:images` after full verification
+# (Terrane rule: dev-is-prod, verified by running the app, not by a DB-touching test suite).
+#
+# Works with ANY private registry (internal Harbor or Aliyun ACR). Set these as Protected/masked CI
+# variables (Settings → CI/CD → Variables — NEVER hard-code them):
+#   REGISTRY            e.g. crpi-….cr.aliyuncs.com   (or harbor.intra.example.com)
+#   REGISTRY_NAMESPACE  e.g. navtra-mirror
+#   REGISTRY_USER       registry username / robot account
+#   REGISTRY_PASSWORD   registry password               (masked)
+# For the deploy stage (optional): KUBE_NAMESPACE, KUBECONFIG (File-type), TERRANE_KEK (masked),
+#   TERRANE_FORGE_EDGE_URL, and — because the chart defaults to EXTERNAL datastores — the managed
+#   DB/cache: EXTERNAL_DB_HOST, EXTERNAL_DB_PASSWORD (masked), EXTERNAL_REDIS_HOST,
+#   EXTERNAL_REDIS_PASSWORD (masked). The external PostgreSQL must provide the age + vector extensions.
+
+stages: [lint, build, push, deploy]
+
+variables:
+  VERSION: "v1.0.0"
+  PLATFORMS: "linux/amd64,linux/arm64"     # 信创: Hygon/Zhaoxin x86 + Kunpeng/Phytium arm64
+  IMG_SERVER:     "$REGISTRY/$REGISTRY_NAMESPACE/terrane-server"
+  IMG_ADMIN:      "$REGISTRY/$REGISTRY_NAMESPACE/terrane-admin-server"
+  IMG_GATEWAY:    "$REGISTRY/$REGISTRY_NAMESPACE/terrane-gateway"
+  IMG_WEB:        "$REGISTRY/$REGISTRY_NAMESPACE/terrane-web"
+  IMG_ADMIN_WEB:  "$REGISTRY/$REGISTRY_NAMESPACE/terrane-admin-web"
+  IMG_POSTGRES:   "$REGISTRY/$REGISTRY_NAMESPACE/terrane-postgres"
+  IMG_REDIS:      "$REGISTRY/$REGISTRY_NAMESPACE/terrane-redis"
+
+# ---- lint (advisory) --------------------------------------------------------------------------
+lint:backend:
+  stage: lint
+  image: python:3.13-slim
+  script:
+    - pip install -q ruff
+    - cd Project-source/terrane-server && ruff check app || true
+    - cd ../terrane-admin-server && ruff check app || true
+  allow_failure: true
+
+# frontends: real gate — tsc --noEmit (via tsc -b) + vite build must pass.
+build:web:
+  stage: lint
+  image: node:24-alpine
+  script:
+    - cd Project-source/terrane-web && npm ci && npm run build
+    - cd ../terrane-admin-web && npm ci && npm run build
+
+# ---- build (multi-arch; loads to the runner, does NOT push) -----------------------------------
+.buildx: &buildx
+  stage: build
+  image: docker:27
+  services: [docker:27-dind]
+  before_script:
+    - docker run --privileged --rm tonistiigi/binfmt --install all
+    - docker buildx create --use
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+build:images:
+  <<: *buildx
+  script:
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_SERVER:$VERSION"    Project-source/terrane-server
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_ADMIN:$VERSION"     Project-source/terrane-admin-server
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_GATEWAY:$VERSION"   Project-source/terrane-gateway
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_WEB:$VERSION"       Project-source/terrane-web
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_ADMIN_WEB:$VERSION" Project-source/terrane-admin-web
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_POSTGRES:$VERSION"
+        -f Project-design/poc/Dockerfile.terrane-postgres Project-design/poc
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_REDIS:$VERSION"
+        -f Project-design/poc/Dockerfile.terrane-redis Project-design/poc
+
+# ---- push (MANUAL only — never automatic; run after 100% verification) ------------------------
+push:images:
+  stage: push
+  image: docker:27
+  services: [docker:27-dind]
+  when: manual                       # ← human-triggered gate; CI never pushes on its own
+  before_script:
+    - docker run --privileged --rm tonistiigi/binfmt --install all
+    - docker buildx create --use
+    - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
+  script:
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_SERVER:$VERSION"    Project-source/terrane-server --push
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_ADMIN:$VERSION"     Project-source/terrane-admin-server --push
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_GATEWAY:$VERSION"   Project-source/terrane-gateway --push
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_WEB:$VERSION"       Project-source/terrane-web --push
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_ADMIN_WEB:$VERSION" Project-source/terrane-admin-web --push
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_POSTGRES:$VERSION"
+        -f Project-design/poc/Dockerfile.terrane-postgres Project-design/poc --push
+    - docker buildx build --platform "$PLATFORMS" -t "$IMG_REDIS:$VERSION"
+        -f Project-design/poc/Dockerfile.terrane-redis Project-design/poc --push
+
+# ---- deploy (MANUAL — Helm install/upgrade onto Kubernetes) -----------------------------------
+deploy:helm:
+  stage: deploy
+  image: alpine/helm:3.16.2
+  when: manual
+  before_script:
+    - apk add --no-cache bash kubectl
+    - bash terrane-deploy/gitlab/Scripts/generate-image-repo-secret-k8s.sh
+        "$REGISTRY_USER" "$REGISTRY_PASSWORD" "$KUBE_NAMESPACE" "https://$REGISTRY"
+  script:
+    # The chart defaults to EXTERNAL datastores (postgres.enabled=false / redis.enabled=false), so the
+    # deploy must point at your managed PostgreSQL (with age+vector) + Redis via CI variables.
+    # For a self-contained demo instead, drop the external* lines and add
+    #   --set postgres.enabled=true --set postgres.password=... --set redis.enabled=true --set redis.password=...
+    - helm upgrade --install terrane terrane-deploy/helm/terrane
+        -n "$KUBE_NAMESPACE" --create-namespace
+        --set imagePullSecrets[0].name=terrane-image-repo-secret
+        --set secret.kek="$TERRANE_KEK"
+        --set license.forgeEdgeUrl="$TERRANE_FORGE_EDGE_URL"
+        --set externalDatabase.host="$EXTERNAL_DB_HOST"     --set externalDatabase.password="$EXTERNAL_DB_PASSWORD"
+        --set externalRedis.host="$EXTERNAL_REDIS_HOST"     --set externalRedis.password="$EXTERNAL_REDIS_PASSWORD"
+        --set server.image.repository="$IMG_SERVER"          --set server.image.tag="$VERSION"
+        --set adminServer.image.repository="$IMG_ADMIN"       --set adminServer.image.tag="$VERSION"
+        --set gateway.image.repository="$IMG_GATEWAY"         --set gateway.image.tag="$VERSION"
+        --set web.image.repository="$IMG_WEB"                 --set web.image.tag="$VERSION"
+        --set adminWeb.image.repository="$IMG_ADMIN_WEB"      --set adminWeb.image.tag="$VERSION"
+        --set postgres.image.repository="$IMG_POSTGRES"       --set postgres.image.tag="$VERSION"
+        --set redis.image.repository="$IMG_REDIS"             --set redis.image.tag="$VERSION"
+  environment:
+    name: production

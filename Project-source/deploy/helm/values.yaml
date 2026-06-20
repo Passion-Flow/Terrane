@@ -1,0 +1,25 @@
+image:
+  registry: registry.local/terrane
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+postgres:
+  image: registry.local/terrane/terrane-postgres:1.0
+  storage: 20Gi
+redis:
+  image: redis:7-alpine
+secrets:
+  postgresPassword: "change-me"
+  redisPassword: "change-me"
+  kek: "change-me-32+chars"
+config:
+  forgeEdgeUrl: "http://118.89.84.188:8081"
+  sessionCookieSecure: "true"
+ingress:
+  enabled: true
+  className: nginx
+  host: terrane.example.com
+  adminHost: admin.terrane.example.com
+replicas:
+  server: 2
+  adminServer: 1
+  gateway: 2

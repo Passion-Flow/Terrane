@@ -1,0 +1,81 @@
+/** MCP 接入密钥管理 —— 创建(令牌仅显示一次 + 连接配置)、列表、删除。挂进 Claude/Cursor。 */
+
+import { Copy, Plus, Trash } from "@phosphor-icons/react";
+import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import { createMcpKey, deleteMcpKey, listMcpKeys, type McpKey } from "@/lib/kb";
+
+export function KbMcpModal({ kbId, open, onClose }: { kbId: string; open: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [keys, setKeys] = useState<McpKey[]>([]);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [created, setCreated] = useState<{ token: string; url: string } | null>(null);
+
+  const load = useCallback(async () => { try { setKeys((await listMcpKeys(kbId)).items); } catch { /* */ } }, [kbId]);
+  useEffect(() => { if (open) { void load(); setCreated(null); setName(""); } }, [open, load]);
+
+  if (!open) return null;
+  const origin = window.location.origin;
+
+  async function onCreate() {
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    try { const r = await createMcpKey(kbId, name.trim()); setCreated({ token: r.token, url: origin + r.mcp_url }); setName(""); await load(); }
+    finally { setBusy(false); }
+  }
+  async function onDelete(k: McpKey) {
+    if (!window.confirm(t("kb.mcpDeleteConfirm", { name: k.name }))) return;
+    try { await deleteMcpKey(kbId, k.id); await load(); } catch { /* */ }
+  }
+  const configSnippet = created
+    ? JSON.stringify({ mcpServers: { terrane: { url: created.url, headers: { Authorization: `Bearer ${created.token}` } } } }, null, 2)
+    : "";
+  const field = "w-full rounded-(--radius-control) border border-border bg-canvas px-3 py-2 text-sm text-ink outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-xl border border-border bg-surface p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold text-ink">{t("kb.mcpTitle")}</h2>
+        <p className="mt-1 text-[13px] text-ink-secondary">{t("kb.mcpDesc")}</p>
+
+        {created ? (
+          <div className="mt-4 space-y-2">
+            <p className="text-[13px] font-medium text-danger">{t("kb.mcpTokenOnce")}</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 truncate rounded bg-canvas px-2 py-1.5 text-xs text-ink">{created.token}</code>
+              <button onClick={() => navigator.clipboard?.writeText(created.token)} className="rounded p-1.5 text-ink-secondary hover:bg-canvas"><Copy className="size-4" /></button>
+            </div>
+            <p className="mt-2 text-[12px] text-ink-faint">{t("kb.mcpConfigHint")}</p>
+            <div className="relative">
+              <pre className="max-h-40 overflow-auto rounded-(--radius-control) bg-canvas p-3 text-[11px] leading-relaxed text-ink-secondary">{configSnippet}</pre>
+              <button onClick={() => navigator.clipboard?.writeText(configSnippet)} className="absolute end-2 top-2 rounded bg-surface p-1 text-ink-secondary hover:text-ink"><Copy className="size-3.5" /></button>
+            </div>
+            <button onClick={() => setCreated(null)} className="text-[13px] text-accent hover:underline">{t("kb.mcpBack")}</button>
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 flex items-end gap-2">
+              <label className="flex-1 text-sm font-medium text-ink">{t("kb.mcpKeyName")}
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("kb.mcpKeyNamePh")} disabled={busy} className={`mt-1.5 ${field}`} /></label>
+              <button onClick={onCreate} disabled={busy || !name.trim()} className="flex items-center gap-1 rounded-(--radius-control) bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"><Plus className="size-4" /> {t("kb.mcpCreate")}</button>
+            </div>
+            <div className="mt-4 space-y-1.5">
+              {keys.map((k) => (
+                <div key={k.id} className="group/k flex items-center justify-between rounded-(--radius-control) border border-border/50 px-3 py-2 text-[13px]">
+                  <span className="text-ink">{k.name} <code className="ms-1 text-xs text-ink-faint">{k.token_prefix}…</code></span>
+                  <button onClick={() => onDelete(k)} className="rounded p-0.5 text-ink-faint opacity-0 transition hover:text-danger group-hover/k:opacity-100"><Trash className="size-3.5" /></button>
+                </div>
+              ))}
+              {keys.length === 0 && <p className="py-2 text-center text-xs text-ink-faint">{t("kb.mcpNoKeys")}</p>}
+            </div>
+          </>
+        )}
+        <div className="mt-5 flex justify-end">
+          <button onClick={onClose} className="rounded-(--radius-control) px-3.5 py-1.5 text-sm text-ink-secondary hover:bg-canvas">{t("common.close")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}

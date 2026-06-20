@@ -1,0 +1,42 @@
+# Terrane CI/CD —— 构建 5 镜像 → 推仓库 → (可选) Helm 升级。私有化交付三件套之一。
+stages: [build, release, deploy]
+
+variables:
+  REGISTRY: $CI_REGISTRY_IMAGE
+  TAG: $CI_COMMIT_SHORT_SHA
+
+.build:
+  stage: build
+  image: docker:27
+  services: [docker:27-dind]
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - docker build -t "$REGISTRY/$SVC:$TAG" -t "$REGISTRY/$SVC:latest" "Project-source/$SVC"
+    - docker push "$REGISTRY/$SVC:$TAG"
+    - docker push "$REGISTRY/$SVC:latest"
+
+build:server:        { extends: .build, variables: { SVC: terrane-server } }
+build:admin-server:  { extends: .build, variables: { SVC: terrane-admin-server } }
+build:gateway:       { extends: .build, variables: { SVC: terrane-gateway } }
+build:web:           { extends: .build, variables: { SVC: terrane-web } }
+build:admin-web:     { extends: .build, variables: { SVC: terrane-admin-web } }
+
+helm-package:
+  stage: release
+  image: alpine/helm:3.16.2
+  script:
+    - helm lint Project-source/deploy/helm
+    - helm package Project-source/deploy/helm --version "0.0.0-$TAG"
+  artifacts: { paths: ["terrane-*.tgz"], expire_in: 30 days }
+
+deploy:cluster:
+  stage: deploy
+  image: alpine/helm:3.16.2
+  when: manual
+  script:
+    - helm upgrade --install terrane Project-source/deploy/helm
+        --set image.registry="$REGISTRY" --set image.tag="$TAG"
+        --set secrets.kek="$TERRANE_KEK" --set secrets.postgresPassword="$PG_PASS" --set secrets.redisPassword="$REDIS_PASS"
+  environment: { name: production }
+  only: [tags]

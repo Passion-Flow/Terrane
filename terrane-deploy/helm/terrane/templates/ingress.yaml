@@ -1,0 +1,39 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "terrane.fullname" . }}
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.global.domain | quote }}]
+      secretName: {{ .Values.ingress.tls.secretName }}
+    - hosts: [{{ .Values.global.adminDomain | quote }}]
+      secretName: {{ .Values.ingress.tls.adminSecretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.global.domain | quote }}            # 前台
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "terrane.fullname" . }}-web
+                port: { number: 80 }
+    - host: {{ .Values.global.adminDomain | quote }}       # 后台
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "terrane.fullname" . }}-admin-web
+                port: { number: 80 }
+{{- end }}

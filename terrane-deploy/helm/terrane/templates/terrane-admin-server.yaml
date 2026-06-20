@@ -1,0 +1,71 @@
+{{- if .Values.adminServer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "terrane.fullname" . }}-admin-server
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  selector: { app: {{ include "terrane.fullname" . }}-admin-server }
+  ports: [{ name: http, port: 43003, targetPort: 43003 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "terrane.fullname" . }}-admin-server
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.adminServer.replicas }}
+  selector: { matchLabels: { app: {{ include "terrane.fullname" . }}-admin-server } }
+  strategy: { type: Recreate }
+  template:
+    metadata:
+      labels:
+        app: {{ include "terrane.fullname" . }}-admin-server
+        {{- include "terrane.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.adminServer.serviceAccountName }}
+      serviceAccountName: {{ .Values.adminServer.serviceAccountName | quote }}
+      {{- end }}
+      {{- with (.Values.adminServer.nodeSelector | default .Values.global.nodeSelector) }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.adminServer.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.adminServer.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: admin-server
+          image: {{ include "terrane.image" .Values.adminServer.image | quote }}
+          imagePullPolicy: {{ .Values.adminServer.image.pullPolicy }}
+          command: ["sh", "-c", "python -m app.cli migrate up && python -m app.cli bootstrap --silent && python main.py"]
+          envFrom:
+            - configMapRef: { name: {{ include "terrane.fullname" . }}-config }
+            - secretRef:    { name: {{ include "terrane.fullname" . }}-secret }
+          env:
+            - name: DATABASE_NAME
+              value: terrane_admin
+            - name: TERRANE_LICENSE_STATE_PATH
+              value: /var/lib/terrane/license/state_admin.json
+            {{- with .Values.adminServer.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports: [{ name: http, containerPort: 43003 }]
+          {{- with .Values.adminServer.readinessProbe }}
+          readinessProbe: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.adminServer.livenessProbe }}
+          livenessProbe: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources: {{- toYaml .Values.adminServer.resources | nindent 12 }}
+          volumeMounts:
+            - name: license
+              mountPath: /var/lib/terrane/license
+      volumes:
+        - name: license
+          persistentVolumeClaim: { claimName: {{ include "terrane.fullname" . }}-license }
+{{- end }}

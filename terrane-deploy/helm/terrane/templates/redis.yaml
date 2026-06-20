@@ -1,0 +1,51 @@
+{{- if .Values.redis.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "terrane.fullname" . }}-redis
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  selector: { app: {{ include "terrane.fullname" . }}-redis }
+  ports: [{ port: 6379, targetPort: 6379 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "terrane.fullname" . }}-redis
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "terrane.fullname" . }}-redis
+  replicas: 1
+  selector: { matchLabels: { app: {{ include "terrane.fullname" . }}-redis } }
+  template:
+    metadata:
+      labels:
+        app: {{ include "terrane.fullname" . }}-redis
+        {{- include "terrane.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: redis
+          image: {{ include "terrane.image" .Values.redis.image | quote }}
+          imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+          command: ["sh", "-c", "redis-server --requirepass \"$REDIS_PASSWORD\" --appendonly yes"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "terrane.fullname" . }}-secret, key: CACHE_PASSWORD } }
+          ports: [{ containerPort: 6379 }]
+          volumeMounts: [{ name: data, mountPath: /data }]
+          readinessProbe:
+            exec: { command: ["sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" ping"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources: { requests: { storage: {{ .Values.redis.size }} } }
+        {{- if .Values.redis.storageClass }}
+        storageClassName: {{ .Values.redis.storageClass | quote }}
+        {{- end }}
+{{- end }}

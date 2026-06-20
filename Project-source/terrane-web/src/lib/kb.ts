@@ -1,0 +1,183 @@
+/** 知识库 API（前台 /api/v1/knowledge-bases）。cookie 鉴权 → credentials:include。 */
+
+import { request } from "@/lib/api";
+import { apiBase } from "@/lib/config";
+import { getChatModelPref, getModelPref } from "@/lib/models";
+
+export type Visibility = "private" | "shared" | "workspace";
+
+export interface Kb {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  visibility: Visibility;
+  status: string;
+  my_role: "owner" | "editor" | "viewer" | null;
+  is_owner: boolean;
+  created_at: string | null;
+}
+
+export interface KbSource {
+  id: string;
+  title: string;
+  kind: string;
+  status: string;
+  size_bytes: number;
+  chunk_count: number;
+  error: string | null;
+  created_at: string | null;
+}
+
+export interface SearchHit {
+  chunk_id: string;
+  content: string;
+  ord: number;
+  source_title: string;
+  source_id: string;
+  score: number;
+}
+
+const opt = (method: string, body?: unknown): RequestInit => ({
+  method, credentials: "include",
+  headers: body ? { "Content-Type": "application/json" } : {},
+  ...(body ? { body: JSON.stringify(body) } : {}),
+});
+
+export const listKbs = () =>
+  request<{ items: Kb[]; total: number }>("/api/v1/knowledge-bases", { credentials: "include" });
+
+export const createKb = (input: { name: string; description?: string; visibility?: Visibility }) =>
+  request<Kb>("/api/v1/knowledge-bases", opt("POST", input));
+
+export const getKb = (id: string) =>
+  request<Kb>(`/api/v1/knowledge-bases/${id}`, { credentials: "include" });
+
+export const updateKb = (id: string, input: { name?: string; description?: string; visibility?: Visibility }) =>
+  request<Kb>(`/api/v1/knowledge-bases/${id}`, opt("PATCH", input));
+
+export const deleteKb = (id: string) =>
+  request<{ ok: boolean }>(`/api/v1/knowledge-bases/${id}`, opt("DELETE"));
+
+export const listSources = (kbId: string) =>
+  request<{ items: KbSource[] }>(`/api/v1/knowledge-bases/${kbId}/sources`, { credentials: "include" });
+
+export const addSource = (kbId: string, input: { title: string; text: string }) =>
+  request<{ id: string; title: string; status: string; chunk_count: number }>(
+    `/api/v1/knowledge-bases/${kbId}/sources`, opt("POST", input));
+
+export interface KbMember {
+  user_id: string;
+  email: string;
+  username: string | null;
+  role: "owner" | "viewer" | "editor";
+}
+
+export const listMembers = (kbId: string) =>
+  request<{ owner: KbMember | null; members: KbMember[] }>(
+    `/api/v1/knowledge-bases/${kbId}/members`, { credentials: "include" });
+
+export const addMember = (kbId: string, input: { email: string; role: "viewer" | "editor" }) =>
+  request<KbMember>(`/api/v1/knowledge-bases/${kbId}/members`, opt("POST", input));
+
+export const removeMember = (kbId: string, userId: string) =>
+  request<{ ok: boolean }>(`/api/v1/knowledge-bases/${kbId}/members/${userId}`, opt("DELETE"));
+
+export async function uploadSourceFile(kbId: string, file: File): Promise<{ id?: string; title?: string; chunk_count?: number; ok?: boolean; reason?: string }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const resp = await fetch(`${apiBase()}/api/v1/knowledge-bases/${kbId}/sources/upload`, {
+    method: "POST", credentials: "include", body: fd,
+  });
+  if (!resp.ok) throw new Error("upload_failed_" + resp.status);
+  return resp.json();
+}
+
+export const deleteSource = (kbId: string, sourceId: string) =>
+  request<{ ok: boolean }>(`/api/v1/knowledge-bases/${kbId}/sources/${sourceId}`, opt("DELETE"));
+
+export const searchKb = (kbId: string, q: string) => {
+  const qs = new URLSearchParams({ q });
+  if (getModelPref("embed")) qs.set("embed_model", getModelPref("embed"));
+  if (getModelPref("rerank")) qs.set("rerank_model", getModelPref("rerank"));
+  return request<{ query: string; hits: SearchHit[]; total: number }>(
+    `/api/v1/knowledge-bases/${kbId}/search?${qs}`, { credentials: "include" });
+};
+
+export interface McpKey { id: string; name: string; token_prefix: string; last_used_at: string | null; created_at: string | null }
+
+export const createMcpKey = (kbId: string, name: string) =>
+  request<{ id: string; name: string; token: string; token_prefix: string; mcp_url: string }>(
+    `/api/v1/knowledge-bases/${kbId}/mcp-keys`, opt("POST", { name }));
+
+export const listMcpKeys = (kbId: string) =>
+  request<{ items: McpKey[] }>(`/api/v1/knowledge-bases/${kbId}/mcp-keys`, { credentials: "include" });
+
+export const deleteMcpKey = (kbId: string, keyId: string) =>
+  request<{ ok: boolean }>(`/api/v1/knowledge-bases/${kbId}/mcp-keys/${keyId}`, opt("DELETE"));
+
+export interface GraphNode { id: string; name: string; etype: string }
+export interface GraphEdge { source: string; target: string; type: string }
+
+export const buildGraph = (kbId: string) =>
+  request<{ entities_added: number; relations_added: number }>(
+    `/api/v1/knowledge-bases/${kbId}/graph/build`, opt("POST"));
+
+export const getGraph = (kbId: string) =>
+  request<{ nodes: GraphNode[]; edges: GraphEdge[] }>(
+    `/api/v1/knowledge-bases/${kbId}/graph`, { credentials: "include" });
+
+export interface WikiPage {
+  id: string; slug: string; title: string; body_md: string;
+  source: string; status: string; inferred: boolean; updated_at: string | null;
+}
+
+export const compileWiki = (kbId: string) =>
+  request<WikiPage & { ok?: boolean; reason?: string }>(
+    `/api/v1/knowledge-bases/${kbId}/wiki/compile`, opt("POST"));
+
+export const getWikiPage = (kbId: string, slug: string) =>
+  request<WikiPage>(`/api/v1/knowledge-bases/${kbId}/wiki/${slug}`, { credentials: "include" });
+
+export interface ChatSource { n: number; source_title: string; source_id: string; content: string; score: number }
+
+export interface ChatHandlers {
+  onSources?: (hits: ChatSource[]) => void;
+  onDelta?: (text: string) => void;
+  onError?: (e: { code?: string; message?: string }) => void;
+  onDone?: () => void;
+}
+
+/** RAG 流式问答:消费 SSE(event: sources / delta / error / done)。 */
+export async function streamChat(kbId: string, query: string, h: ChatHandlers, signal?: AbortSignal): Promise<void> {
+  const resp = await fetch(`${apiBase()}/api/v1/knowledge-bases/${kbId}/chat`, {
+    method: "POST", credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, model: getChatModelPref() || undefined }), signal,
+  });
+  if (!resp.ok || !resp.body) { h.onError?.({ code: "HTTP_" + resp.status }); return; }
+  const reader = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const blocks = buf.split("\n\n");
+    buf = blocks.pop() ?? "";
+    for (const blk of blocks) {
+      let ev = "message"; let data = "";
+      for (const line of blk.split("\n")) {
+        if (line.startsWith("event:")) ev = line.slice(6).trim();
+        else if (line.startsWith("data:")) data = line.slice(5).trim();
+      }
+      if (!data) continue;
+      let parsed: Record<string, unknown>;
+      try { parsed = JSON.parse(data); } catch { continue; }
+      if (ev === "sources") h.onSources?.(parsed.hits as ChatSource[]);
+      else if (ev === "delta") h.onDelta?.(parsed.text as string);
+      else if (ev === "error") h.onError?.(parsed as { code?: string; message?: string });
+      else if (ev === "done") h.onDone?.();
+    }
+  }
+}

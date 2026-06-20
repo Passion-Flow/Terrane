@@ -1,0 +1,46 @@
+[project]
+name = "terrane-admin-server"
+version = "1.0.0"
+description = "Terrane 后台管理控制面（terrane-admin-api）"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi==0.136.3",
+    "uvicorn[standard]==0.49.0",
+    "httpx==0.28.1",  # 运行期:在线激活校验(forge_verifier online)
+    "pydantic==2.13.4",
+    "pydantic-settings==2.14.1",
+    "structlog==26.1.0",
+    "cryptography==48.0.1",
+    # —— 阶段②认证地基 ——
+    "sqlalchemy[asyncio]==2.0.45",
+    "asyncpg==0.31.0",
+    "alembic==1.14.0",
+    "redis==5.2.1",
+    "argon2-cffi==25.1.0",
+    "email-validator==2.2.0",
+    "uuid-utils==0.11.1",
+    "typer==0.15.4",
+]
+
+[project.optional-dependencies]
+# 信创 DB 适配矩阵驱动（按 DATABASE_TYPE 选装，缺失时 db/dialects.py 给清晰 ImportError）。
+xinchuang-pg = ["asyncpg==0.31.0"]
+xinchuang-mysql = ["asyncmy==0.2.10"]
+xinchuang-oracle = ["oracledb==2.5.1"]
+
+[dependency-groups]
+dev = [
+    "pytest==8.*",
+    "pytest-asyncio==0.25.0",
+    "httpx==0.28.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

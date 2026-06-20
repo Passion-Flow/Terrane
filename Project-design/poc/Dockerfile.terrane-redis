@@ -1,0 +1,7 @@
+# terrane-redis — Redis 7 (alpine), re-published under the Terrane tag (v1.0.0) so private /
+# air-gapped / 信创 deployments pull EVERYTHING (incl. cache) from one registry instead of Docker Hub.
+# No customization beyond the tag; the upstream entrypoint + redis-server flags are unchanged.
+FROM redis:7-alpine
+LABEL org.opencontainers.image.title="terrane-redis" \
+      org.opencontainers.image.version="v1.0.0" \
+      org.opencontainers.image.vendor="navtra"

@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/* Terrane 设计基准（05-frontend.md §5 + terrane-design SKILL.md）：
+   minimalist 主基调 —— 暖石中性灰阶（warm-stone，区别于纯灰）+ 单一品牌强调色 petrol-teal（地质/矿物气质）
+   + signal 金色矿脉（仅 Logo 标记）+ 语义三色；浅色默认 + 深色三态；等宽数字呈现一切 ID/指纹；1px 边框分层。
+   Geist 字体本地自托管（禁公网 CDN），中文回退思源黑体/苹方。 */
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/Geist-Variable.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/GeistMono-Variable.woff2") format("woff2");
+}
+
+@theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, "PingFang SC", "Source Han Sans SC", "Noto Sans CJK SC", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+  /* 品牌 signal —— 金色矿脉，仅 Logo 标记用，不进交互强调 */
+  --color-signal: oklch(0.74 0.13 75);
+
+  /* 暖石中性（warm-stone，hue~85 极低 chroma —— 地质暖调，区别于纯灰） */
+  --color-canvas: oklch(0.985 0.003 85);
+  --color-surface: oklch(1 0 0);
+  --color-border: oklch(0.915 0.004 85);
+  --color-ink: oklch(0.22 0.006 85);
+  --color-ink-secondary: oklch(0.45 0.006 85);
+  --color-ink-faint: oklch(0.62 0.005 85);
+
+  /* 强调 —— petrol-teal（矿物/沉积气质，WCAG AA 可达） */
+  --color-accent: oklch(0.52 0.085 200);
+  --color-accent-hover: oklch(0.46 0.09 200);
+  --color-accent-soft: oklch(0.95 0.022 200);
+
+  --color-success: oklch(0.58 0.13 165);
+  --color-warning: oklch(0.74 0.14 70);
+  --color-danger: oklch(0.55 0.19 25);
+  --color-danger-soft: oklch(0.96 0.022 25);
+
+  --radius-card: 12px;
+  --radius-control: 8px;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+.dark {
+  --color-canvas: oklch(0.17 0.004 85);
+  --color-surface: oklch(0.212 0.004 85);
+  --color-border: oklch(0.31 0.005 85);
+  --color-ink: oklch(0.93 0.003 85);
+  --color-ink-secondary: oklch(0.7 0.004 85);
+  --color-ink-faint: oklch(0.55 0.004 85);
+  --color-accent: oklch(0.66 0.09 200);
+  --color-accent-hover: oklch(0.72 0.09 200);
+  --color-accent-soft: oklch(0.28 0.04 200);
+  --color-danger-soft: oklch(0.25 0.04 25);
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}

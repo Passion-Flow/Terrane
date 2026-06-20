@@ -1,0 +1,548 @@
+{
+  "brand": {
+    "console": "管理后台"
+  },
+  "locked": {
+    "message": "需要激活许可证.",
+    "desc": "您所在部署的 Terrane Enterprise 许可证尚未激活，请激活后继续使用。",
+    "expiredDesc": "您所在部署的 Terrane Enterprise 许可证已过期，请重新激活或联系厂商续期。",
+    "revokedDesc": "您所在部署的许可证已被吊销，请联系厂商。",
+    "mismatchDesc": "当前许可证未绑定到本部署，请使用与本部署 ID 匹配的许可证。"
+  },
+  "activate": {
+    "openButton": "激活",
+    "modalTitle": "许可证激活",
+    "modalSubtitle": "输入您的许可证以激活系统。",
+    "method": "激活方式",
+    "online": "在线",
+    "offline": "离线",
+    "deploymentId": "部署 ID",
+    "deploymentIdHint": "此 ID 由本机硬件实时生成（硬绑定），请提供给厂商用于签发许可证。",
+    "copy": "复制",
+    "copied": "已复制",
+    "pasteLabel": "离线许可证",
+    "pastePlaceholder": "粘贴离线许可证内容…",
+    "codeLabel": "在线激活码",
+    "codePlaceholder": "请输入在线激活码",
+    "cancel": "取消",
+    "submit": "激活",
+    "submitting": "正在校验…",
+    "success": "许可证已激活"
+  },
+  "login": {
+    "title": "嗨，开始吧！",
+    "welcome": "👋 欢迎！请登录以进入管理后台。",
+    "email": "邮箱",
+    "password": "密码",
+    "code": "两步验证码",
+    "emailPlaceholder": "你的邮箱",
+    "passwordPlaceholder": "你的密码",
+    "submit": "登录",
+    "submitting": "正在登录…",
+    "codeHint": "6 位数字验证码",
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码"
+  },
+  "changePassword": {
+    "title": "首次登录 · 修改密码",
+    "desc": "出厂超级管理员密码与邮箱相同，请先设置新密码再进入控制台。",
+    "current": "当前密码",
+    "currentPlaceholder": "出厂密码（= 超管邮箱）",
+    "next": "新密码",
+    "nextPlaceholder": "设置新密码",
+    "confirm": "确认新密码",
+    "confirmPlaceholder": "再次输入新密码",
+    "policy": "至少 12 位，含大小写字母、数字、符号中的 3 类；不得与邮箱相同。",
+    "mismatch": "两次输入的密码不一致。",
+    "submit": "设置并进入",
+    "submitting": "正在保存…",
+    "cancel": "退出登录"
+  },
+  "wizard": {
+    "title": "初始化向导",
+    "welcome": "欢迎，{name}。完成几步基础配置即可开始使用。",
+    "step": {
+      "license": "许可证",
+      "super_admin": "超级管理员",
+      "email": "邮件服务",
+      "branding": "品牌外观",
+      "done": "完成"
+    },
+    "emailDesc": "配置 SMTP 用于发送验证、通知与告警邮件。可稍后在设置中修改，或先跳过。支持 163/QQ/Gmail/企业邮及任意 SMTP 服务商。",
+    "provider": "邮箱服务商",
+    "providerPick": "选择服务商一键填充…",
+    "smtpHost": "SMTP 主机",
+    "smtpPort": "端口",
+    "smtpEncryption": "加密方式",
+    "encAuto": "自动（按端口）",
+    "encSsl": "SSL/TLS（隐式，465）",
+    "encStarttls": "STARTTLS（587）",
+    "encNone": "不加密（25）",
+    "smtpUser": "用户名",
+    "smtpPass": "密码 / 授权码",
+    "smtpFromName": "发件人名称",
+    "smtpFrom": "发件地址",
+    "fromLockedHint": "该服务商要求发件地址与登录用户名一致",
+    "allowInsecure": "允许不安全 TLS（仅内网自签证书时勾选）",
+    "testEmail": "发送测试邮件",
+    "emailHint": {
+      "auth_failed": "认证失败：检查用户名/密码。国内邮箱（163/QQ 等）密码须用「授权码」而非登录密码；Gmail/Outlook 开了两步验证须用应用专用密码或 OAuth。",
+      "auth_or_tls_required": "服务器要求先认证或先启用加密。请填用户名/密码并选择 SSL 或 STARTTLS。",
+      "from_not_allowed": "发件地址被拒：多数邮箱要求发件地址与登录账号完全一致，请把发件地址改成你的登录邮箱。",
+      "temporary": "服务器暂时不可用或限速，请稍后重试；频繁失败可降低发送频率。",
+      "rejected": "邮件被服务器拒收（常因反垃圾/策略），请检查内容、发件域名与 SPF/DKIM。",
+      "connect_failed": "连接失败：检查 SMTP 主机、端口与加密方式是否匹配（如 465 用 SSL、587 用 STARTTLS），以及网络是否可达。",
+      "tls_failed": "TLS 握手失败：证书不匹配或加密方式不对。内网自签证书可勾选「允许不安全 TLS」。",
+      "smtp_error": "发送失败，请检查 SMTP 配置。"
+    },
+    "brandingDesc": "设置产品名称与主题色，应用于前台与管理后台。可稍后在设置中修改。",
+    "productName": "产品名称",
+    "accent": "主题色",
+    "loginSubtitle": "登录页副标题",
+    "skip": "跳过",
+    "saveNext": "保存并继续",
+    "back": "上一步",
+    "skipFinish": "跳过并完成",
+    "finish": "完成并进入",
+    "finishing": "正在完成…",
+    "savedEmail": "邮件配置已保存",
+    "testSent": "测试邮件已发送，请检查收件箱"
+  },
+  "admin": {
+    "logout": "退出登录",
+    "soon": "即将上线",
+    "welcomeTitle": "欢迎回来",
+    "welcomeDesc": "已登录管理后台，{name}。各业务模块将在后续阶段逐步开放。",
+    "role": "角色",
+    "permissions": "权限",
+    "roles": {
+      "super_admin": "超级管理员",
+      "admin": "管理员",
+      "auditor": "审计员"
+    },
+    "nav": {
+      "overview": "概览",
+      "auditLogs": "审计日志",
+      "workspaces": "工作区",
+      "members": "成员",
+      "channels": "模型渠道",
+      "branding": "品牌",
+      "settings": "设置",
+      "account": "账号安全",
+      "knowledgeBases": "知识库"
+    }
+  },
+  "channels": {
+    "title": "模型渠道",
+    "desc": "配置本部署的 LLM / 嵌入 / 重排 / Web 搜索后端(六路收口的渠道侧)。",
+    "create": "新建渠道",
+    "createTitle": "新建{p}渠道",
+    "editTitle": "编辑渠道",
+    "empty": "暂无渠道。点右上「新建渠道」选择服务商类型添加。",
+    "noKey": "未配置 Key",
+    "on": "启用",
+    "off": "停用",
+    "test": "测试连通",
+    "testing": "测试中…",
+    "testOk": "连通正常",
+    "testErr": {
+      "auth_failed": "鉴权失败:Key 无效或无权限",
+      "connect_failed": "连接失败:Base URL/网络不可达",
+      "no_base_url": "未填 Base URL",
+      "failed": "连通测试失败"
+    },
+    "fName": "名称",
+    "fKind": "用途",
+    "fBaseUrl": "Base URL",
+    "fModel": "模型",
+    "fKey": "API Key",
+    "deleteTitle": "删除渠道",
+    "deleteDesc": "确认删除模型渠道「{name}」?此操作不可撤销。",
+    "col": {
+      "name": "名称",
+      "provider": "服务商",
+      "kind": "用途",
+      "model": "模型",
+      "status": "状态"
+    },
+    "kind": {
+      "chat": "对话",
+      "embed": "嵌入",
+      "rerank": "重排",
+      "web_search": "Web 搜索",
+      "vl": "多模态(VL)",
+      "asr": "语音识别(ASR)"
+    }
+  },
+  "account": {
+    "nav": {
+      "password": "修改密码"
+    },
+    "password": {
+      "title": "修改密码",
+      "desc": "修改你自己的后台登录密码。改密后会重新签发会话,无需重新登录。",
+      "current": "当前密码",
+      "next": "新密码",
+      "confirm": "确认新密码",
+      "policyHint": "需满足平台密码策略（最小长度与字符类别要求）。",
+      "mismatch": "两次输入的新密码不一致。",
+      "saved": "密码已修改"
+    }
+  },
+  "overview": {
+    "license": "License",
+    "product": "产品",
+    "subscription": "订阅",
+    "daysLeft": "剩余天数",
+    "days": "{n} 天",
+    "activeUntil": "有效期至",
+    "licenseId": "License ID",
+    "recentAudit": "近期审计",
+    "viewAll": "查看全部"
+  },
+  "license": {
+    "status": {
+      "active": "有效",
+      "expiring": "即将到期",
+      "expired": "已过期",
+      "revoked": "已吊销",
+      "binding_mismatch": "绑定不符",
+      "invalid_signature": "签名无效",
+      "locked": "未激活"
+    }
+  },
+  "ws": {
+    "title": "工作区",
+    "desc": "平台内所有工作区（个人/团队），含成员数与状态。",
+    "searchPlaceholder": "按名称或 slug 搜索…",
+    "empty": "暂无工作区。",
+    "create": "创建工作区",
+    "createTitle": "新建工作区",
+    "fName": "名称",
+    "fNamePlaceholder": "如：研发团队",
+    "fKind": "类型",
+    "showMembers": "查看成员",
+    "addMember": "添加成员",
+    "edit": "编辑",
+    "delete": "删除",
+    "editTitle": "编辑工作区",
+    "deleteTitle": "删除工作区",
+    "deleteDesc": "确定删除工作区「{name}」？此操作不可撤销，将连带删除其下所有用户与数据。",
+    "col": {
+      "name": "名称",
+      "kind": "类型",
+      "status": "状态",
+      "members": "成员数",
+      "created": "创建时间"
+    },
+    "kind": {
+      "personal": "个人",
+      "team": "团队"
+    },
+    "status": {
+      "active": "正常",
+      "suspended": "已停用"
+    }
+  },
+  "members": {
+    "title": "成员",
+    "desc": "所有前台注册用户、所属工作区、角色与状态。",
+    "searchPlaceholder": "按邮箱或用户名搜索…",
+    "empty": "暂无成员。",
+    "never": "从未登录",
+    "create": "创建成员",
+    "createTitle": "新建成员",
+    "createdTitle": "成员已创建",
+    "createdDesc": "已为 {email} 创建账号（直接可用，免邮箱验证）。",
+    "genPassword": "自动生成的初始密码",
+    "genPasswordHint": "请妥善转交该用户，此密码仅显示这一次。",
+    "fEmail": "邮箱",
+    "fUsername": "用户名（可选）",
+    "fWorkspace": "工作区",
+    "fWorkspacePick": "选择工作区…",
+    "fRole": "角色",
+    "fPassword": "密码（可选）",
+    "fPasswordPlaceholder": "留空则自动生成强密码",
+    "edit": "编辑",
+    "resetPw": "重置密码",
+    "delete": "删除",
+    "editTitle": "编辑成员",
+    "resetTitle": "重置密码",
+    "resetDesc": "为 {email} 生成一个新的强密码？旧密码将立即失效。",
+    "resetConfirm": "确认重置",
+    "deleteTitle": "删除成员",
+    "deleteDesc": "确定删除成员「{email}」？此操作不可撤销。若其工作区为个人空间，将一并删除。",
+    "filteredByWs": "仅显示该工作区的成员",
+    "clearWsFilter": "清除筛选",
+    "col": {
+      "user": "用户",
+      "workspace": "工作区",
+      "role": "角色",
+      "status": "状态",
+      "lastLogin": "最近登录",
+      "created": "注册时间"
+    },
+    "status": {
+      "active": "正常",
+      "disabled": "已禁用",
+      "pending": "待验证"
+    },
+    "role": {
+      "Owner": "所有者",
+      "Admin": "管理员",
+      "Editor": "编辑者",
+      "Member": "成员",
+      "Reader": "只读"
+    }
+  },
+  "operators": {
+    "title": "操作员",
+    "desc": "管理可登录后台的账号(超级管理员 / 管理员 / 审计员)及其角色与状态。",
+    "searchPlaceholder": "按邮箱/用户名搜索…",
+    "empty": "暂无操作员。",
+    "you": "(你)",
+    "create": "新建操作员",
+    "createTitle": "新建操作员",
+    "createdTitle": "操作员已创建",
+    "createdDesc": "已为 {email} 创建后台账号。首次登录需修改初始密码。",
+    "genPassword": "自动生成的初始密码",
+    "genPasswordHint": "请安全地交给本人——仅此一次显示;对方首登须改密。",
+    "resetHint": "请安全地交给本人——仅此一次显示;对方首登须改密。",
+    "fEmail": "邮箱",
+    "fUsername": "用户名",
+    "fRole": "角色",
+    "fPassword": "密码(可选)",
+    "fPasswordPlaceholder": "留空则自动生成强密码并强制首登改密",
+    "editTitle": "编辑操作员",
+    "resetDesc": "为 {email} 生成新的强密码?旧密码立即失效,且对方首登须改密。",
+    "deleteTitle": "删除操作员",
+    "deleteDesc": "确认删除操作员「{email}」?此操作不可撤销,其全部会话将被踢出。",
+    "col": {
+      "user": "用户",
+      "role": "角色",
+      "status": "状态",
+      "lastLogin": "最近登录",
+      "created": "创建时间"
+    }
+  },
+  "settings": {
+    "title": "设置",
+    "desc": "平台配置——初始化向导完成后可随时修改。",
+    "nav": {
+      "operators": "操作员",
+      "email": "邮件服务",
+      "login": "登录设置",
+      "password": "密码策略",
+      "license": "License"
+    },
+    "license": {
+      "title": "License",
+      "desc": "查看当前 Terrane Enterprise 授权。更换许可证请在锁定页走激活流程。",
+      "current": "许可证状态",
+      "statusLabel": "状态",
+      "customer": "客户",
+      "activeFrom": "生效时间",
+      "clusterId": "集群 ID",
+      "deploymentId": "部署 ID",
+      "workspaces": "工作区（已用 / 上限）",
+      "membersLimit": "成员上限",
+      "unlimited": "无限制"
+    },
+    "savedSecurity": "已保存",
+    "password": {
+      "title": "密码策略",
+      "desc": "口令复杂度要求——适用于注册、改密、管理员建成员、重置密码等所有设置口令的场景。"
+    },
+    "login": {
+      "title": "登录设置",
+      "desc": "登录保护与会话——失败锁定、会话时长等;前后台登录统一生效。"
+    },
+    "security": {
+      "title": "安全",
+      "desc": "平台安全策略——密码规则等,前后台所有口令校验点统一生效。",
+      "pwTitle": "密码策略",
+      "pwDesc": "适用于注册、改密、管理员建成员、重置密码等所有设置口令的场景。",
+      "minLength": "最小长度",
+      "minLengthHint": "8–128 个字符;推荐 ≥ 12。",
+      "charClasses": "字符类别要求",
+      "charClassesHint": "大写 / 小写 / 数字 / 符号 四类中至少满足几类。",
+      "charClassesN": "{n} 类",
+      "lockTitle": "登录保护",
+      "lockDesc": "连续登录失败达阈值后,临时锁定该账号,抵御暴力破解。",
+      "lockThreshold": "失败次数阈值",
+      "lockThresholdHint": "连续失败多少次后锁定(3–50)。",
+      "lockMinutes": "锁定时长(分钟)",
+      "lockMinutesHint": "锁定持续时间,到期自动解锁(1–1440 分钟)。",
+      "sessionTitle": "会话",
+      "sessionDesc": "登录会话的最长有效期,到期需重新登录。",
+      "sessionDays": "会话时长(天)",
+      "sessionDaysHint": "1–365 天;推荐 7 天。"
+    },
+    "test": "发送测试邮件",
+    "savedEmail": "邮件设置已保存",
+    "savedBranding": "品牌设置已保存",
+    "testSent": "测试邮件已发送——请查收",
+    "passwordKept": "留空 = 保持当前密码不变",
+    "supportUrl": "支持链接",
+    "logo": "Logo",
+    "logoUpload": "上传 Logo",
+    "logoRemove": "移除",
+    "logoHint": "PNG/JPG/SVG/WebP,建议正方形,≤ 700KB;显示于侧边栏、登录页与浏览器图标。",
+    "logoTooLarge": "图片太大(需 ≤ 700KB),请压缩后再传。",
+    "email": {
+      "title": "邮件服务",
+      "desc": "用于验证、通知、告警邮件的 SMTP。支持 163/QQ/Gmail/企业邮箱及任意 SMTP 服务商。"
+    },
+    "branding": {
+      "title": "品牌外观",
+      "desc": "应用标题、Logo、主题色等白标项，应用于整个前台与管理后台。",
+      "appTitle": "应用标题",
+      "appTitleUsage": "显示于浏览器标签页与邮件（最长 50 字）。",
+      "consoleLogo": "控制台 Logo",
+      "consoleLogoUsage": "显示于后台/前台左上角。建议任意宽 × 40px；PNG/SVG，≤ 700KB。",
+      "loginLogo": "登录页 Logo",
+      "loginLogoUsage": "显示于登录页。建议任意宽 × 44px；PNG/SVG，≤ 700KB。",
+      "favicon": "Favicon",
+      "faviconUsage": "显示于浏览器地址栏。建议 32×32 起、1:1；PNG/ICO/SVG，≤ 700KB。",
+      "accentUsage": "主题色，应用于按钮、链接、高亮等。",
+      "subtitleUsage": "登录页标题下方的副标题。",
+      "supportUsage": "「支持/帮助」入口链接（可选）。"
+    }
+  },
+  "audit": {
+    "title": "审计日志",
+    "desc": "记录后台所有变更操作的不可篡改流水（append-only，仅元数据）。",
+    "actionPlaceholder": "按操作过滤，如 wizard.（末尾点=前缀）",
+    "filter": "筛选",
+    "pageInfo": "显示 {from}–{to} / 共 {total} 条",
+    "prev": "上一页",
+    "next": "下一页",
+    "empty": "暂无审计记录。",
+    "col": {
+      "time": "时间",
+      "actor": "操作者",
+      "action": "操作",
+      "target": "对象",
+      "ip": "IP"
+    },
+    "actorType": {
+      "admin": "操作员",
+      "user": "用户",
+      "system": "系统"
+    },
+    "action": {
+      "wizard_email_configure": "配置邮件服务",
+      "wizard_branding_update": "更新品牌外观",
+      "wizard_complete": "完成初始化向导",
+      "workspace_create": "创建工作区",
+      "workspace_update": "编辑工作区",
+      "workspace_delete": "删除工作区",
+      "user_create": "创建成员",
+      "user_update": "编辑成员",
+      "user_reset_password": "重置密码",
+      "user_delete": "删除成员",
+      "settings_email_update": "更新邮件服务",
+      "settings_branding_update": "更新品牌外观",
+      "settings_security_update": "更新安全策略",
+      "operator_create": "创建操作员",
+      "operator_update": "编辑操作员",
+      "operator_reset_password": "重置操作员密码",
+      "operator_delete": "删除操作员",
+      "channel_create": "创建模型渠道",
+      "channel_update": "编辑模型渠道",
+      "channel_delete": "删除模型渠道"
+    },
+    "targetType": {
+      "setting": "设置",
+      "branding": "品牌外观",
+      "user": "用户",
+      "workspace": "工作区",
+      "membership": "成员",
+      "operator": "操作员",
+      "channel": "模型渠道"
+    },
+    "targetId": {
+      "email": "邮件",
+      "wizard": "向导",
+      "login": "登录策略",
+      "password": "密码策略",
+      "branding": "品牌外观",
+      "data_retention": "数据保留"
+    }
+  },
+  "common": {
+    "loading": "加载中…",
+    "search": "搜索",
+    "all": "全部",
+    "cancel": "取消",
+    "create": "创建",
+    "creating": "创建中…",
+    "done": "完成",
+    "actions": "操作",
+    "save": "保存",
+    "saving": "保存中…",
+    "delete": "删除",
+    "confirmDeletePrompt": "请逐字输入以下内容以确认删除："
+  },
+  "pagination": {
+    "pageInfo": "显示 {from}–{to} / 共 {total} 条",
+    "prev": "上一页",
+    "next": "下一页"
+  },
+  "theme": {
+    "label": "主题",
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统"
+  },
+  "lang": {
+    "label": "语言"
+  },
+  "errors": {
+    "AUTH_INVALID_CREDENTIALS": "邮箱或密码错误。",
+    "AUTH_ACCOUNT_LOCKED": "账号因多次尝试失败已被锁定，请稍后再试。",
+    "AUTH_ACCOUNT_DISABLED": "该账号已被禁用，请联系管理员。",
+    "AUTH_2FA_REQUIRED": "请输入两步验证码。",
+    "AUTH_2FA_INVALID": "两步验证码无效。",
+    "AUTH_PASSWORD_WEAK": "密码强度不满足要求：至少 12 位且含 3 类字符，不得与邮箱相同。",
+    "AUTH_PASSWORD_REUSED": "新密码不能与当前密码相同。",
+    "RATE_LIMIT_LOGIN_BLOCKED": "登录尝试过于频繁，请稍后再试。",
+    "LICENSE_INVALID": "许可证无效。",
+    "LICENSE_INVALID_SIGNATURE": "许可证签名无效。",
+    "LICENSE_BINDING_MISMATCH": "许可证未绑定到本部署（部署 ID 不匹配）。",
+    "LICENSE_EXPIRED": "许可证已过期。",
+    "LICENSE_REVOKED": "许可证已被吊销。",
+    "LICENSE_REQUIRED": "需要激活许可证.",
+    "RATE_LIMIT_EXCEEDED": "激活尝试过于频繁，请稍后再试。",
+    "AUTH_REQUIRED": "替换已激活的许可证需要超级管理员认证。",
+    "VALIDATION_FAILED": "请求校验失败。",
+    "PERM_DENIED": "无权限执行该操作。",
+    "WIZARD_ALREADY_DONE": "初始化向导已完成。",
+    "SYSTEM_UNAVAILABLE": "服务暂不可用（如 SMTP 连接失败），请检查配置后重试。",
+    "NETWORK_ERROR": "网络请求失败，请检查连接。",
+    "OPERATOR_SELF_FORBIDDEN": "不能对当前登录的自己执行该操作。",
+    "OPERATOR_LAST_SUPER_ADMIN": "不能删除/禁用/降级最后一个超级管理员。",
+    "SYSTEM_HTTP_ERROR": "系统错误，请稍后再试。"
+  },
+  "kbOverview": {
+    "title": "库总览",
+    "desc": "平台俯视所有工作区的知识库(只读元数据,不触达内容)。",
+    "searchPlaceholder": "搜索库名…",
+    "allVis": "全部可见性",
+    "vis": {
+      "private": "私有",
+      "shared": "共享",
+      "workspace": "工作区"
+    },
+    "col": {
+      "name": "名称",
+      "workspace": "工作区",
+      "visibility": "可见性",
+      "sources": "源数",
+      "status": "状态"
+    },
+    "empty": "暂无知识库。",
+    "found": "共 {n} 个",
+    "pageOf": "第 {x}/{y} 页"
+  }
+}

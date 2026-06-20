@@ -1,0 +1,368 @@
+{
+  "locked": {
+    "message": "需要激活许可证.",
+    "desc": "您所在部署的 Terrane Enterprise 许可证尚未激活，请联系管理员在管理后台完成激活后继续使用。",
+    "expiredDesc": "您所在部署的 Terrane Enterprise 许可证已过期，请联系管理员在管理后台重新激活或续期。",
+    "revokedDesc": "您所在部署的许可证已被吊销，请联系管理员处理。",
+    "mismatchDesc": "当前许可证未绑定到本部署，请联系管理员使用匹配的许可证激活。"
+  },
+  "common": {
+    "loading": "加载中…",
+    "cancel": "取消",
+    "saving": "保存中…",
+    "close": "关闭",
+    "back": "返回"
+  },
+  "login": {
+    "title": "嗨，欢迎回来",
+    "welcome": "登录以进入你的知识空间。",
+    "email": "邮箱",
+    "password": "密码",
+    "code": "两步验证码",
+    "emailPlaceholder": "你的邮箱",
+    "passwordPlaceholder": "你的密码",
+    "codeHint": "6 位数字验证码",
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码",
+    "forgot": "忘记密码？",
+    "submit": "登录",
+    "submitting": "正在登录…",
+    "noAccount": "还没有账号？",
+    "toRegister": "注册",
+    "or": "或",
+    "ssoLogin": "使用 {provider} 登录"
+  },
+  "register": {
+    "title": "创建你的 Terrane 账号",
+    "welcome": "注册后将自动为你创建一个个人知识空间。",
+    "username": "用户名（可选）",
+    "usernamePlaceholder": "如何称呼你",
+    "passwordPlaceholder": "设置密码",
+    "policy": "至少 10 位，含字母与数字等至少 2 类字符；不得与邮箱相同。",
+    "submit": "注册",
+    "submitting": "正在创建…",
+    "hasAccount": "已有账号？",
+    "toLogin": "去登录",
+    "checkEmailTitle": "请验证你的邮箱",
+    "checkEmailDesc": "我们已向 {email} 发送验证邮件，请点击邮件中的链接完成验证后登录。"
+  },
+  "forgot": {
+    "title": "找回密码",
+    "desc": "输入注册邮箱，我们将发送重置链接。",
+    "submit": "发送重置链接",
+    "submitting": "正在发送…",
+    "sent": "若 {email} 是已注册邮箱，重置链接已发送，请查收。",
+    "back": "返回登录"
+  },
+  "reset": {
+    "title": "设置新密码",
+    "newPassword": "新密码",
+    "confirm": "确认新密码",
+    "mismatch": "两次输入的密码不一致。",
+    "submit": "重置密码",
+    "submitting": "正在重置…",
+    "done": "密码已重置，正在跳转登录…",
+    "noToken": "重置链接无效或缺少凭证。",
+    "requestNew": "重新申请重置"
+  },
+  "verify": {
+    "title": "邮箱验证",
+    "checking": "正在验证…",
+    "ok": "邮箱验证成功，现在可以登录了。",
+    "error": "验证链接无效或已过期，请重新登录后重发验证邮件。"
+  },
+  "home": {
+    "logout": "退出登录",
+    "welcome": "欢迎，{name}",
+    "desc": "你的个人知识空间已就绪。知识库、对话、Agent 等能力将在后续阶段开放。"
+  },
+  "theme": {
+    "label": "主题",
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统"
+  },
+  "lang": {
+    "label": "语言"
+  },
+  "errors": {
+    "LICENSE_REQUIRED": "需要激活许可证.",
+    "AUTH_REQUIRED": "请先登录。",
+    "AUTH_INVALID_CREDENTIALS": "邮箱或密码错误。",
+    "AUTH_ACCOUNT_DISABLED": "该账号已被禁用，请联系管理员。",
+    "AUTH_ACCOUNT_LOCKED": "登录失败次数过多，账号已临时锁定，请稍后再试。",
+    "AUTH_EMAIL_NOT_VERIFIED": "邮箱尚未验证，请先完成邮箱验证。",
+    "AUTH_2FA_REQUIRED": "请输入两步验证码。",
+    "AUTH_2FA_INVALID": "两步验证码无效。",
+    "AUTH_PASSWORD_WEAK": "密码强度不满足要求：至少 10 位且含 2 类字符，不得与邮箱相同。",
+    "AUTH_PASSWORD_REUSED": "新密码不能与当前密码相同。",
+    "AUTH_EMAIL_TAKEN": "该邮箱已被注册。",
+    "AUTH_TOKEN_INVALID": "链接无效或已过期。",
+    "RATE_LIMIT_EXCEEDED": "请求过于频繁，请稍后再试。",
+    "RATE_LIMIT_LOGIN_BLOCKED": "登录尝试过于频繁，请稍后再试。",
+    "VALIDATION_FAILED": "请求校验失败。",
+    "NETWORK_ERROR": "网络请求失败，请检查连接。",
+    "SYSTEM_HTTP_ERROR": "系统错误，请稍后再试。"
+  },
+  "kb": {
+    "title": "我的知识库",
+    "subtitle": "把资料喂进来,让它编译成可检索的知识。",
+    "create": "新建知识库",
+    "createTitle": "新建知识库",
+    "empty": "还没有知识库。点右上「新建知识库」开始。",
+    "noDesc": "暂无描述",
+    "noDescription": "暂无描述",
+    "fName": "名称",
+    "fDesc": "描述(可选)",
+    "fVis": "可见性",
+    "vis": {
+      "private": "私有",
+      "shared": "共享",
+      "workspace": "工作区可见"
+    },
+    "role": {
+      "owner": "拥有者",
+      "editor": "可编辑",
+      "viewer": "只读"
+    },
+    "back": "返回",
+    "notFound": "知识库不存在或无访问权限。",
+    "sources": "数据源",
+    "addText": "添加文本",
+    "addTextTitle": "添加文本源",
+    "noSources": "还没有数据源,添加文本开始构建知识库。",
+    "chunks": "{n} 切片",
+    "deleteKb": "删除库",
+    "confirmDelete": "确认删除知识库「{name}」?此操作不可撤销。",
+    "status": {
+      "pending": "待处理",
+      "parsing": "解析中",
+      "parsed": "已解析",
+      "failed": "失败"
+    },
+    "searchPlaceholder": "检索这个知识库…",
+    "search": "检索",
+    "searching": "检索中…",
+    "searchHint": "输入关键词,向量语义 + 词法混合检索 + 重排。",
+    "noHits": "没有命中。",
+    "hitsCount": "{n} 条命中",
+    "ingesting": "摄入中…",
+    "fSourceTitle": "源标题",
+    "fText": "文本内容",
+    "upload": "上传文件",
+    "uploadFile": "上传文件(PDF/Word/Excel/PPT/文本/视频)",
+    "fileTooBig": "文件过大(上限 4MB)",
+    "fileEmpty": "文件内容为空",
+    "deleteSource": "删除源",
+    "confirmDeleteSource": "删除数据源「{name}」及其全部切片?",
+    "share": "管理共享",
+    "shareTitle": "共享知识库",
+    "shareDesc": "邀请同工作区成员协作(viewer 只读 / editor 可编辑)。",
+    "memberEmail": "成员邮箱",
+    "noMembers": "还没有共享成员。",
+    "tabChat": "问答",
+    "tabSearch": "检索",
+    "chatHint": "向知识库提问,答案会基于库内资料并标注引用来源。",
+    "chatPlaceholder": "问点什么…",
+    "noChatModel": "尚未配置对话模型(后台「模型渠道」添加 chat 渠道)。",
+    "chatError": "生成失败,请重试。",
+    "tab_chat": "问答",
+    "tab_search": "检索",
+    "tab_wiki": "Wiki",
+    "tab_graph": "图谱",
+    "graphTitle": "知识图谱",
+    "graphBuild": "构建图谱",
+    "graphBuilding": "构建中…",
+    "graphEmpty": "还没有图谱,点「构建图谱」从资料抽取实体与关系。",
+    "wikiTitle": "知识 Wiki",
+    "wikiCompile": "编译 Wiki",
+    "wikiRecompile": "重新编译",
+    "wikiCompiling": "编译中…",
+    "wikiEmpty": "还没有 Wiki,点「编译 Wiki」把资料编译成结构化知识。",
+    "wikiUpdated": "已更新",
+    "mcpTitle": "MCP 接入",
+    "mcpDesc": "生成密钥,把这个知识库作为 MCP 工具挂进 Claude Code / Cursor 等。",
+    "mcpTokenOnce": "令牌只显示这一次,请立即复制保存。",
+    "mcpConfigHint": "把下面配置加入你的 MCP 客户端:",
+    "mcpBack": "返回密钥列表",
+    "mcpKeyName": "密钥名称",
+    "mcpKeyNamePh": "如:我的 Claude 接入",
+    "mcpCreate": "创建",
+    "mcpNoKeys": "还没有密钥。",
+    "mcpDeleteConfirm": "删除密钥「{name}」?使用它的客户端将立即失效。",
+    "parseFailed": "解析失败或文档为空",
+    "tab_studio": "Studio"
+  },
+  "nav": {
+    "kbs": "知识库",
+    "memory": "记忆",
+    "account": "账号设置",
+    "overview": "概览",
+    "graph": "知识图谱",
+    "chat": "Chat",
+    "settings": "设置",
+    "modelSettings": "模型设置",
+    "security": "安全",
+    "language": "语言",
+    "collapse": "折叠/展开",
+    "editProfile": "编辑资料"
+  },
+  "memory": {
+    "title": "我的记忆",
+    "subtitle": "你的专属长期记忆:从聊天与上传文档自动记忆,也可手动添加。仅你可见。",
+    "add": "记住",
+    "addPlaceholder": "告诉 Terrane 一件值得记住的事…",
+    "recallPlaceholder": "语义唤回:试试「我的偏好」「过敏」…",
+    "recallResult": "唤回 {n} 条",
+    "empty": "还没有记忆。在上面输入一条开始。",
+    "extracted": "· 自动抽取",
+    "kindFact": "事实",
+    "kindPref": "偏好",
+    "kindEvent": "事件",
+    "autoTitle": "自动记忆",
+    "autoHint": "开启后,我会从你的对话和上传的文档里自动记住关于你的偏好、事实与重要事件(去重+更新)。",
+    "autoStats": "已自动记忆:对话 {{chat}} 条 · 文档 {{doc}} 条",
+    "srcManual": "手动",
+    "srcChat": "对话",
+    "srcDocument": "文档",
+    "filter": {
+      "all": "全部",
+      "manual": "手动",
+      "chat": "对话",
+      "document": "文档"
+    }
+  },
+  "account": {
+    "title": "账号设置",
+    "subtitle": "你的个人资料与安全。",
+    "username": "用户名",
+    "email": "邮箱",
+    "password": "密码",
+    "changePassword": "修改密码"
+  },
+  "twofa": {
+    "title": "两步验证(2FA)",
+    "on": "已开启",
+    "enable": "开启",
+    "disable": "关闭",
+    "enrollHint": "在身份验证器 App(如 Google Authenticator)中手动添加下面的密钥,再输入 6 位验证码确认:",
+    "codePlaceholder": "6 位验证码",
+    "codeOrBackup": "验证码或备份码",
+    "confirm": "确认开启",
+    "confirmDisable": "确认关闭",
+    "backupHint": "请妥善保存这些一次性备份码(仅显示一次):",
+    "done": "完成",
+    "error": "操作失败",
+    "codeInvalid": "验证码无效"
+  },
+  "studio": {
+    "title": "Studio",
+    "subtitle": "基于库内资料一键生成多种产物。",
+    "back": "返回",
+    "noSources": "先添加资料再生成。",
+    "failed": "生成失败,请重试。",
+    "kind": {
+      "study_guide": "学习指南",
+      "faq": "常见问答",
+      "briefing": "简报文档",
+      "timeline": "时间线",
+      "mind_map": "思维导图",
+      "flashcards": "记忆闪卡",
+      "quiz": "测验",
+      "data_table": "数据表",
+      "slide_deck": "幻灯片",
+      "audio_overview": "播客音频"
+    },
+    "downloadPptx": "下载 PPTX",
+    "exporting": "导出中…",
+    "noTts": "未配置语音(TTS)渠道",
+    "rateLimited": "语音服务繁忙,请稍后重试",
+    "synthHint": "正在生成对话脚本并合成语音,约 1-2 分钟…"
+  },
+  "topbar": {
+    "activated": "已激活",
+    "inactive": "未激活"
+  },
+  "menu": {
+    "profile": "个人设置",
+    "language": "语言",
+    "changePassword": "修改密码",
+    "security": "安全设置"
+  },
+  "profile": {
+    "title": "个人资料",
+    "desc": "更新你的头像和名字。",
+    "avatarHint": "支持 PNG/JPG/WebP/GIF,自动裁剪为方形。",
+    "removeAvatar": "移除头像",
+    "name": "名字",
+    "email": "邮箱",
+    "notImage": "请选择图片文件",
+    "imageFailed": "图片处理失败",
+    "saveFailed": "保存失败,请重试"
+  },
+  "overview": {
+    "hello": "你好,{name}",
+    "subtitle": "你的知识空间总览。",
+    "startChat": "开始对话",
+    "recent": "最近的知识库"
+  },
+  "graphPage": {
+    "subtitle": "从资料抽取的实体与关系,选择一个知识库查看。"
+  },
+  "chatPage": {
+    "subtitle": "选择一个知识库,基于其内容问答(带引用)。",
+    "empty": "先去「知识库」建一个库并添加资料。"
+  },
+  "modelSettings": {
+    "subtitle": "前台使用的模型,同步自后台「模型渠道」配置。",
+    "chatModel": "对话模型",
+    "chatHint": "选择问答/生成使用的模型(后台配置的可选项)。",
+    "none": "后台尚未配置对话(chat)渠道。",
+    "current": "当前",
+    "others": "其他模型(后台配置,只读)",
+    "unset": "未配置",
+    "othersHint": "嵌入/重排/多模态由管理员在后台配置。",
+    "kind": {
+      "vl": "多模态(VL)",
+      "embed": "嵌入",
+      "rerank": "重排"
+    },
+    "kindFull": {
+      "chat": "对话模型",
+      "vl": "多模态模型(VL)",
+      "embed": "嵌入模型",
+      "rerank": "重排模型"
+    },
+    "kindHint": {
+      "chat": "问答与生成使用的模型。",
+      "vl": "图片/视频画面理解使用的模型。",
+      "embed": "资料向量化使用的模型(切换后新资料用新模型)。",
+      "rerank": "检索结果精排使用的模型。"
+    },
+    "noneKind": "该用途后台尚未配置渠道。",
+    "syncNote": "选项同步自后台「模型渠道」,管理员配置后此处即可选择。"
+  },
+  "langSettings": {
+    "subtitle": "界面语言。",
+    "label": "界面语言"
+  },
+  "securitySettings": {
+    "subtitle": "密码与两步验证。"
+  },
+  "assistant": {
+    "newChat": "新对话",
+    "noHistory": "还没有对话记录",
+    "welcome": "我是你的 AI 助手",
+    "welcomeSub": "自动引用你的知识库和记忆,问我任何问题。",
+    "placeholder": "问我任何问题…(Enter 发送,Shift+Enter 换行)",
+    "noModel": "尚未配置对话模型(后台「模型渠道」添加 chat 渠道)。",
+    "error": "生成失败,请重试。",
+    "attach": "添加文件(文档/图片/视频/音频)",
+    "kb": "知识库",
+    "kbHint": "开启后基于你的知识库回答(可指定库)",
+    "allKb": "全部知识库",
+    "web": "联网搜索",
+    "webHint": "开启后联网搜索最新信息",
+    "webSources": "联网来源"
+  }
+}

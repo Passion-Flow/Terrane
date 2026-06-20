@@ -1,0 +1,13 @@
+# terrane-postgres PoC: PG18 + AGE 1.7.0 + pgvector（设计 06-deployment §2 / 01-system D2 实证）
+# 范式来源：LightRAG 官方 Dockerfile.postgres（PRD §6.1 核验）
+FROM pgvector/pgvector:pg18-trixie AS build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential git ca-certificates postgresql-server-dev-18 bison flex \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 --branch release/PG18/1.7.0 https://github.com/apache/age.git /age \
+    && cd /age && make && make install
+
+FROM pgvector/pgvector:pg18-trixie
+COPY --from=build /usr/lib/postgresql/18/lib/age.so /usr/lib/postgresql/18/lib/
+COPY --from=build /usr/share/postgresql/18/extension/age* /usr/share/postgresql/18/extension/
+CMD ["postgres", "-c", "shared_preload_libraries=age"]

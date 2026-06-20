@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "terrane.fullname" . }}-config
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+data:
+  TZ: {{ .Values.global.timezone | quote }}
+  TERRANE_LOG_LEVEL: {{ .Values.global.logLevel | quote }}
+  SESSION_COOKIE_SECURE: {{ .Values.global.useTLS | toString | quote }}
+  DATABASE_HOST: {{ include "terrane.db.host" . | quote }}
+  DATABASE_PORT: {{ include "terrane.db.port" . | quote }}
+  DATABASE_USERNAME: {{ include "terrane.db.user" . | quote }}
+  DATABASE_SSL_MODE: {{ include "terrane.db.sslmode" . | quote }}
+  CACHE_HOST: {{ include "terrane.cache.host" . | quote }}
+  CACHE_PORT: {{ include "terrane.cache.port" . | quote }}
+  TERRANE_FORGE_EDGE_URL: {{ .Values.license.forgeEdgeUrl | quote }}
+  TERRANE_LICENSE_PATH: /var/lib/terrane/license/active.forge
+  TERRANE_LICENSE_CRL_PATH: /var/lib/terrane/license/crl.forge
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "terrane.fullname" . }}-secret
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+type: Opaque
+data:
+  TERRANE_KEK: {{ required "secret.kek is required (openssl rand -base64 32)" .Values.secret.kek | b64enc | quote }}
+  DATABASE_PASSWORD: {{ (.Values.postgres.enabled | ternary .Values.postgres.password .Values.externalDatabase.password) | b64enc | quote }}
+  CACHE_PASSWORD: {{ (.Values.redis.enabled | ternary .Values.redis.password .Values.externalRedis.password) | b64enc | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "terrane.fullname" . }}-license
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  accessModes: [{{ .Values.license.accessMode }}]
+  resources:
+    requests:
+      storage: {{ .Values.license.size }}
+  {{- if .Values.license.storageClass }}
+  storageClassName: {{ .Values.license.storageClass | quote }}
+  {{- end }}

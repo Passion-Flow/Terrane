@@ -1,0 +1,45 @@
+# Terrane 错误码字典（error-codes.md 规范；基础码全局对齐不改名）
+# 信封: {code, message(i18n key), details, request_id}
+# 前缀 TRN_*；HTTP 映射标注；前端按 code 翻译（zh-CN/en 资源文件）
+
+base:  # 全局基础码（对齐 00-Global/error-codes.md，不在此重定义，仅引用）
+  - OK
+  - VALIDATION_FAILED          # 400 RequestValidationError 统一信封（OpenRelay 教训）
+  - AUTH_REQUIRED              # 401
+  - PERMISSION_DENIED          # 403
+  - NOT_FOUND                  # 404
+  - RATE_LIMITED               # 429
+  - TENANT_QUOTA_EXCEEDED      # 429（配额三类型信封）
+  - LICENSE_REQUIRED           # 423 锁定态（文案逐字：需要激活许可证. / License activation required.）
+  - INTERNAL_ERROR             # 500
+
+business:
+  # 知识库
+  TRN_KB_NOT_FOUND:               {http: 404, zh: 知识库不存在, en: Knowledge base not found}
+  TRN_KB_NAME_CONFIRM_MISMATCH:   {http: 422, zh: 删除确认名称不匹配, en: Confirmation name mismatch}
+  TRN_KB_SLUG_TAKEN:              {http: 409, zh: 库标识已被占用, en: KB slug already taken}
+  TRN_SOURCE_IMMUTABLE:           {http: 409, zh: 原始源不可修改（请追加新版本）, en: Raw source is immutable; append a new version}
+  # 摄入
+  TRN_INGEST_PARSE_FAILED:        {http: 422, zh: 解析失败, en: Parse failed}
+  TRN_INGEST_DEGRADED:            {http: 200, zh: 解析已降级（详情见任务）, en: Parse degraded}
+  TRN_INGEST_UNSUPPORTED_TYPE:    {http: 415, zh: 不支持的文件类型, en: Unsupported file type}
+  # 预算/配额
+  TRN_BUDGET_EXHAUSTED:           {http: 402, zh: 本月 token 预算已用尽（自动任务已暂停）, en: Monthly token budget exhausted}
+  TRN_QUOTA_EXCEEDED:             {http: 429, zh: 配额超限, en: Quota exceeded}   # 信封 code=TENANT_QUOTA_EXCEEDED, details.kind=storage|token
+  # 页面
+  TRN_PAGE_EDIT_LOCKED:           {http: 409, zh: 页面正被他人编辑, en: Page is being edited by another user}
+  TRN_PAGE_REV_CONFLICT:          {http: 409, zh: 版本冲突（含 diff）, en: Revision conflict (diff attached)}
+  # 图谱
+  TRN_GRAPH_QUERY_TIMEOUT:        {http: 408, zh: 图查询超时, en: Graph query timeout}
+  TRN_GRAPH_DEPTH_EXCEEDED:       {http: 422, zh: 超出最大跳数（3）, en: Max hops (3) exceeded}
+  # 连接器
+  TRN_CONNECTOR_AUTH_EXPIRED:     {http: 401, zh: 连接器凭据失效, en: Connector credential expired}
+  TRN_CONNECTOR_RATE_LIMITED:     {http: 429, zh: 外部源限速中, en: Upstream source rate-limited}
+  # MCP / 模型
+  TRN_MCP_SCOPE_DENIED:           {http: 403, zh: Key 权限范围不足, en: API key scope denied}
+  TRN_NO_AVAILABLE_CHANNEL:       {http: 503, zh: 无可用模型渠道, en: No available model channel}
+  TRN_OFFLINE_FEATURE_UNAVAILABLE: {http: 503, zh: 该功能需要外部网络/未配置渠道, en: Feature requires network or unconfigured channel}
+  # 记忆
+  TRN_MEMORY_NOT_OWNER:           {http: 403, zh: 记忆仅本人可操作, en: Memory is owner-only}
+  # License
+  TRN_LICENSE_SEAT_EXHAUSTED:     {http: 403, zh: 席位已满（现有用户不受影响）, en: Seats exhausted (existing users unaffected)}

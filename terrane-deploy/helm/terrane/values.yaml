@@ -1,0 +1,377 @@
+# Default values for terrane.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+global:
+  # Public domain of the FRONT app (knowledge base / Chat / memory / studio). Used by the ingress host
+  # and to build the session-cookie scope. Example: terrane.example.com
+  domain: "terrane.example.com"
+  # Public domain of the ADMIN console (activation / setup wizard / model channels / members).
+  # Example: admin.terrane.example.com
+  adminDomain: "admin.terrane.example.com"
+  # Serve over HTTPS. When true the session cookie is marked Secure (browser only sends it over TLS)
+  # and the ingress requests TLS. Default false for an HTTP bring-up — flip to true once you serve the
+  # console over HTTPS, otherwise the browser drops the login cookie over HTTP and login never sticks.
+  useTLS: false
+  # IANA timezone for all backend pods. Example: Asia/Shanghai, UTC.
+  timezone: "Asia/Shanghai"
+  # Backend log level: DEBUG | INFO | WARNING | ERROR.
+  logLevel: "INFO"
+  # Default nodeSelector applied to every component pod unless the component overrides it. Empty = none.
+  nodeSelector: {}
+  # Extra labels applied to all Terrane workload Pods (Deployment/StatefulSet pod templates). Empty = none.
+  podLabels: {}
+  # Custom CA certificate — trust a self-signed / private-CA https endpoint (信创 intranet). When the
+  # backend talks to a TLS DB / mail / object store signed by a private CA, enable this.
+  customCA:
+    # Turn on private-CA trust injection.
+    enabled: false
+    # Name of an existing Kubernetes Secret holding the CA certificate (PEM). Required when enabled.
+    # NOTE: changing the CA secret needs a pod restart — the combined bundle is built once by an initContainer.
+    existingSecret: ""
+    # Key inside the Secret that contains the CA certificate.
+    key: ca.crt
+    # Mount path of the combined CA bundle inside the pods.
+    mountPath: /etc/terrane/custom-ca
+    # Init-container image that combines system CAs with the custom CA. For air-gapped clusters replace
+    # with a private-registry image that ships /etc/ssl/certs/ca-certificates.crt (Debian) or /etc/ssl/cert.pem (Alpine).
+    initImage: alpine:3.20
+
+# Ingress exposes the front app + admin console on two hosts (global.domain / global.adminDomain).
+# Disabled by default — private deployments usually front the Services with their own ingress /
+# LoadBalancer / gateway. Enable this to let the chart create the Ingress object.
+ingress:
+  # Create the Ingress object.
+  enabled: false
+  # IngressClass name (e.g. nginx). Empty = cluster default ingress class.
+  className: ""
+  # Extra ingress annotations. Empty {} by default; uncomment the examples below for nginx-ingress
+  # (large knowledge-base / video uploads + Chat SSE streaming).
+  annotations: {}
+  #  nginx.ingress.kubernetes.io/proxy-body-size: "320m"
+  #  nginx.ingress.kubernetes.io/proxy-buffering: "off"
+  #  nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+  # TLS termination at the ingress.
+  tls:
+    # Enable TLS (pair with global.useTLS=true once you have certificates).
+    enabled: false
+    # Secret holding the FRONT host certificate (global.domain). Fill when tls.enabled=true.
+    secretName: ""
+    # Secret holding the ADMIN host certificate (global.adminDomain). Fill when tls.enabled=true.
+    adminSecretName: ""
+
+# ==================================================================================================
+# Application components. Each carries its own image block (default = Aliyun mirror, tag v1.0.0).
+# ==================================================================================================
+
+# ---- 前台业务控制面 (terrane-server) — knowledge base / retrieval / Chat assistant / studio / memory.
+server:
+  # Deploy this component.
+  enabled: true
+  # Container image for this component.
+  image:
+    # Full image repository. Defaults to the Aliyun mirror; point at your private Harbor for on-prem.
+    repository: crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror/terrane-server
+    # Image tag.
+    tag: v1.0.0
+    # imagePullPolicy: IfNotPresent | Always | Never.
+    pullPolicy: IfNotPresent
+  # Replica count. Keep 1 unless the license PVC is ReadWriteMany (state is shared via the license volume).
+  replicas: 1
+  # CPU/memory requests + limits. Empty {} = no limit (recommended to set in production). Demo below.
+  resources: {}
+  #  requests:
+  #    cpu: 250m
+  #    memory: 512Mi
+  #  limits:
+  #    cpu: 2
+  #    memory: 2Gi
+  # ServiceAccount for the pod. Empty = namespace default.
+  serviceAccountName: ""
+  # Pod scheduling controls (override global.nodeSelector when set).
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
+  # Readiness probe (start serving once /livez passes). initialDelay covers DB migration on first boot.
+  readinessProbe:
+    httpGet:
+      path: /livez
+      port: 43001
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 30
+  # Liveness probe.
+  livenessProbe:
+    httpGet:
+      path: /livez
+      port: 43001
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    failureThreshold: 3
+  # Extra environment variables appended to the container. Demo below.
+  extraEnv: []
+  # extraEnv:
+  #   - name: TERRANE_SOME_FLAG
+  #     value: "1"
+
+# ---- 后台管理控制面 (terrane-admin-server) — activation / setup wizard / model channels / members.
+# Runs DB migration + factory super-admin bootstrap on startup.
+adminServer:
+  # Deploy this component.
+  enabled: true
+  # Container image for this component.
+  image:
+    # Full image repository. Defaults to the Aliyun mirror.
+    repository: crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror/terrane-admin-server
+    # Image tag.
+    tag: v1.0.0
+    # imagePullPolicy: IfNotPresent | Always | Never.
+    pullPolicy: IfNotPresent
+  # Replica count. Keep 1 unless the license PVC is ReadWriteMany (state is shared via the license volume).
+  replicas: 1
+  # CPU/memory requests + limits. Empty {} = no limit (recommended to set in production). Demo below.
+  resources: {}
+  #  requests:
+  #    cpu: 100m
+  #    memory: 256Mi
+  #  limits:
+  #    cpu: 1
+  #    memory: 1Gi
+  # ServiceAccount for the pod. Empty = namespace default.
+  serviceAccountName: ""
+  # Pod scheduling controls (override global.nodeSelector when set).
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
+  # Readiness probe (start serving once /livez passes). initialDelay covers DB migration on first boot.
+  readinessProbe:
+    httpGet:
+      path: /livez
+      port: 43003
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 30
+  # Liveness probe.
+  livenessProbe:
+    httpGet:
+      path: /livez
+      port: 43003
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    failureThreshold: 3
+  # Extra environment variables appended to the container. Demo below.
+  extraEnv: []
+  # extraEnv:
+  #   - name: TERRANE_SOME_FLAG
+  #     value: "1"
+
+# ---- 数据面网关 (terrane-gateway, Go). Carries its own license verifier-state on the shared volume.
+gateway:
+  # Deploy this component.
+  enabled: true
+  # Container image for this component.
+  image:
+    # Full image repository. Defaults to the Aliyun mirror.
+    repository: crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror/terrane-gateway
+    # Image tag.
+    tag: v1.0.0
+    # imagePullPolicy: IfNotPresent | Always | Never.
+    pullPolicy: IfNotPresent
+  # Replica count. Keep 1 (shares the license volume for its verifier-state).
+  replicas: 1
+  # CPU/memory requests + limits. Empty {} = no limit (recommended to set in production). Demo below.
+  resources: {}
+  #  requests:
+  #    cpu: 50m
+  #    memory: 64Mi
+  #  limits:
+  #    cpu: 500m
+  #    memory: 256Mi
+  # ServiceAccount for the pod. Empty = namespace default.
+  serviceAccountName: ""
+  # Pod scheduling controls (override global.nodeSelector when set).
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
+  # Extra environment variables appended to the container. Demo below.
+  extraEnv: []
+  # extraEnv:
+  #   - name: TERRANE_SOME_FLAG
+  #     value: "1"
+
+# ---- 前台 Web (terrane-web) — nginx SPA serving the front app + reverse-proxying /api to terrane-server.
+# Stateless, safe to scale horizontally.
+web:
+  # Deploy this component.
+  enabled: true
+  # Container image for this component.
+  image:
+    # Full image repository. Defaults to the Aliyun mirror.
+    repository: crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror/terrane-web
+    # Image tag.
+    tag: v1.0.0
+    # imagePullPolicy: IfNotPresent | Always | Never.
+    pullPolicy: IfNotPresent
+  # Replica count. Stateless — scale up for higher front-end traffic.
+  replicas: 2
+  # CPU/memory requests + limits. Empty {} = no limit (recommended to set in production). Demo below.
+  resources: {}
+  #  requests:
+  #    cpu: 50m
+  #    memory: 64Mi
+  #  limits:
+  #    cpu: 500m
+  #    memory: 256Mi
+  # ServiceAccount for the pod. Empty = namespace default.
+  serviceAccountName: ""
+  # Pod scheduling controls (override global.nodeSelector when set).
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
+
+# ---- 后台 Web (terrane-admin-web) — nginx SPA serving the admin console + reverse-proxying
+# /admin-api to terrane-admin-server. Stateless.
+adminWeb:
+  # Deploy this component.
+  enabled: true
+  # Container image for this component.
+  image:
+    # Full image repository. Defaults to the Aliyun mirror.
+    repository: crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror/terrane-admin-web
+    # Image tag.
+    tag: v1.0.0
+    # imagePullPolicy: IfNotPresent | Always | Never.
+    pullPolicy: IfNotPresent
+  # Replica count. Stateless.
+  replicas: 1
+  # CPU/memory requests + limits. Empty {} = no limit (recommended to set in production). Demo below.
+  resources: {}
+  #  requests:
+  #    cpu: 50m
+  #    memory: 64Mi
+  #  limits:
+  #    cpu: 500m
+  #    memory: 256Mi
+  # ServiceAccount for the pod. Empty = namespace default.
+  serviceAccountName: ""
+  # Pod scheduling controls (override global.nodeSelector when set).
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
+
+# ==================================================================================================
+# Secrets + datastores (license / database / cache).
+# ==================================================================================================
+
+# Field-encryption + license secrets. REQUIRED.
+secret:
+  # TERRANE_KEK — master key encrypting SMTP password / 2FA secrets / stored credentials.
+  # Generate: openssl rand -base64 32. The backend FAILS CLOSED in production when empty.
+  # Back this up with your data; losing it makes existing ciphertext permanently unrecoverable.
+  kek: "#REPLACE_ME#"
+
+# License (Forge) configuration. The product ships LOCKED and must be activated.
+license:
+  # Online-activation edge URL (Forge). Leave EMPTY for offline-only (air-gapped) activation, where an
+  # operator pastes a signed .forge license blob in the admin console instead. Example: http://forge-edge:8081
+  forgeEdgeUrl: ""
+  # Shared license volume holding active.forge + install_id, so the three control planes (server /
+  # admin-server / gateway) share ONE deployment identity (anti-clone double-lock) and activation
+  # survives restarts. Empty = use the cluster default StorageClass.
+  storageClass: ""
+  # Access mode for the shared license PVC. ReadWriteMany is required when the control-plane pods can
+  # land on different nodes (needs an RWX class such as NFS/CephFS). With ReadWriteOnce keep the control
+  # planes co-scheduled (replicas: 1, default) so they share the single-node volume.
+  accessMode: ReadWriteMany
+  # Size of the license PVC (tiny — a few KB of credentials).
+  size: 1Gi
+
+# Bundled PostgreSQL 18 + Apache AGE + pgvector. This exact stack is REQUIRED — AGE powers the
+# knowledge graph and pgvector powers semantic retrieval; Terrane will not run without them.
+postgres:
+  # Deploy the bundled terrane-postgres StatefulSet. DEFAULT false — a proper private deployment uses
+  # a customer-managed PostgreSQL (fill externalDatabase below). Set true only for a quick single-host
+  # bring-up; the bundled DB must also provide the `age` and `vector` extensions (the terrane-postgres
+  # image does).
+  enabled: false
+  # Container image for the bundled PostgreSQL (PG18 + AGE + pgvector).
+  image:
+    # Full image repository. Defaults to the Aliyun mirror.
+    repository: crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror/terrane-postgres
+    # Image tag.
+    tag: v1.0.0
+    # imagePullPolicy: IfNotPresent | Always | Never.
+    pullPolicy: IfNotPresent
+  # Full-privilege business DB account (used by both control planes). Two logical DBs are created on
+  # first init: terrane_main (platform) + terrane_admin (operators).
+  username: terrane_app
+  # Password for the DB account. REQUIRED when postgres.enabled=true. Generate: openssl rand -base64 24.
+  password: "#REPLACE_ME#"
+  # StorageClass for the Postgres data PVC. Empty = cluster default.
+  storageClass: ""
+  # Size of the Postgres data PVC. Grow this for large knowledge bases.
+  size: 20Gi
+  # CPU/memory requests + limits for the Postgres pod. Empty {} = no limit. Demo below — tune for your KB size.
+  resources: {}
+  #  requests:
+  #    cpu: 500m
+  #    memory: 1Gi
+  #  limits:
+  #    cpu: 2
+  #    memory: 4Gi
+
+# External database — the DEFAULT, required path for a private deployment (used when postgres.enabled
+# =false above). Must be a PostgreSQL-compatible engine (incl. 信创 openGauss / PolarDB-PG) that
+# provides the `age` and `vector` extensions, with two databases reachable: terrane_main + terrane_admin.
+externalDatabase:
+  # Use an external customer-managed database. Keep true for private deployment (pair with postgres.enabled=false).
+  enabled: true
+  # Database host. Example: pg.internal.example.com
+  host: "#REPLACE_ME#"
+  # Database port.
+  port: 5432
+  # Business DB account.
+  username: terrane_app
+  # Business DB account password.
+  password: "#REPLACE_ME#"
+  # TLS mode for the DB connection: disable | prefer | require | verify-ca | verify-full.
+  sslMode: prefer
+
+# Bundled Redis (cache + rate limiting).
+redis:
+  # Deploy the bundled Redis StatefulSet. DEFAULT false — a proper private deployment uses a
+  # customer-managed Redis (fill externalRedis below). Set true only for a quick single-host bring-up.
+  enabled: false
+  # Container image for the bundled Redis (terrane-redis = upstream redis:7-alpine re-tagged, so
+  # everything is pulled from one registry for air-gapped / 信创 delivery).
+  image:
+    # Full image repository. Defaults to the Aliyun mirror.
+    repository: crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror/terrane-redis
+    # Image tag.
+    tag: v1.0.0
+    # imagePullPolicy: IfNotPresent | Always | Never.
+    pullPolicy: IfNotPresent
+  # Redis password. REQUIRED when redis.enabled=true. Generate: openssl rand -base64 24.
+  password: "#REPLACE_ME#"
+  # StorageClass for the Redis AOF PVC. Empty = cluster default.
+  storageClass: ""
+  # Size of the Redis PVC.
+  size: 5Gi
+
+# External Redis — the DEFAULT, required path for a private deployment (used when redis.enabled=false above).
+externalRedis:
+  # Use an external customer-managed Redis. Keep true for private deployment (pair with redis.enabled=false).
+  enabled: true
+  # Redis host. Example: redis.internal.example.com
+  host: "#REPLACE_ME#"
+  # Redis port.
+  port: 6379
+  # Redis password (leave empty if the external Redis has no auth).
+  password: "#REPLACE_ME#"
+
+# ==================================================================================================
+# Image-pull secrets — referenced by every pod to pull from a private registry. Default empty (public
+# / already-authenticated registry). For a private Harbor / Aliyun ACR, create the secret with
+# helm/Scripts/generate-image-repo-secret.sh and add its name here, e.g. [{ name: terrane-image-repo-secret }].
+# ==================================================================================================
+imagePullSecrets: []

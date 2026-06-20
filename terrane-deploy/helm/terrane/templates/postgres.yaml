@@ -1,0 +1,76 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "terrane.fullname" . }}-pg-init
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+data:
+  01-databases.sql: |
+    SELECT 'CREATE DATABASE terrane_main'  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='terrane_main')\gexec
+    SELECT 'CREATE DATABASE terrane_admin' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='terrane_admin')\gexec
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "terrane.fullname" . }}-postgres
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector: { app: {{ include "terrane.fullname" . }}-postgres }
+  ports: [{ port: 5432, targetPort: 5432 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "terrane.fullname" . }}-postgres
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "terrane.fullname" . }}-postgres
+  replicas: 1
+  selector: { matchLabels: { app: {{ include "terrane.fullname" . }}-postgres } }
+  template:
+    metadata:
+      labels:
+        app: {{ include "terrane.fullname" . }}-postgres
+        {{- include "terrane.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: postgres
+          image: {{ include "terrane.image" .Values.postgres.image | quote }}
+          imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          args: ["postgres", "-c", "shared_preload_libraries=age"]
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.postgres.username | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "terrane.fullname" . }}-secret, key: DATABASE_PASSWORD } }
+            - name: POSTGRES_DB
+              value: postgres
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports: [{ containerPort: 5432 }]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", {{ .Values.postgres.username | quote }}] }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources: {{- toYaml .Values.postgres.resources | nindent 12 }}
+      volumes:
+        - name: init
+          configMap: { name: {{ include "terrane.fullname" . }}-pg-init }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources: { requests: { storage: {{ .Values.postgres.size }} } }
+        {{- if .Values.postgres.storageClass }}
+        storageClassName: {{ .Values.postgres.storageClass | quote }}
+        {{- end }}
+{{- end }}

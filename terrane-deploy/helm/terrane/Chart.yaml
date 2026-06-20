@@ -1,0 +1,18 @@
+apiVersion: v2
+name: terrane
+description: Terrane — private-deployment AI knowledge base (dual control plane + KB/graph/chat/studio/memory)
+type: application
+version: 1.0.0
+appVersion: "v1.0.0"
+home: https://navtra.ai
+keywords:
+  - knowledge-base
+  - rag
+  - pgvector
+  - apache-age
+  - 信创
+maintainers:
+  - name: navtra
+    email: terrane@navtra.ai
+# No subchart deps: PostgreSQL is the custom PG18+AGE+pgvector image (bitnami PG can't provide AGE),
+# and Redis is deployed in-chart — keeps the chart fully self-contained / air-gap friendly.

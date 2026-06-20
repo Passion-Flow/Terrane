@@ -1,0 +1,43 @@
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Local dev launcher (not shipped) ----
+local-dev/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# ---- Node / frontend ----
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# ---- Env files & secrets (keep *.example) ----
+.env
+.env.*
+!.env.example
+*.forge
+licenses/
+*.pem
+*.key
+
+# ---- Logs / tmp ----
+*.log
+tmp/
+.cache/
+
+# ---- IDE ----
+.idea/
+.vscode/
+
+# ---- 内部 AI-agent 规则文档(含开发凭据,不进公开仓)----
+.agent.md

@@ -1,0 +1,368 @@
+{
+  "locked": {
+    "message": "License activation required.",
+    "desc": "The Terrane Enterprise license for this deployment has not been activated. Ask an administrator to activate it in the Admin Console to continue.",
+    "expiredDesc": "The Terrane Enterprise license for this deployment has expired. Ask an administrator to re-activate or renew it in the Admin Console.",
+    "revokedDesc": "The license for this deployment has been revoked. Please contact an administrator.",
+    "mismatchDesc": "The license is not bound to this deployment. Ask an administrator to activate a matching license."
+  },
+  "common": {
+    "loading": "Loading…",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "close": "Close",
+    "back": "Back"
+  },
+  "login": {
+    "title": "Hey, welcome back",
+    "welcome": "Sign in to enter your knowledge space.",
+    "email": "Email",
+    "password": "Password",
+    "code": "2FA code",
+    "emailPlaceholder": "Your email",
+    "passwordPlaceholder": "Your password",
+    "codeHint": "6-digit code",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "forgot": "Forgot password?",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "noAccount": "No account yet?",
+    "toRegister": "Sign up",
+    "or": "or",
+    "ssoLogin": "Sign in with {provider}"
+  },
+  "register": {
+    "title": "Create your Terrane account",
+    "welcome": "A personal knowledge space is created for you automatically on sign-up.",
+    "username": "Username (optional)",
+    "usernamePlaceholder": "What should we call you",
+    "passwordPlaceholder": "Set a password",
+    "policy": "At least 10 characters with 2+ character classes; must not equal your email.",
+    "submit": "Sign up",
+    "submitting": "Creating…",
+    "hasAccount": "Already have an account?",
+    "toLogin": "Sign in",
+    "checkEmailTitle": "Verify your email",
+    "checkEmailDesc": "We sent a verification email to {email}. Click the link in it to verify, then sign in."
+  },
+  "forgot": {
+    "title": "Reset your password",
+    "desc": "Enter your account email and we'll send a reset link.",
+    "submit": "Send reset link",
+    "submitting": "Sending…",
+    "sent": "If {email} is a registered address, a reset link has been sent. Please check your inbox.",
+    "back": "Back to sign in"
+  },
+  "reset": {
+    "title": "Set a new password",
+    "newPassword": "New password",
+    "confirm": "Confirm new password",
+    "mismatch": "The two passwords do not match.",
+    "submit": "Reset password",
+    "submitting": "Resetting…",
+    "done": "Password reset — redirecting to sign in…",
+    "noToken": "The reset link is invalid or missing its token.",
+    "requestNew": "Request a new reset"
+  },
+  "verify": {
+    "title": "Email verification",
+    "checking": "Verifying…",
+    "ok": "Email verified — you can sign in now.",
+    "error": "The verification link is invalid or expired. Sign in to resend a verification email."
+  },
+  "home": {
+    "logout": "Sign out",
+    "welcome": "Welcome, {name}",
+    "desc": "Your personal knowledge space is ready. Knowledge bases, chat, and agents roll out in later stages."
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "lang": {
+    "label": "Language"
+  },
+  "errors": {
+    "LICENSE_REQUIRED": "License activation required.",
+    "AUTH_REQUIRED": "Please sign in first.",
+    "AUTH_INVALID_CREDENTIALS": "Incorrect email or password.",
+    "AUTH_ACCOUNT_DISABLED": "This account has been disabled. Contact an administrator.",
+    "AUTH_ACCOUNT_LOCKED": "Too many failed attempts. The account is temporarily locked — try again later.",
+    "AUTH_EMAIL_NOT_VERIFIED": "Your email isn't verified yet. Please complete email verification first.",
+    "AUTH_2FA_REQUIRED": "Enter your two-factor authentication code.",
+    "AUTH_2FA_INVALID": "Invalid two-factor authentication code.",
+    "AUTH_PASSWORD_WEAK": "Password too weak: at least 10 chars with 2 character classes, and must not equal your email.",
+    "AUTH_PASSWORD_REUSED": "The new password must differ from the current password.",
+    "AUTH_EMAIL_TAKEN": "This email is already registered.",
+    "AUTH_TOKEN_INVALID": "The link is invalid or has expired.",
+    "RATE_LIMIT_EXCEEDED": "Too many requests. Please try again later.",
+    "RATE_LIMIT_LOGIN_BLOCKED": "Too many sign-in attempts. Please try again later.",
+    "VALIDATION_FAILED": "Request validation failed.",
+    "NETWORK_ERROR": "Network request failed. Check your connection.",
+    "SYSTEM_HTTP_ERROR": "System error. Please try again later."
+  },
+  "kb": {
+    "title": "My knowledge bases",
+    "subtitle": "Feed in material; let it compile into searchable knowledge.",
+    "create": "New base",
+    "createTitle": "New knowledge base",
+    "empty": "No knowledge bases yet. Click \"New base\" to start.",
+    "noDesc": "No description",
+    "noDescription": "No description",
+    "fName": "Name",
+    "fDesc": "Description (optional)",
+    "fVis": "Visibility",
+    "vis": {
+      "private": "Private",
+      "shared": "Shared",
+      "workspace": "Workspace"
+    },
+    "role": {
+      "owner": "Owner",
+      "editor": "Editor",
+      "viewer": "Viewer"
+    },
+    "back": "Back",
+    "notFound": "Knowledge base not found or no access.",
+    "sources": "Sources",
+    "addText": "Add text",
+    "addTextTitle": "Add text source",
+    "noSources": "No sources yet. Add text to start building.",
+    "chunks": "{n} chunks",
+    "deleteKb": "Delete base",
+    "confirmDelete": "Delete knowledge base \"{name}\"? This cannot be undone.",
+    "status": {
+      "pending": "Pending",
+      "parsing": "Parsing",
+      "parsed": "Parsed",
+      "failed": "Failed"
+    },
+    "searchPlaceholder": "Search this base…",
+    "search": "Search",
+    "searching": "Searching…",
+    "searchHint": "Enter keywords — vector semantic + lexical hybrid retrieval + rerank.",
+    "noHits": "No hits.",
+    "hitsCount": "{n} hits",
+    "ingesting": "Ingesting…",
+    "fSourceTitle": "Source title",
+    "fText": "Text content",
+    "upload": "Upload",
+    "uploadFile": "Upload a file (PDF/Word/Excel/PPT/text/video)",
+    "fileTooBig": "File too large (max 4MB)",
+    "fileEmpty": "File is empty",
+    "deleteSource": "Delete source",
+    "confirmDeleteSource": "Delete source \"{name}\" and all its chunks?",
+    "share": "Share",
+    "shareTitle": "Share knowledge base",
+    "shareDesc": "Invite workspace members to collaborate (viewer read-only / editor can edit).",
+    "memberEmail": "Member email",
+    "noMembers": "No shared members yet.",
+    "tabChat": "Ask",
+    "tabSearch": "Search",
+    "chatHint": "Ask the knowledge base; answers are grounded in your sources with citations.",
+    "chatPlaceholder": "Ask anything…",
+    "noChatModel": "No chat model configured (add a chat channel under admin Model Channels).",
+    "chatError": "Generation failed, please retry.",
+    "tab_chat": "Ask",
+    "tab_search": "Search",
+    "tab_wiki": "Wiki",
+    "tab_graph": "Graph",
+    "graphTitle": "Knowledge graph",
+    "graphBuild": "Build graph",
+    "graphBuilding": "Building…",
+    "graphEmpty": "No graph yet. Click \"Build graph\" to extract entities and relations.",
+    "wikiTitle": "Knowledge Wiki",
+    "wikiCompile": "Compile Wiki",
+    "wikiRecompile": "Recompile",
+    "wikiCompiling": "Compiling…",
+    "wikiEmpty": "No Wiki yet. Click \"Compile Wiki\" to compile sources into structured knowledge.",
+    "wikiUpdated": "updated",
+    "mcpTitle": "MCP access",
+    "mcpDesc": "Generate a key to mount this knowledge base as an MCP tool in Claude Code / Cursor.",
+    "mcpTokenOnce": "This token is shown only once — copy it now.",
+    "mcpConfigHint": "Add this to your MCP client config:",
+    "mcpBack": "Back to keys",
+    "mcpKeyName": "Key name",
+    "mcpKeyNamePh": "e.g. My Claude integration",
+    "mcpCreate": "Create",
+    "mcpNoKeys": "No keys yet.",
+    "mcpDeleteConfirm": "Delete key \"{name}\"? Clients using it stop working immediately.",
+    "parseFailed": "Parse failed or document is empty",
+    "tab_studio": "Studio"
+  },
+  "nav": {
+    "kbs": "Knowledge",
+    "memory": "Memory",
+    "account": "Account",
+    "overview": "Overview",
+    "graph": "Graph",
+    "chat": "Chat",
+    "settings": "Settings",
+    "modelSettings": "Models",
+    "security": "Security",
+    "language": "Language",
+    "collapse": "Collapse",
+    "editProfile": "Edit profile"
+  },
+  "memory": {
+    "title": "My memory",
+    "subtitle": "Your long-term memory: auto-remembered from chats & uploaded docs, or add manually. Only you can see it.",
+    "add": "Remember",
+    "addPlaceholder": "Tell Terrane something worth remembering…",
+    "recallPlaceholder": "Semantic recall: try \"my preferences\", \"allergy\"…",
+    "recallResult": "{n} recalled",
+    "empty": "No memories yet. Add one above.",
+    "extracted": "· auto-extracted",
+    "kindFact": "Fact",
+    "kindPref": "Preference",
+    "kindEvent": "Event",
+    "autoTitle": "Auto memory",
+    "autoHint": "When on, I automatically remember your preferences, facts and key events from your chats and uploaded documents (deduped + updated).",
+    "autoStats": "Auto-remembered: {{chat}} from chat · {{doc}} from docs",
+    "srcManual": "Manual",
+    "srcChat": "Chat",
+    "srcDocument": "Doc",
+    "filter": {
+      "all": "All",
+      "manual": "Manual",
+      "chat": "Chat",
+      "document": "Doc"
+    }
+  },
+  "account": {
+    "title": "Account",
+    "subtitle": "Your profile and security.",
+    "username": "Username",
+    "email": "Email",
+    "password": "Password",
+    "changePassword": "Change password"
+  },
+  "twofa": {
+    "title": "Two-factor (2FA)",
+    "on": "Enabled",
+    "enable": "Enable",
+    "disable": "Disable",
+    "enrollHint": "Add this secret to an authenticator app (e.g. Google Authenticator), then enter the 6-digit code:",
+    "codePlaceholder": "6-digit code",
+    "codeOrBackup": "Code or backup code",
+    "confirm": "Enable",
+    "confirmDisable": "Disable",
+    "backupHint": "Save these one-time backup codes (shown only once):",
+    "done": "Done",
+    "error": "Operation failed",
+    "codeInvalid": "Invalid code"
+  },
+  "studio": {
+    "title": "Studio",
+    "subtitle": "One-click artifacts generated from your sources.",
+    "back": "Back",
+    "noSources": "Add sources first.",
+    "failed": "Generation failed, retry.",
+    "kind": {
+      "study_guide": "Study guide",
+      "faq": "FAQ",
+      "briefing": "Briefing",
+      "timeline": "Timeline",
+      "mind_map": "Mind map",
+      "flashcards": "Flashcards",
+      "quiz": "Quiz",
+      "data_table": "Data table",
+      "slide_deck": "Slides",
+      "audio_overview": "Podcast"
+    },
+    "downloadPptx": "Download PPTX",
+    "exporting": "Exporting…",
+    "noTts": "No TTS channel configured",
+    "rateLimited": "Voice service busy, retry later",
+    "synthHint": "Writing script and synthesizing audio, ~1-2 min…"
+  },
+  "topbar": {
+    "activated": "Activated",
+    "inactive": "Inactive"
+  },
+  "menu": {
+    "profile": "Profile",
+    "language": "Language",
+    "changePassword": "Change password",
+    "security": "Security"
+  },
+  "profile": {
+    "title": "Profile",
+    "desc": "Update your avatar and name.",
+    "avatarHint": "PNG/JPG/WebP/GIF, auto-cropped to square.",
+    "removeAvatar": "Remove avatar",
+    "name": "Name",
+    "email": "Email",
+    "notImage": "Please choose an image",
+    "imageFailed": "Image processing failed",
+    "saveFailed": "Save failed, retry"
+  },
+  "overview": {
+    "hello": "Hi, {name}",
+    "subtitle": "Your knowledge workspace at a glance.",
+    "startChat": "Start chat",
+    "recent": "Recent knowledge bases"
+  },
+  "graphPage": {
+    "subtitle": "Entities and relations extracted from your sources; pick a base."
+  },
+  "chatPage": {
+    "subtitle": "Pick a base and ask questions grounded in its content.",
+    "empty": "Create a base and add sources first."
+  },
+  "modelSettings": {
+    "subtitle": "Models used by the app, synced from admin Model Channels.",
+    "chatModel": "Chat model",
+    "chatHint": "Pick the model for Q&A/generation (from backend-configured options).",
+    "none": "No chat channel configured in the admin yet.",
+    "current": "Current",
+    "others": "Other models (admin-configured, read-only)",
+    "unset": "unset",
+    "othersHint": "Embedding/rerank/multimodal are configured by the admin.",
+    "kind": {
+      "vl": "Multimodal (VL)",
+      "embed": "Embedding",
+      "rerank": "Rerank"
+    },
+    "kindFull": {
+      "chat": "Chat model",
+      "vl": "Multimodal (VL)",
+      "embed": "Embedding model",
+      "rerank": "Rerank model"
+    },
+    "kindHint": {
+      "chat": "Used for Q&A and generation.",
+      "vl": "Used for image/video frame understanding.",
+      "embed": "Used to vectorize sources (new sources use the new model).",
+      "rerank": "Used to re-rank search results."
+    },
+    "noneKind": "No channel configured for this purpose yet.",
+    "syncNote": "Options sync from admin Model Channels."
+  },
+  "langSettings": {
+    "subtitle": "Interface language.",
+    "label": "Interface language"
+  },
+  "securitySettings": {
+    "subtitle": "Password and two-factor."
+  },
+  "assistant": {
+    "newChat": "New chat",
+    "noHistory": "No conversations yet",
+    "welcome": "I'm your AI assistant",
+    "welcomeSub": "Grounded in your knowledge bases and memory. Ask me anything.",
+    "placeholder": "Ask me anything… (Enter to send, Shift+Enter for newline)",
+    "noModel": "No chat model configured (add a chat channel in admin).",
+    "error": "Generation failed, retry.",
+    "attach": "Attach (docs/images/video/audio)",
+    "kb": "Knowledge",
+    "kbHint": "Answer grounded in your knowledge bases",
+    "allKb": "All bases",
+    "web": "Web search",
+    "webHint": "Search the web for fresh info",
+    "webSources": "Web sources"
+  }
+}
