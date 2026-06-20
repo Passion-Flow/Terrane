@@ -56,6 +56,15 @@ async def ensure_graph(db: AsyncSession, kb_id: uuid.UUID) -> str:
     return g
 
 
+async def drop_graph(db: AsyncSession, kb_id: uuid.UUID) -> None:
+    """删除该库的 AGE 图(删源后清理 / 重建前清旧)。幂等。"""
+    g = graph_name(kb_id)
+    ac = await _ac(db)
+    exists = await ac.fetchval("SELECT count(*) FROM ag_catalog.ag_graph WHERE name = $1", g)
+    if exists:
+        await ac.execute(f"SELECT drop_graph('{g}', true)")  # true = 级联删标签/数据
+
+
 def _parse_extraction(raw: str) -> dict:
     raw = raw.strip()
     if raw.startswith("```"):

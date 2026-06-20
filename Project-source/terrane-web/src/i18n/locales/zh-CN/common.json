@@ -191,7 +191,13 @@
     "mcpNoKeys": "还没有密钥。",
     "mcpDeleteConfirm": "删除密钥「{name}」?使用它的客户端将立即失效。",
     "parseFailed": "解析失败或文档为空",
-    "tab_studio": "Studio"
+    "tab_studio": "Studio",
+    "previewSource": "预览解析内容",
+    "previewEmpty": "暂无解析内容",
+    "previewOriginal": "原文",
+    "previewParsed": "解析结果",
+    "previewNoRender": "该文件类型不支持内嵌预览",
+    "downloadOriginal": "下载原文件"
   },
   "nav": {
     "kbs": "知识库",

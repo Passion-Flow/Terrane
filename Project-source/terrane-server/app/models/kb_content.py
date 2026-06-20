@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import BigInteger, Integer, String, Text, Uuid
+import datetime
+
+from sqlalchemy import BigInteger, DateTime, Integer, LargeBinary, String, Text, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -41,6 +43,18 @@ class Chunk(UUIDMixin, Base):
     ord: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class RawSourceOriginal(Base):
+    """上传文件的原始字节(用于「原文/解析」对照预览)。单独成表,list/get 不加载 blob。随源级联硬删。"""
+
+    __tablename__ = "raw_source_originals"
+
+    raw_source_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    mime: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    size: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class WikiPage(UUIDMixin, HardTimestampMixin, Base):

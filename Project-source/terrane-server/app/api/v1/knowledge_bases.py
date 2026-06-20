@@ -31,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser, get_current_user, get_db_session
 from app.core.errors import BizError
 from app.models.api_key import ApiKey
-from app.models.kb_content import Chunk, RawSource
+from app.models.kb_content import Chunk, IngestJob, RawSource, RawSourceOriginal
 from app.models.knowledge_base import VISIBILITY, KbMember, KnowledgeBase
 from app.models.user import User
 from app.services import graph_service, ingest_service, memory_service, studio_service, wiki_service
@@ -166,6 +166,11 @@ async def delete_kb(kb_id: str = Path(...), user: CurrentUser = Depends(get_curr
     kb, role = await _load(db, kb_id, user)
     if role != "owner":
         raise BizError("PERM_DENIED", {"need": "owner"})
+    try:
+        await graph_service.drop_graph(db, kb.id)   # AGE 图独立于关系表,删库时一并清
+        await db.commit()
+    except Exception as e:  # noqa: BLE001
+        log.warning("graph_drop_failed", kb_id=kb_id, error=str(e))
     await db.delete(kb)   # 硬删 + 级联(kb_members/raw_sources/chunks/wiki/jobs)
     await db.commit()
     log.info("kb_deleted", kb_id=kb_id, user_id=user.user_id)
@@ -326,6 +331,11 @@ async def upload_source(kb_id: str = Path(...), file: UploadFile = File(...),
 
     raw, n = await ingest_service.add_text_source(
         db, kb_id=kb.id, workspace_id=kb.workspace_id, title=fname, body=text, kind="file")
+    # 存原始文件字节(供「原文/解析」对照预览);视频不存(过大且无版面渲染),其余 ≤50MB 存
+    if mime not in video_parser.VIDEO_MIMES and len(data) <= 50_000_000:
+        db.add(RawSourceOriginal(raw_source_id=raw.id, mime=mime or "application/octet-stream",
+                                 size=len(data), data=data))
+        await db.commit()
     asyncio.create_task(memory_service.consolidate_bg(uuid.UUID(user.user_id), text, "document"))
     return {"id": str(raw.id), "title": raw.title, "status": raw.status, "chunk_count": n}
 
@@ -345,6 +355,52 @@ async def list_sources(kb_id: str = Path(...), user: CurrentUser = Depends(get_c
     } for r in rows]}
 
 
+@router.get("/{kb_id}/sources/{source_id}")
+async def get_source(kb_id: str = Path(...), source_id: str = Path(...),
+                     user: CurrentUser = Depends(get_current_user),
+                     db: AsyncSession = Depends(get_db_session)) -> dict:
+    """取单个源的解析内容(预览)。返回 Terrane Parse 解析后的文本 + 元信息 + 切片数。"""
+    kb, _ = await _load(db, kb_id, user)
+    try:
+        sid = uuid.UUID(source_id)
+    except ValueError:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    r = await db.get(RawSource, sid)
+    if r is None or r.kb_id != kb.id:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    n = int((await db.execute(select(func.count()).select_from(Chunk)
+                              .where(Chunk.raw_source_id == r.id))).scalar_one())
+    # 原文件的真实 mime(RawSource.mime 摄入时统一写 text/plain,左侧渲染要用原文件真 mime)
+    orig_mime = (await db.execute(select(RawSourceOriginal.mime)
+                                  .where(RawSourceOriginal.raw_source_id == r.id))).scalar_one_or_none()
+    return {"id": str(r.id), "title": r.title, "kind": r.kind, "mime": orig_mime or r.mime,
+            "status": r.status, "size_bytes": r.size_bytes, "chunk_count": n,
+            "error": r.error, "parsed_text": r.parsed_text or "", "has_original": orig_mime is not None,
+            "created_at": r.created_at.isoformat() if r.created_at else None}
+
+
+@router.get("/{kb_id}/sources/{source_id}/original")
+async def get_source_original(kb_id: str = Path(...), source_id: str = Path(...),
+                              user: CurrentUser = Depends(get_current_user),
+                              db: AsyncSession = Depends(get_db_session)) -> StreamingResponse:
+    """取上传文件的原始字节(用于左侧原文渲染:PDF/图片等)。inline 展示。"""
+    import io
+
+    kb, _ = await _load(db, kb_id, user)
+    try:
+        sid = uuid.UUID(source_id)
+    except ValueError:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    r = await db.get(RawSource, sid)
+    if r is None or r.kb_id != kb.id:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    o = await db.get(RawSourceOriginal, sid)
+    if o is None:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "original"})
+    return StreamingResponse(io.BytesIO(o.data), media_type=o.mime or "application/octet-stream",
+                             headers={"Content-Disposition": "inline"})
+
+
 @router.delete("/{kb_id}/sources/{source_id}")
 async def delete_source(kb_id: str = Path(...), source_id: str = Path(...),
                         user: CurrentUser = Depends(get_current_user),
@@ -361,6 +417,15 @@ async def delete_source(kb_id: str = Path(...), source_id: str = Path(...),
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
     await db.delete(raw)   # 硬删 + 级联(chunks ON DELETE CASCADE)
     await db.commit()
+    # 库内已无源 → 清空知识图谱(否则图谱残留旧实体)
+    remaining = int((await db.execute(select(func.count()).select_from(RawSource)
+                                      .where(RawSource.kb_id == kb.id))).scalar_one())
+    if remaining == 0:
+        try:
+            await graph_service.drop_graph(db, kb.id)
+            await db.commit()
+        except Exception as e:  # noqa: BLE001
+            log.warning("graph_drop_failed", kb_id=kb_id, error=str(e))
     log.info("source_deleted", kb_id=kb_id, source_id=source_id, user_id=user.user_id)
     return {"ok": True}
 
@@ -376,10 +441,38 @@ async def search_kb(kb_id: str = Path(...), q: str = "", limit: int = 10,
     return {"query": q, "hits": hits, "total": len(hits)}
 
 
+async def _graph_build_bg(kb_id: uuid.UUID, job_id: uuid.UUID, sources: list[tuple[str, str]]) -> None:
+    """后台构建图谱:重建前清旧 → 逐源抽取 → 实时回写进度。自带 session。"""
+    from app.db.session import get_sessionmaker
+    try:
+        async with get_sessionmaker()() as db:
+            await graph_service.drop_graph(db, kb_id)  # 重建前清旧,使图反映当前源
+            await db.commit()
+            n = max(1, len(sources))
+            for i, (_t, txt) in enumerate(sources):
+                # 处理第 i 个源前先推进度(至少 8%,单源也有可见进度);源内 LLM 抽取为原子,无法再细分
+                await db.execute(text("UPDATE ingest_jobs SET progress=:p WHERE id=:id"),
+                                 {"p": max(8, int(i / n * 95)), "id": str(job_id)})
+                await db.commit()
+                if txt and txt.strip():
+                    await graph_service.build_from_text(db, kb_id, txt)
+            await db.execute(text("UPDATE ingest_jobs SET status='done', progress=100 WHERE id=:id"), {"id": str(job_id)})
+            await db.commit()
+    except Exception as e:  # noqa: BLE001
+        log.warning("graph_build_failed", kb_id=str(kb_id), error=str(e))
+        try:
+            async with get_sessionmaker()() as d2:
+                await d2.execute(text("UPDATE ingest_jobs SET status='failed', error=:e WHERE id=:id"),
+                                 {"e": str(e)[:500], "id": str(job_id)})
+                await d2.commit()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 @router.post("/{kb_id}/graph/build")
 async def build_graph(kb_id: str = Path(...), user: CurrentUser = Depends(get_current_user),
                       db: AsyncSession = Depends(get_db_session)) -> dict:
-    """从库内各源抽取实体/关系,构建知识图谱(AGE)。需 editor/owner。LLM 抽取,可能较慢。"""
+    """启动图谱构建(后台 + 进度);需 editor/owner。返回 job 信息,前端轮询 /graph/status。"""
     kb, role = await _load(db, kb_id, user)
     if role not in ("owner", "editor"):
         raise BizError("PERM_DENIED", {"need": "editor"})
@@ -387,15 +480,44 @@ async def build_graph(kb_id: str = Path(...), user: CurrentUser = Depends(get_cu
                              .where(RawSource.kb_id == kb.id, RawSource.parsed_text.is_not(None)))).all()
     sources = [(t, x) for t, x in rows]
     if not sources:
-        return {"entities_added": 0, "relations_added": 0}
-    result = await graph_service.build_graph(db, kb.id, sources)
-    return result
+        await graph_service.drop_graph(db, kb.id)  # 没源 → 清图
+        await db.commit()
+        return {"job_id": None, "status": "done", "total": 0}
+    job = IngestJob(kb_id=kb.id, kind="graph", status="running", progress=0)
+    db.add(job)
+    await db.flush()
+    jid = job.id
+    await db.commit()
+    asyncio.create_task(_graph_build_bg(kb.id, jid, sources))
+    return {"job_id": str(jid), "status": "running", "total": len(sources)}
+
+
+@router.get("/{kb_id}/graph/status")
+async def graph_status(kb_id: str = Path(...), user: CurrentUser = Depends(get_current_user),
+                       db: AsyncSession = Depends(get_db_session)) -> dict:
+    """最近一次图谱构建任务的状态/进度(供前端轮询 + 刷新续接进度)。"""
+    kb, _ = await _load(db, kb_id, user)
+    j = (await db.execute(select(IngestJob).where(IngestJob.kb_id == kb.id, IngestJob.kind == "graph")
+                          .order_by(IngestJob.created_at.desc()).limit(1))).scalar_one_or_none()
+    if j is None:
+        return {"status": "none", "progress": 0}
+    return {"status": j.status, "progress": j.progress, "error": j.error}
 
 
 @router.get("/{kb_id}/graph")
 async def get_graph(kb_id: str = Path(...), user: CurrentUser = Depends(get_current_user),
                     db: AsyncSession = Depends(get_db_session)) -> dict:
     kb, _ = await _load(db, kb_id, user)
+    # 库内无任何源 → 图谱必为空(顺手清掉历史遗留的孤儿图,保证「删完源图就空」)
+    n_src = int((await db.execute(select(func.count()).select_from(RawSource)
+                                  .where(RawSource.kb_id == kb.id))).scalar_one())
+    if n_src == 0:
+        try:
+            await graph_service.drop_graph(db, kb.id)
+            await db.commit()
+        except Exception as e:  # noqa: BLE001
+            log.warning("graph_drop_failed", kb_id=kb_id, error=str(e))
+        return {"nodes": [], "edges": []}
     return await graph_service.graph_data(db, kb.id)
 
 

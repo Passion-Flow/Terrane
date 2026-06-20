@@ -191,7 +191,13 @@
     "mcpNoKeys": "No keys yet.",
     "mcpDeleteConfirm": "Delete key \"{name}\"? Clients using it stop working immediately.",
     "parseFailed": "Parse failed or document is empty",
-    "tab_studio": "Studio"
+    "tab_studio": "Studio",
+    "previewSource": "Preview parsed content",
+    "previewEmpty": "No parsed content",
+    "previewOriginal": "Original",
+    "previewParsed": "Parsed",
+    "previewNoRender": "This file type can't be previewed inline",
+    "downloadOriginal": "Download original"
   },
   "nav": {
     "kbs": "Knowledge",

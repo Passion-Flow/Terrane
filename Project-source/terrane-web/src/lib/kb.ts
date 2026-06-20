@@ -29,6 +29,12 @@ export interface KbSource {
   created_at: string | null;
 }
 
+export interface KbSourceDetail extends KbSource {
+  mime: string | null;
+  parsed_text: string;
+  has_original: boolean;
+}
+
 export interface SearchHit {
   chunk_id: string;
   content: string;
@@ -93,6 +99,16 @@ export async function uploadSourceFile(kbId: string, file: File): Promise<{ id?:
   return resp.json();
 }
 
+export const getSource = (kbId: string, sourceId: string) =>
+  request<KbSourceDetail>(`/api/v1/knowledge-bases/${kbId}/sources/${sourceId}`, { credentials: "include" });
+
+/** 取原始文件并生成本地 blob URL(供左侧原文渲染:PDF iframe / 图片 img)。用完记得 revoke。 */
+export async function fetchSourceOriginal(kbId: string, sourceId: string): Promise<string> {
+  const resp = await fetch(`${apiBase()}/api/v1/knowledge-bases/${kbId}/sources/${sourceId}/original`, { credentials: "include" });
+  if (!resp.ok) throw new Error("no original");
+  return URL.createObjectURL(await resp.blob());
+}
+
 export const deleteSource = (kbId: string, sourceId: string) =>
   request<{ ok: boolean }>(`/api/v1/knowledge-bases/${kbId}/sources/${sourceId}`, opt("DELETE"));
 
@@ -120,8 +136,12 @@ export interface GraphNode { id: string; name: string; etype: string }
 export interface GraphEdge { source: string; target: string; type: string }
 
 export const buildGraph = (kbId: string) =>
-  request<{ entities_added: number; relations_added: number }>(
+  request<{ job_id: string | null; status: string; total: number }>(
     `/api/v1/knowledge-bases/${kbId}/graph/build`, opt("POST"));
+
+export const graphStatus = (kbId: string) =>
+  request<{ status: string; progress: number; error?: string | null }>(
+    `/api/v1/knowledge-bases/${kbId}/graph/status`, { credentials: "include" });
 
 export const getGraph = (kbId: string) =>
   request<{ nodes: GraphNode[]; edges: GraphEdge[] }>(
