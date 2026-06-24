@@ -218,6 +218,13 @@
     "ovHealth": "Health",
     "ovIssues": "Suggestions",
     "ovNoIssues": "All set — nothing needs attention.",
+    "lint": {
+      "no_sources": "This knowledge base has no sources yet — upload a file or add text.",
+      "failed_sources": "{n} source(s) failed to parse — click Reparse to retry.",
+      "unembedded": "{n}/{total} chunks have no vectors (embedding channel missing or failed); vector search is incomplete.",
+      "no_graph": "Knowledge graph not built yet — build it in the Graph tab.",
+      "no_wiki": "Wiki not compiled yet — compile it in the Wiki tab."
+    },
     "ovWiki": "Wiki compiled",
     "ovWikiNo": "Wiki not compiled",
     "ovLoading": "Computing stats…",

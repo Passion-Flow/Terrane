@@ -597,7 +597,11 @@ function Overview({ lint, onRetry }: { lint: KbLint | null; onRetry: () => void 
             {lint.issues.map((iss, i) => (
               <li key={i} className="flex items-start gap-2 text-[13px]">
                 <span className={`mt-0.5 size-1.5 shrink-0 rounded-full ${iss.level === "warn" || iss.level === "error" ? "bg-danger" : "bg-accent"}`} />
-                <span className="text-ink-secondary">{iss.msg}</span>
+                <span className="text-ink-secondary">{
+                  iss.code === "failed_sources" ? t("kb.lint.failed_sources", { n: s.failed_sources })
+                    : iss.code === "unembedded" ? t("kb.lint.unembedded", { n: s.chunks - s.embedded_chunks, total: s.chunks })
+                      : t(`kb.lint.${iss.code}`, { defaultValue: iss.msg })
+                }</span>
               </li>
             ))}
           </ul>

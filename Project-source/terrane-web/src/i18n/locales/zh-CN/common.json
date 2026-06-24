@@ -218,6 +218,13 @@
     "ovHealth": "健康度",
     "ovIssues": "待办建议",
     "ovNoIssues": "一切就绪,没有需要处理的问题。",
+    "lint": {
+      "no_sources": "知识库还没有任何资料,先上传文件或添加文本。",
+      "failed_sources": "{n} 个源解析失败,可点「重新解析」重试。",
+      "unembedded": "{n}/{total} 个切片未生成向量(嵌入渠道未配置或失败),向量检索不完整。",
+      "no_graph": "尚未构建知识图谱,可在 Graph 标签里构建。",
+      "no_wiki": "尚未编译 Wiki,可在 Wiki 标签里编译。"
+    },
     "ovWiki": "已编译 Wiki",
     "ovWikiNo": "未编译 Wiki",
     "ovLoading": "正在统计…",
