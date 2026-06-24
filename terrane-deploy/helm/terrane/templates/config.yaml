@@ -21,6 +21,14 @@ data:
   # Shared deployment identity → all components (server/admin/gateway) get ONE fingerprint, so online
   # activation in the admin also unlocks the front. REQUIRED. Generate once: openssl rand -hex 16.
   FORGE_DEPLOYMENT_UID: {{ .Values.license.deploymentUid | quote }}
+  # Object storage (uploaded originals + per-page WebP layout images). Bundled SeaweedFS by default;
+  # set objectStorage.type to a cloud provider + creds to use a cloud bucket instead.
+  OBJECT_STORAGE_TYPE: {{ .Values.objectStorage.type | quote }}
+  OBJECT_STORAGE_LOCAL_MODE: {{ .Values.objectStorage.localMode | quote }}
+  OBJECT_STORAGE_DEFAULT_BUCKET: {{ .Values.objectStorage.bucket | quote }}
+  OBJECT_STORAGE_ENDPOINT: {{ include "terrane.storage.endpoint" . | quote }}
+  OBJECT_STORAGE_REGION: {{ .Values.objectStorage.region | quote }}
+  OBJECT_STORAGE_SECURE: {{ .Values.objectStorage.secure | toString | quote }}
 ---
 apiVersion: v1
 kind: Secret
@@ -32,6 +40,8 @@ data:
   TERRANE_KEK: {{ required "secret.kek is required (openssl rand -base64 32)" .Values.secret.kek | b64enc | quote }}
   DATABASE_PASSWORD: {{ (.Values.postgres.enabled | ternary .Values.postgres.password .Values.externalDatabase.password) | b64enc | quote }}
   CACHE_PASSWORD: {{ (.Values.redis.enabled | ternary .Values.redis.password .Values.externalRedis.password) | b64enc | quote }}
+  OBJECT_STORAGE_ACCESS_KEY: {{ .Values.objectStorage.accessKey | b64enc | quote }}
+  OBJECT_STORAGE_SECRET_KEY: {{ .Values.objectStorage.secretKey | b64enc | quote }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

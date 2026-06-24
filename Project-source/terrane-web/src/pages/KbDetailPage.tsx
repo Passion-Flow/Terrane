@@ -2,8 +2,6 @@
 
 import { ArrowLeft, Eye, FileText, MagnifyingGlass, Plus, PlugsConnected, Trash, UploadSimple, UserPlus, Users, X } from "@phosphor-icons/react";
 
-import { Markdown } from "@/components/ui/Markdown";
-import { OriginalPreview } from "@/components/OriginalPreview";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router";
@@ -17,8 +15,8 @@ import { Select } from "@/components/ui/Select";
 import { FALLBACK_LANG, isSupported } from "@/i18n/langs";
 import { ApiError } from "@/lib/api";
 import {
-  addMember, addSource, deleteKb, deleteSource, getKb, getSource, listMembers, listSources, removeMember, searchKb, uploadSourceFile,
-  type Kb, type KbMember, type KbSource, type KbSourceDetail, type SearchHit,
+  addMember, addSource, deleteKb, deleteSource, getKb, listMembers, listSources, removeMember, searchKb, uploadSourceFile,
+  type Kb, type KbMember, type KbSource, type SearchHit,
 } from "@/lib/kb";
 
 export function KbDetailPage() {
@@ -30,8 +28,6 @@ export function KbDetailPage() {
 
   const [kb, setKb] = useState<Kb | null>(null);
   const [sources, setSources] = useState<KbSource[]>([]);
-  const [preview, setPreview] = useState<KbSourceDetail | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
 
   const [tab, setTab] = useState<"chat" | "search" | "studio" | "wiki" | "graph">("chat");
@@ -119,10 +115,8 @@ export function KbDetailPage() {
     if (!window.confirm(t("kb.confirmDeleteSource", { name: s.title }))) return;
     try { await deleteSource(id, s.id); await reload(); } catch { /* ignore */ }
   }
-  function closePreview() { setPreview(null); }
-  async function onPreview(s: KbSource) {
-    setPreview({ ...s, mime: null, parsed_text: "", has_original: false }); setPreviewLoading(true);
-    try { setPreview(await getSource(id, s.id)); } catch { /* ignore */ } finally { setPreviewLoading(false); }
+  function onPreview(s: KbSource) {
+    navigate(`/${seg}/kb/${id}/source/${s.id}`);
   }
 
   async function onDeleteKb() {
@@ -333,55 +327,6 @@ export function KbDetailPage() {
         </div>
       )}
 
-      {/* 源预览:左原文 / 右解析结果 对照 */}
-      {preview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closePreview}>
-          <div className={`flex max-h-[88vh] w-full flex-col rounded-xl border border-border bg-surface shadow-xl ${preview.has_original ? "max-w-6xl" : "max-w-3xl"}`} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-3">
-              <div className="min-w-0">
-                <p className="line-clamp-1 text-sm font-semibold text-ink">{preview.title}</p>
-                <p className="mt-0.5 text-[11px] text-ink-faint">
-                  {t(`kb.status.${preview.status}`, { defaultValue: preview.status })}
-                  {preview.mime ? ` · ${preview.mime}` : ""} · {t("kb.chunks", { n: preview.chunk_count })}
-                </p>
-              </div>
-              <button onClick={closePreview} className="shrink-0 rounded p-1 text-ink-faint hover:text-ink"><X className="size-4" /></button>
-            </div>
-
-            <div className="flex min-h-0 flex-1">
-              {/* 左:原始文件渲染 */}
-              {preview.has_original && (
-                <div className="hidden w-1/2 shrink-0 flex-col border-e border-border/60 md:flex">
-                  <div className="border-b border-border/40 px-4 py-1.5 text-[11px] font-medium text-ink-faint">{t("kb.previewOriginal")}</div>
-                  <div className="min-h-0 flex-1 overflow-auto bg-canvas">
-                    <OriginalPreview kbId={id} sourceId={preview.id} mime={preview.mime} title={preview.title} />
-                  </div>
-                </div>
-              )}
-
-              {/* 右:解析结果 */}
-              <div className="flex min-w-0 flex-1 flex-col">
-                {preview.has_original && <div className="border-b border-border/40 px-4 py-1.5 text-[11px] font-medium text-ink-faint">{t("kb.previewParsed")}</div>}
-                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-                  {previewLoading ? (
-                    <div className="space-y-2">{[...Array(8)].map((_, i) => <div key={i} className="h-3.5 animate-pulse rounded bg-canvas" style={{ width: `${95 - i * 6}%` }} />)}</div>
-                  ) : preview.error ? (
-                    <p className="text-sm text-danger">{preview.error}</p>
-                  ) : preview.parsed_text.trim() ? (
-                    <Markdown>{preview.parsed_text}</Markdown>
-                  ) : (
-                    <p className="py-10 text-center text-sm text-ink-faint">{t("kb.previewEmpty")}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-border/60 px-5 py-2.5 text-end">
-              <button onClick={closePreview} className="rounded-(--radius-control) px-3.5 py-1.5 text-sm text-ink-secondary hover:bg-canvas">{t("common.close", { defaultValue: "关闭" })}</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

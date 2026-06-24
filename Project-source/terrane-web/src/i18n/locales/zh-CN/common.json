@@ -370,5 +370,13 @@
     "web": "联网搜索",
     "webHint": "开启后联网搜索最新信息",
     "webSources": "联网来源"
+  },
+  "source": {
+    "back": "返回",
+    "downloadOriginal": "下载原文",
+    "originalLayout": "原文版面",
+    "parsedResult": "解析结果",
+    "generatingLayout": "正在生成版面预览…",
+    "noOriginal": "无原文可预览"
   }
 }

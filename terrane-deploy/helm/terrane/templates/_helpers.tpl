@@ -37,3 +37,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- define "terrane.cache.port" -}}
 {{- if .Values.redis.enabled }}6379{{ else }}{{ .Values.externalRedis.port }}{{ end -}}
 {{- end -}}
+
+{{- define "terrane.storage.endpoint" -}}
+{{- if .Values.seaweedfs.enabled }}http://{{ include "terrane.fullname" . }}-seaweedfs:8333{{ else }}{{ .Values.objectStorage.endpoint }}{{ end -}}
+{{- end -}}

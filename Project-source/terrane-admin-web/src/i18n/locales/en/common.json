@@ -156,6 +156,7 @@
     "fBaseUrl": "Base URL",
     "fModel": "Model",
     "fKey": "API Key",
+    "fKeyKept": "•••••••••• (leave blank to keep unchanged)",
     "deleteTitle": "Delete channel",
     "deleteDesc": "Delete model channel \"{name}\"? This cannot be undone.",
     "col": {
@@ -171,7 +172,8 @@
       "rerank": "Rerank",
       "web_search": "Web search",
       "vl": "Multimodal (VL)",
-      "asr": "Speech (ASR)"
+      "asr": "Speech (ASR)",
+      "tts": "Text-to-Speech (TTS)"
     }
   },
   "account": {

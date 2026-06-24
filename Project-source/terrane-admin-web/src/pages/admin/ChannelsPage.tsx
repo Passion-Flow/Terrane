@@ -208,7 +208,7 @@ export function ChannelsPage() {
           )}
           <label className="block text-sm font-medium text-ink">{t("channels.fKey")}
             <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="new-password"
-              placeholder={editing?.has_key ? "••••••••••（留空不变）" : ""} disabled={busy} className={`mt-1.5 ${FIELD}`} /></label>
+              placeholder={editing?.has_key ? t("channels.fKeyKept") : ""} disabled={busy} className={`mt-1.5 ${FIELD}`} /></label>
           {formProvider?.key_hint && (
             <p className="rounded-(--radius-control) bg-accent-soft px-3 py-2 text-xs text-accent">{formProvider.key_hint}</p>
           )}

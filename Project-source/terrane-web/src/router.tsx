@@ -16,6 +16,7 @@ import { HomePage } from "@/pages/HomePage";
 import { KbDetailPage } from "@/pages/KbDetailPage";
 import { MemoryPage } from "@/pages/MemoryPage";
 import { OverviewPage } from "@/pages/OverviewPage";
+import { SourcePreviewPage } from "@/pages/SourcePreviewPage";
 import { ModelSettingsPage } from "@/pages/settings/ModelSettingsPage";
 import { LanguageSettingsPage } from "@/pages/settings/LanguageSettingsPage";
 import { SecuritySettingsPage } from "@/pages/settings/SecuritySettingsPage";
@@ -81,6 +82,7 @@ export const router = createBrowserRouter([
                   { index: true, element: <OverviewPage /> },
                   { path: "kb", element: <HomePage /> },
                   { path: "kb/:kbId", element: <KbDetailPage /> },
+                  { path: "kb/:kbId/source/:sourceId", element: <SourcePreviewPage /> },
                   { path: "graph", element: <GraphPage /> },
                   { path: "memory", element: <MemoryPage /> },
                   { path: "chat", element: <ChatPage /> },

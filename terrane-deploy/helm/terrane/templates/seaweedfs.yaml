@@ -1,0 +1,63 @@
+# Bundled SeaweedFS (S3-compatible object storage): uploaded originals + per-page WebP layout images.
+# Disable with seaweedfs.enabled=false to use a cloud bucket (set objectStorage.* instead).
+{{- if .Values.seaweedfs.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "terrane.fullname" . }}-seaweedfs-s3
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+data:
+  s3.json: |
+    {"identities":[{"name":{{ .Values.objectStorage.accessKey | quote }},"credentials":[{"accessKey":{{ .Values.objectStorage.accessKey | quote }},"secretKey":{{ .Values.objectStorage.secretKey | quote }}}],"actions":["Admin","Read","Write","List","Tagging"]}]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "terrane.fullname" . }}-seaweedfs
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  selector: { app: {{ include "terrane.fullname" . }}-seaweedfs }
+  ports: [{ name: s3, port: 8333, targetPort: 8333 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "terrane.fullname" . }}-seaweedfs
+  labels: {{- include "terrane.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "terrane.fullname" . }}-seaweedfs
+  replicas: 1
+  selector: { matchLabels: { app: {{ include "terrane.fullname" . }}-seaweedfs } }
+  template:
+    metadata:
+      labels:
+        app: {{ include "terrane.fullname" . }}-seaweedfs
+        {{- include "terrane.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: seaweedfs
+          image: {{ include "terrane.image" .Values.seaweedfs.image | quote }}
+          imagePullPolicy: {{ .Values.seaweedfs.image.pullPolicy }}
+          args: ["server", "-dir=/data", "-s3", "-s3.port=8333",
+                 "-s3.config=/etc/seaweedfs/s3.json", "-master.volumeSizeLimitMB=2000"]
+          ports: [{ name: s3, containerPort: 8333 }]
+          readinessProbe: { httpGet: { path: /cluster/healthz, port: 9333 }, initialDelaySeconds: 8 }
+          resources: {{- toYaml .Values.seaweedfs.resources | nindent 12 }}
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: s3config, mountPath: /etc/seaweedfs }
+      volumes:
+        - name: s3config
+          configMap: { name: {{ include "terrane.fullname" . }}-seaweedfs-s3 }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.seaweedfs.storageClass }}
+        storageClassName: {{ .Values.seaweedfs.storageClass | quote }}
+        {{- end }}
+        resources: { requests: { storage: {{ .Values.seaweedfs.size }} } }
+{{- end }}

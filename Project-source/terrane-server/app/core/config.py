@@ -77,6 +77,33 @@ class Settings(BaseSettings):
     terrane_license_crl_max_age_days: int = 0  # 0 = 不强制 CRL 新鲜度（离线气隙环境）
     terrane_forge_edge_url: str = ""           # 空 = 仅离线激活
 
+    # —— 对象存储（字段化；provider 由 object_storage_type 选定；.agent.md [Service 使用情况]）——
+    # 8 个 provider：local 双模 + s3 + 4 国产云(aliyun-oss/tencent-cos/volcengine-tos/huawei-obs)
+    # + azure-blob + google-storage。自托管默认 = SeaweedFS（S3 兼容走 boto3）。
+    object_storage_type: Literal[
+        "local", "s3", "azure-blob", "aliyun-oss",
+        "google-storage", "tencent-cos", "volcengine-tos", "huawei-obs",
+    ] = "local"
+    # local 双模：filesystem = 纯磁盘（开发默认）；s3 = 委托 SeaweedFS（S3 兼容端点）。
+    object_storage_local_mode: Literal["filesystem", "s3"] = "filesystem"
+    object_storage_local_path: str = "/var/lib/terrane/uploads"
+    object_storage_default_bucket: str = "terrane"
+    object_storage_presigned_url_expires: int = 900
+    object_storage_max_file_size: int = 104857600
+    # 通用云凭据（S3 / SeaweedFS / 阿里云 OSS / 腾讯 COS / 火山 TOS / 华为 OBS）。
+    # endpoint 出厂留空，由 compose 注入本机 SeaweedFS S3 端点（48333）。
+    object_storage_endpoint: str = ""          # 例 http://seaweedfs:48333 ；空 = provider 默认
+    object_storage_region: str = ""
+    object_storage_access_key: str = ""        # SeaweedFS 出厂用户 terrane_app（由 compose 注入）
+    object_storage_secret_key: str = ""        # SeaweedFS 出厂密码 Seaweedfs@!QAZxsw2.（由 compose 注入）
+    object_storage_secure: bool = True         # 端点 TLS
+    # Azure Blob（account/key 模型，而非 access/secret）。
+    object_storage_azure_account: str = ""
+    object_storage_azure_key: str = ""
+    # Google Cloud Storage（service-account JSON 路径 + project）。
+    object_storage_gcs_credentials_json: str = ""
+    object_storage_gcs_project: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

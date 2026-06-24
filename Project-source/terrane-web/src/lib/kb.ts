@@ -33,7 +33,12 @@ export interface KbSourceDetail extends KbSource {
   mime: string | null;
   parsed_text: string;
   has_original: boolean;
+  render_status?: string | null;
+  page_count?: number;
 }
+
+export interface SourcePage { n: number; w: number; h: number }
+export interface SourcePages { status: string; page_count: number; pages: SourcePage[] }
 
 export interface SearchHit {
   chunk_id: string;
@@ -101,6 +106,18 @@ export async function uploadSourceFile(kbId: string, file: File): Promise<{ id?:
 
 export const getSource = (kbId: string, sourceId: string) =>
   request<KbSourceDetail>(`/api/v1/knowledge-bases/${kbId}/sources/${sourceId}`, { credentials: "include" });
+
+/** 逐页版面图清单(每页 WebP 的页码 + 像素宽高)。 */
+export const getSourcePages = (kbId: string, sourceId: string) =>
+  request<SourcePages>(`/api/v1/knowledge-bases/${kbId}/sources/${sourceId}/pages`, { credentials: "include" });
+
+/** 单页 WebP 版面图 URL(同源带 cookie,可直接当 <img src>)。 */
+export const sourcePageUrl = (kbId: string, sourceId: string, n: number) =>
+  `${apiBase()}/api/v1/knowledge-bases/${kbId}/sources/${sourceId}/page/${n}`;
+
+/** 原文件 URL(可直接当 <img src> 或 <a href> 下载)。 */
+export const sourceOriginalUrl = (kbId: string, sourceId: string) =>
+  `${apiBase()}/api/v1/knowledge-bases/${kbId}/sources/${sourceId}/original`;
 
 /** 取原始文件并生成本地 blob URL(供左侧原文渲染:PDF iframe / 图片 img)。用完记得 revoke。 */
 export async function fetchSourceOriginal(kbId: string, sourceId: string): Promise<string> {

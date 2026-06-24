@@ -31,12 +31,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser, get_current_user, get_db_session
 from app.core.errors import BizError
 from app.models.api_key import ApiKey
-from app.models.kb_content import Chunk, IngestJob, RawSource, RawSourceOriginal
+from app.models.kb_content import Chunk, IngestJob, RawSource, RawSourceOriginal, RawSourceRender
 from app.models.knowledge_base import VISIBILITY, KbMember, KnowledgeBase
 from app.models.user import User
-from app.services import graph_service, ingest_service, memory_service, studio_service, wiki_service
+from app.services import (
+    graph_service, ingest_service, memory_service, render_service, storage, studio_service, wiki_service,
+)
 from app.services.parse import engine as parse_engine
 from app.services.parse import video as video_parser
+from app.services.parse import vl as parse_vl
 from app.services.model_channels import get_channel, get_channel_by_model
 from app.services.model_client import ModelError, chat_stream
 
@@ -171,6 +174,10 @@ async def delete_kb(kb_id: str = Path(...), user: CurrentUser = Depends(get_curr
         await db.commit()
     except Exception as e:  # noqa: BLE001
         log.warning("graph_drop_failed", kb_id=kb_id, error=str(e))
+    # 清对象存储:库内所有源的原文 + 页面图(DB 行随级联硬删,但对象存储需显式清)
+    sids = (await db.execute(select(RawSource.id).where(RawSource.kb_id == kb.id))).scalars().all()
+    for s in sids:
+        await storage.delete_source_objects(s)
     await db.delete(kb)   # 硬删 + 级联(kb_members/raw_sources/chunks/wiki/jobs)
     await db.commit()
     log.info("kb_deleted", kb_id=kb_id, user_id=user.user_id)
@@ -321,6 +328,12 @@ async def upload_source(kb_id: str = Path(...), file: UploadFile = File(...),
             os.unlink(tmp)
         if not text or not text.strip():
             return {"ok": False, "reason": "parse_failed_or_empty"}
+        # VL 增强(仅 PDF):扫描页 OCR + 嵌入图片描述。无 vl 渠道则原样,失败不阻断。
+        if mime == "application/pdf":
+            try:
+                text = await parse_vl.enhance_pdf(db, data, text)
+            except Exception as e:  # noqa: BLE001
+                log.warning("vl_enhance_failed", file=fname, error=str(e))
     else:
         try:
             text = data.decode("utf-8")
@@ -331,11 +344,26 @@ async def upload_source(kb_id: str = Path(...), file: UploadFile = File(...),
 
     raw, n = await ingest_service.add_text_source(
         db, kb_id=kb.id, workspace_id=kb.workspace_id, title=fname, body=text, kind="file")
-    # 存原始文件字节(供「原文/解析」对照预览);视频不存(过大且无版面渲染),其余 ≤50MB 存
-    if mime not in video_parser.VIDEO_MIMES and len(data) <= 50_000_000:
-        db.add(RawSourceOriginal(raw_source_id=raw.id, mime=mime or "application/octet-stream",
-                                 size=len(data), data=data))
-        await db.commit()
+    # 存原始文件字节(供「原文/解析」对照预览);视频不存(过大且无版面渲染)。
+    # 优先入对象存储(originals/{rid}),失败降级 DB bytea(≤50MB)。可渲染类型(PDF/Office)再异步逐页 WebP。
+    if mime not in video_parser.VIDEO_MIMES:
+        in_obj = False
+        try:
+            await storage.ensure_bucket()
+            await storage.get_adapter().upload(storage.original_key(raw.id), data,
+                                               content_type=mime or "application/octet-stream")
+            in_obj = True
+        except Exception as e:  # noqa: BLE001 —— 对象存储不可用 → 降级 DB
+            log.warning("original_object_store_failed", file=fname, error=str(e))
+        if in_obj or len(data) <= 50_000_000:
+            db.add(RawSourceOriginal(raw_source_id=raw.id, mime=mime or "application/octet-stream",
+                                     size=len(data), data=None if in_obj else data))
+            do_render = in_obj and render_service.renderable(mime)
+            if do_render:
+                db.add(RawSourceRender(raw_source_id=raw.id, status="pending"))
+            await db.commit()
+            if do_render:
+                asyncio.create_task(render_service.render_source_bg(raw.id, data, mime, ext))
     asyncio.create_task(memory_service.consolidate_bg(uuid.UUID(user.user_id), text, "document"))
     return {"id": str(raw.id), "title": raw.title, "status": raw.status, "chunk_count": n}
 
@@ -373,17 +401,61 @@ async def get_source(kb_id: str = Path(...), source_id: str = Path(...),
     # 原文件的真实 mime(RawSource.mime 摄入时统一写 text/plain,左侧渲染要用原文件真 mime)
     orig_mime = (await db.execute(select(RawSourceOriginal.mime)
                                   .where(RawSourceOriginal.raw_source_id == r.id))).scalar_one_or_none()
+    rnd = await db.get(RawSourceRender, r.id)
     return {"id": str(r.id), "title": r.title, "kind": r.kind, "mime": orig_mime or r.mime,
             "status": r.status, "size_bytes": r.size_bytes, "chunk_count": n,
             "error": r.error, "parsed_text": r.parsed_text or "", "has_original": orig_mime is not None,
+            "render_status": rnd.status if rnd else None, "page_count": rnd.page_count if rnd else 0,
             "created_at": r.created_at.isoformat() if r.created_at else None}
+
+
+@router.get("/{kb_id}/sources/{source_id}/pages")
+async def get_source_pages(kb_id: str = Path(...), source_id: str = Path(...),
+                           user: CurrentUser = Depends(get_current_user),
+                           db: AsyncSession = Depends(get_db_session)) -> dict:
+    """取原文逐页 WebP 版面图的元信息(页数 + 每页尺寸)。前端据此占位 + 按视口懒加载单页。"""
+    kb, _ = await _load(db, kb_id, user)
+    try:
+        sid = uuid.UUID(source_id)
+    except ValueError:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    r = await db.get(RawSource, sid)
+    if r is None or r.kb_id != kb.id:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    rnd = await db.get(RawSourceRender, sid)
+    if rnd is None:
+        return {"status": "none", "page_count": 0, "pages": []}
+    return {"status": rnd.status, "page_count": rnd.page_count, "pages": rnd.pages}
+
+
+@router.get("/{kb_id}/sources/{source_id}/page/{page_no}")
+async def get_source_page(kb_id: str = Path(...), source_id: str = Path(...), page_no: int = Path(..., ge=1),
+                          user: CurrentUser = Depends(get_current_user),
+                          db: AsyncSession = Depends(get_db_session)) -> StreamingResponse:
+    """取单页 WebP 版面图(对象存储)。强缓存:页面图内容不可变。"""
+    import io
+
+    kb, _ = await _load(db, kb_id, user)
+    try:
+        sid = uuid.UUID(source_id)
+    except ValueError:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    r = await db.get(RawSource, sid)
+    if r is None or r.kb_id != kb.id:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    try:
+        data = await storage.get_adapter().download(storage.page_key(sid, page_no))
+    except Exception:  # noqa: BLE001
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "page"})
+    return StreamingResponse(io.BytesIO(data), media_type="image/webp",
+                             headers={"Content-Disposition": "inline", "Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @router.get("/{kb_id}/sources/{source_id}/original")
 async def get_source_original(kb_id: str = Path(...), source_id: str = Path(...),
                               user: CurrentUser = Depends(get_current_user),
                               db: AsyncSession = Depends(get_db_session)) -> StreamingResponse:
-    """取上传文件的原始字节(用于左侧原文渲染:PDF/图片等)。inline 展示。"""
+    """取上传文件的原始字节(用于下载/直接渲染)。优先对象存储,降级 DB bytea。inline 展示。"""
     import io
 
     kb, _ = await _load(db, kb_id, user)
@@ -397,7 +469,13 @@ async def get_source_original(kb_id: str = Path(...), source_id: str = Path(...)
     o = await db.get(RawSourceOriginal, sid)
     if o is None:
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "original"})
-    return StreamingResponse(io.BytesIO(o.data), media_type=o.mime or "application/octet-stream",
+    data = o.data
+    if data is None:  # 字节在对象存储
+        try:
+            data = await storage.get_adapter().download(storage.original_key(sid))
+        except Exception:  # noqa: BLE001
+            raise BizError("RESOURCE_NOT_FOUND", {"resource": "original"})
+    return StreamingResponse(io.BytesIO(data), media_type=o.mime or "application/octet-stream",
                              headers={"Content-Disposition": "inline"})
 
 
@@ -415,6 +493,7 @@ async def delete_source(kb_id: str = Path(...), source_id: str = Path(...),
     raw = await db.get(RawSource, sid)
     if raw is None or raw.kb_id != kb.id:
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    await storage.delete_source_objects(sid)   # 清对象存储(原文 + 页面图);DB 行随级联硬删
     await db.delete(raw)   # 硬删 + 级联(chunks ON DELETE CASCADE)
     await db.commit()
     # 库内已无源 → 清空知识图谱(否则图谱残留旧实体)

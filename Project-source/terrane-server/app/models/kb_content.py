@@ -46,15 +46,32 @@ class Chunk(UUIDMixin, Base):
 
 
 class RawSourceOriginal(Base):
-    """上传文件的原始字节(用于「原文/解析」对照预览)。单独成表,list/get 不加载 blob。随源级联硬删。"""
+    """上传文件原始字节的元信息。字节优先存对象存储（key=originals/{rid}），data 仅旧数据/降级时用。
+    单独成表,list/get 不加载 blob。随源级联硬删（对象存储侧由 delete 钩子清理）。"""
 
     __tablename__ = "raw_source_originals"
 
     raw_source_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
     mime: Mapped[str | None] = mapped_column(String(128), nullable=True)
     size: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
-    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    # data 可空：对象存储成功时为 NULL（字节在 bucket）；存储不可用时降级把字节存这里。
+    data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class RawSourceRender(Base):
+    """原文逐页 WebP 版面图的渲染状态。页面图字节存对象存储（key=pages/{rid}/{n}.webp），
+    本表只存元信息（页数 + 每页尺寸），前端据此按视口懒加载单页。随源级联硬删。"""
+
+    __tablename__ = "raw_source_renders"
+
+    raw_source_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")  # pending/rendering/done/failed/skipped
+    page_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    pages: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)  # [{"n":1,"w":1654,"h":2339}, ...]
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
 
 class WikiPage(UUIDMixin, HardTimestampMixin, Base):

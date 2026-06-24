@@ -1,0 +1,11 @@
+{
+  "identities": [
+    {
+      "name": "terrane_app",
+      "credentials": [
+        { "accessKey": "terrane_app", "secretKey": "Seaweedfs@!QAZxsw2." }
+      ],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

@@ -370,5 +370,13 @@
     "web": "Web search",
     "webHint": "Search the web for fresh info",
     "webSources": "Web sources"
+  },
+  "source": {
+    "back": "Back",
+    "downloadOriginal": "Download original",
+    "originalLayout": "Original layout",
+    "parsedResult": "Parsed result",
+    "generatingLayout": "Generating layout preview…",
+    "noOriginal": "No original to preview"
   }
 }

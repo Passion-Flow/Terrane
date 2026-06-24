@@ -378,6 +378,36 @@ externalRedis:
   password: "#REPLACE_ME#"
 
 # ==================================================================================================
+# Object storage — uploaded originals + per-page WebP layout images (knowledge-base preview).
+# Bundled self-hosted default = SeaweedFS (S3-compatible). To use a cloud bucket: set type to one of
+# s3 / aliyun-oss / tencent-cos / volcengine-tos / huawei-obs / azure-blob / google-storage, fill
+# endpoint + accessKey/secretKey, and set seaweedfs.enabled=false.
+# ==================================================================================================
+objectStorage:
+  type: "local"          # local(bundled SeaweedFS) / s3 / aliyun-oss / tencent-cos / volcengine-tos / huawei-obs / azure-blob / google-storage
+  localMode: "s3"        # s3 = delegate to SeaweedFS; filesystem = local disk
+  bucket: "terrane"
+  region: "us-east-1"
+  secure: false          # http to the in-cluster SeaweedFS; true for cloud over https
+  # Endpoint used ONLY when seaweedfs.enabled=false (a cloud / external S3 endpoint).
+  endpoint: ""
+  accessKey: "terrane_app"
+  secretKey: "Seaweedfs@!QAZxsw2."
+
+# Bundled SeaweedFS (S3-compatible object storage). Set enabled=false to use a cloud bucket instead.
+seaweedfs:
+  enabled: true
+  image:
+    repository: crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror/terrane-seaweedfs
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  resources: {}
+  #  requests: { cpu: 100m, memory: 256Mi }
+  #  limits:   { cpu: "1",  memory: 1Gi }
+  storageClass: ""
+  size: 20Gi
+
+# ==================================================================================================
 # Image-pull secrets — referenced by every pod to pull from a private registry. Default empty (public
 # / already-authenticated registry). For a private Harbor / Aliyun ACR, create the secret with
 # helm/Scripts/generate-image-repo-secret.sh and add its name here, e.g. [{ name: terrane-image-repo-secret }].

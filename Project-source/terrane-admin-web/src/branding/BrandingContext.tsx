@@ -4,6 +4,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import { DEFAULT_BRANDING, getBranding, type Branding } from "@/lib/branding";
 
@@ -14,6 +15,7 @@ export function useBranding(): Branding {
 }
 
 export function BrandingProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const { data } = useQuery({
     queryKey: ["branding"],
     queryFn: getBranding,
@@ -21,10 +23,10 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   });
   const branding = data ?? DEFAULT_BRANDING;
 
-  // 产品名 → 标签页标题（保留「管理后台」后缀）。
+  // 产品名 → 标签页标题（保留「管理后台」后缀，随语言切换）。
   useEffect(() => {
-    document.title = `${branding.product_name} 管理后台`;
-  }, [branding.product_name]);
+    document.title = `${branding.product_name} ${t("brand.console")}`;
+  }, [branding.product_name, t]);
 
   // favicon：专用 favicon 优先，缺省回退控制台 Logo，再缺省保留出厂 favicon.svg。
   useEffect(() => {

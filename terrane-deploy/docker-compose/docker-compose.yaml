@@ -45,6 +45,20 @@ x-shared-env: &backend-env
   # container uses its own random machine-id and the admin activating does NOT unlock the front
   # ("后台已激活、前台仍显示未激活"). Generate once: openssl rand -hex 16. Do NOT change after activating.
   FORGE_DEPLOYMENT_UID: ${FORGE_DEPLOYMENT_UID:-#REPLACE_ME#}
+  # ---- Object storage (8-provider; bundled self-hosted default = SeaweedFS, S3-compatible) ----
+  # Stores uploaded originals + per-page WebP layout images (knowledge-base preview). DEFAULT points at
+  # the bundled `seaweedfs` service below. To use a cloud bucket instead set OBJECT_STORAGE_TYPE to one of
+  # s3 / aliyun-oss / tencent-cos / volcengine-tos / huawei-obs / azure-blob / google-storage and fill its
+  # credentials (see .env.example). If unreachable, originals fall back to the DB and preview degrades.
+  OBJECT_STORAGE_TYPE: ${OBJECT_STORAGE_TYPE:-local}
+  OBJECT_STORAGE_LOCAL_MODE: ${OBJECT_STORAGE_LOCAL_MODE:-s3}      # s3 = 委托内置 SeaweedFS；filesystem = 纯磁盘
+  OBJECT_STORAGE_DEFAULT_BUCKET: ${OBJECT_STORAGE_DEFAULT_BUCKET:-terrane}
+  OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-http://seaweedfs:8333}
+  OBJECT_STORAGE_REGION: ${OBJECT_STORAGE_REGION:-us-east-1}
+  OBJECT_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:-terrane_app}
+  OBJECT_STORAGE_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:-Seaweedfs@!QAZxsw2.}
+  OBJECT_STORAGE_SECURE: ${OBJECT_STORAGE_SECURE:-false}            # 内网 SeaweedFS 走 http
+  OBJECT_STORAGE_LOCAL_PATH: ${OBJECT_STORAGE_LOCAL_PATH:-/var/lib/terrane/uploads}
   # ---- private CA (optional): trust a self-signed / private-CA https endpoint (信创 intranet) ----
   SSL_CERT_FILE: ${TERRANE_CA_FILE:+/etc/terrane/ca-bundle.crt}
   REQUESTS_CA_BUNDLE: ${TERRANE_CA_FILE:+/etc/terrane/ca-bundle.crt}
@@ -75,6 +89,8 @@ services:
       # required:false → if you comment out the bundled PG/Redis to use an external one, this won't error.
       postgres: { condition: service_healthy, required: false }
       redis: { condition: service_healthy, required: false }
+      # 对象存储是可降级依赖:只等启动(不等健康),挂了也不阻塞前台(原文回退 DB、预览降级)。
+      seaweedfs: { condition: service_started, required: false }
     networks: [internal]
 
   # ---- 后台管理控制面 (terrane-admin-server, internal :43003) — 迁移 + 出厂建超管 --------------
@@ -177,9 +193,28 @@ services:
       retries: 30
     networks: [internal]
 
+  # ---- 对象存储 (SeaweedFS, S3 兼容, 自托管默认) -----------------------------------------------
+  # 存原文 + 逐页 WebP 版面图。S3 端点 :8333(仅内网)。要用云上 OSS 改 .env 的 OBJECT_STORAGE_* 并停本服务。
+  seaweedfs:
+    image: ${REGISTRY:-crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror}/terrane-seaweedfs:${TERRANE_TAG:-v1.0.0}
+    restart: always
+    command: ["server", "-dir=/data", "-s3", "-s3.port=8333",
+              "-s3.config=/etc/seaweedfs/s3.json", "-master.volumeSizeLimitMB=2000"]
+    volumes:
+      - seaweeddata:/data
+      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9333/cluster/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks: [internal]
+
 volumes:
   pgdata:
   redisdata:
+  seaweeddata:
   license:        # shared by terrane-server + terrane-admin-server + terrane-gateway
 
 networks:
