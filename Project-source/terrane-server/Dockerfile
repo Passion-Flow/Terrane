@@ -4,7 +4,11 @@ FROM python:3.13-slim AS base
 # 运行期系统依赖:
 #  - ca/curl + ffmpeg(视频解析抽帧/抽音轨;PyMuPDF wheel 自带其余)
 #  - libreoffice(无界面) + 中日韩字体:Office(docx/xlsx/pptx)→PDF→逐页 WebP 版面预览
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 构建期换阿里云 Debian 源(直连可靠/更快;仅影响 build 阶段,成品镜像不含 apt 源差异)。
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' \
+        /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; \
+    apt-get -o Acquire::Retries=8 update && \
+    apt-get -o Acquire::Retries=8 -o Acquire::http::Pipeline-Depth=0 install -y --no-install-recommends \
         ca-certificates curl ffmpeg \
         libreoffice-impress libreoffice-writer libreoffice-calc \
         fonts-noto-cjk fonts-noto-core \
