@@ -49,7 +49,8 @@ class AuthService:
         self.settings = get_settings()
 
     # ── 注册 ──
-    async def register(self, email: str, password: str, username: str | None) -> User:
+    async def register(self, email: str, password: str, username: str | None,
+                       *, base_url: str | None = None) -> User:
         email = email.lower()
         if await self.users.email_exists(email):
             raise BizError("AUTH_EMAIL_TAKEN")
@@ -70,21 +71,31 @@ class AuthService:
         self.db.add(Membership(workspace_id=ws.id, user_id=user.id, role="Owner"))
         await self.db.commit()
 
-        await self._send_verify(user)
+        await self._send_verify(user, base_url=base_url)
         return user
 
-    async def _send_verify(self, user: User) -> None:
+    def _link_base(self, base_url: str | None) -> str:
+        """优先用请求推导出的访问地址（跟随部署的 IP/域名），回退到配置的 frontend_base_url。"""
+        return (base_url or self.settings.frontend_base_url or "http://localhost:43000").rstrip("/")
+
+    async def _send_verify(self, user: User, *, base_url: str | None = None) -> None:
         """发验证邮件（best-effort：邮件未配置/发送失败不阻断注册，仅告警）。"""
         token = await token_service.issue(VERIFY_KIND, str(user.id),
                                           ttl_seconds=self.settings.email_verify_ttl_seconds)
-        link = f"{self.settings.frontend_base_url}/verify-email?token={token}"
+        link = f"{self._link_base(base_url)}/verify-email?token={token}"
         cfg = await get_setting(self.db, EMAIL_KEY)
         if not cfg or not cfg.get("configured"):
             log.warning("email_not_configured", action="verify_email", user_id=str(user.id))
             return
+        brand = (cfg.get("from_name") or "Terrane").strip()
+        html = email_service.render_action_email(
+            brand=brand, title="验证你的邮箱", button_text="验证邮箱",
+            intro=f"欢迎加入 {brand}。点击下方按钮完成邮箱验证以激活你的账户，链接 24 小时内有效。",
+            link=link, note="此验证链接将在 24 小时后失效。")
         try:
-            await email_service.send(cfg, to=user.email, subject="验证你的 Terrane 邮箱",
-                                     body=f"点击链接完成邮箱验证（24 小时内有效）：\n{link}")
+            await email_service.send(cfg, to=user.email, subject=f"验证你的 {brand} 邮箱",
+                                     body=f"欢迎加入 {brand}。点击链接完成邮箱验证（24 小时内有效）：\n{link}",
+                                     html=html)
         except BizError:
             log.warning("verify_email_send_failed", user_id=str(user.id))
 
@@ -207,21 +218,26 @@ class AuthService:
         await self.db.commit()
 
     # ── 密码重置 ──
-    async def request_reset(self, email: str) -> None:
+    async def request_reset(self, email: str, *, base_url: str | None = None) -> None:
         """发重置邮件（防枚举：无论邮箱是否存在都静默成功）。"""
         user = await self.users.get_by_email(email.lower())
         if not user:
             return
         token = await token_service.issue(RESET_KIND, str(user.id),
                                           ttl_seconds=self.settings.password_reset_ttl_seconds)
-        link = f"{self.settings.frontend_base_url}/reset-password?token={token}"
+        link = f"{self._link_base(base_url)}/reset-password?token={token}"
         cfg = await get_setting(self.db, EMAIL_KEY)
         if not cfg or not cfg.get("configured"):
             log.warning("email_not_configured", action="reset_password", user_id=str(user.id))
             return
+        brand = (cfg.get("from_name") or "Terrane").strip()
+        html = email_service.render_action_email(
+            brand=brand, title="重置你的密码", button_text="重置密码",
+            intro="我们收到了重置你账户密码的请求。点击下方按钮设置新密码，链接 2 小时内有效。",
+            link=link, note="出于安全，此重置链接将在 2 小时后失效，且仅可使用一次。")
         try:
-            await email_service.send(cfg, to=user.email, subject="重置你的 Terrane 密码",
-                                     body=f"点击链接重置密码（2 小时内有效）：\n{link}")
+            await email_service.send(cfg, to=user.email, subject=f"重置你的 {brand} 密码",
+                                     body=f"点击链接重置密码（2 小时内有效）：\n{link}", html=html)
         except BizError:
             log.warning("reset_email_send_failed", user_id=str(user.id))
 

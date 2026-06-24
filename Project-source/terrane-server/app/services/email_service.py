@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import asyncio
+import html as _html
 import smtplib
 import ssl
 from email.message import EmailMessage
@@ -29,6 +30,54 @@ from typing import Any
 from app.core.errors import BizError
 
 _IMPLICIT_SSL_PORTS = frozenset({465, 994, 2465})
+
+# 品牌色（petrol-teal，与前端 --color-accent 一致）。邮件必须内联样式 + 表格布局才能在 Gmail/Outlook 稳定渲染。
+_ACCENT = "#0d7d86"
+
+
+def render_action_email(*, brand: str, title: str, intro: str, button_text: str,
+                        link: str, note: str) -> str:
+    """SaaS 风格的「行动邀请」邮件（验证邮箱 / 重置密码通用）。内联样式、表格布局、响应式、深浅皆清晰。"""
+    b = _html.escape(brand or "Terrane")
+    initial = b[0].upper() if b else "T"
+    t, i, btn, n = (_html.escape(x) for x in (title, intro, button_text, note))
+    safe_link = _html.escape(link, quote=True)
+    return f"""<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark"></head>
+<body style="margin:0;padding:0;background:#f4f5f7;-webkit-font-smoothing:antialiased;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:40px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border:1px solid #ececf0;border-radius:16px;overflow:hidden;">
+        <tr><td style="padding:30px 40px 0;">
+          <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+            <td style="vertical-align:middle;"><div style="width:36px;height:36px;border-radius:10px;background:{_ACCENT};color:#ffffff;font:700 19px/36px -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;text-align:center;">{initial}</div></td>
+            <td style="vertical-align:middle;padding-left:11px;font:600 17px/1 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">{b}</td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="padding:26px 40px 0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+          <h1 style="margin:0 0 12px;font-size:21px;font-weight:600;color:#18181b;letter-spacing:-.01em;">{t}</h1>
+          <p style="margin:0 0 26px;font-size:14px;line-height:1.65;color:#52525b;">{i}</p>
+          <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+            <td style="border-radius:11px;background:{_ACCENT};">
+              <a href="{safe_link}" target="_blank" style="display:inline-block;padding:13px 32px;font:600 14px/1 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#ffffff;text-decoration:none;border-radius:11px;">{btn}</a>
+            </td>
+          </tr></table>
+          <p style="margin:26px 0 0;font-size:12px;line-height:1.6;color:#a1a1aa;">{n}</p>
+          <p style="margin:14px 0 0;font-size:12px;line-height:1.6;color:#a1a1aa;">若按钮无法点击，请复制下方链接到浏览器打开：</p>
+          <p style="margin:6px 0 0;font-size:12px;line-height:1.5;word-break:break-all;"><a href="{safe_link}" target="_blank" style="color:{_ACCENT};text-decoration:none;">{safe_link}</a></p>
+        </td></tr>
+        <tr><td style="padding:28px 40px 30px;">
+          <div style="border-top:1px solid #f0f0f3;padding-top:18px;font:400 11px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#c0c0c8;">
+            此邮件由 {b} 自动发送，请勿直接回复。如果这不是你本人的操作，忽略本邮件即可，你的账户不会有任何变化。
+          </div>
+        </td></tr>
+      </table>
+      <div style="max-width:480px;margin:16px auto 0;font:400 11px/1 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#c8c8d0;text-align:center;">© {b}</div>
+    </td></tr>
+  </table>
+</body></html>"""
 
 
 def resolve_encryption(encryption: str | None, port: int) -> str:
@@ -53,18 +102,22 @@ def _context(allow_insecure: bool) -> ssl.SSLContext:
     return ctx
 
 
-def _build_message(cfg: dict[str, Any], to: str, subject: str, body: str) -> tuple[EmailMessage, str]:
+def _build_message(cfg: dict[str, Any], to: str, subject: str, body: str,
+                   html: str | None = None) -> tuple[EmailMessage, str]:
     from_addr = (cfg.get("from_address") or cfg.get("username") or "no-reply@terrane.local").strip()
     from_name = (cfg.get("from_name") or "Terrane").strip()
     msg = EmailMessage()
     msg["From"] = formataddr((from_name, from_addr))  # 非 ASCII 显示名自动 RFC2047 编码
     msg["To"] = to
     msg["Subject"] = subject
-    msg.set_content(body)
+    msg.set_content(body)                         # 纯文本兜底（无 HTML 渲染的客户端 + 反垃圾友好）
+    if html:
+        msg.add_alternative(html, subtype="html")  # multipart/alternative：优先展示 HTML
     return msg, from_addr
 
 
-def _send_sync(cfg: dict[str, Any], to: str, subject: str, body: str) -> None:
+def _send_sync(cfg: dict[str, Any], to: str, subject: str, body: str,
+               html: str | None = None) -> None:
     host = (cfg.get("host") or "localhost").strip()
     port = int(cfg.get("port") or 25)
     enc = resolve_encryption(cfg.get("encryption"), port)
@@ -74,7 +127,7 @@ def _send_sync(cfg: dict[str, Any], to: str, subject: str, body: str) -> None:
     allow_insecure = bool(cfg.get("allow_insecure"))
     timeout = float(cfg.get("timeout") or 20)
     ctx = _context(allow_insecure)
-    msg, from_addr = _build_message(cfg, to, subject, body)
+    msg, from_addr = _build_message(cfg, to, subject, body, html)
 
     if enc == "ssl":
         smtp: smtplib.SMTP = smtplib.SMTP_SSL(host, port, context=ctx, timeout=timeout)
@@ -113,10 +166,11 @@ def _classify(code: int | None, text: Any) -> str:
     return "smtp_error"
 
 
-async def send(cfg: dict[str, Any], *, to: str, subject: str, body: str) -> None:
+async def send(cfg: dict[str, Any], *, to: str, subject: str, body: str,
+               html: str | None = None) -> None:
     """发送一封邮件；失败抛 SYSTEM_UNAVAILABLE（details 带 hint + 脱敏原因）。"""
     try:
-        await asyncio.to_thread(_send_sync, cfg, to, subject, body)
+        await asyncio.to_thread(_send_sync, cfg, to, subject, body, html)
     except smtplib.SMTPResponseException as exc:
         raise BizError("SYSTEM_UNAVAILABLE", {
             "service": "email", "hint": _classify(exc.smtp_code, exc.smtp_error),

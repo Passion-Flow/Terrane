@@ -40,6 +40,19 @@ log = structlog.get_logger("terrane.api.auth")
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
+def _public_base_url(request: Request) -> str | None:
+    """邮件里链接用的前台地址。显式配置了非 localhost 的 FRONTEND_BASE_URL 就用它（生产固定域名 +
+    防 Host 注入）；否则跟随本次请求的 Host —— 部署在什么 IP/域名访问，邮件链接就用什么，无需配置。"""
+    cfg = (get_settings().frontend_base_url or "").rstrip("/")
+    if cfg and "localhost" not in cfg and "127.0.0.1" not in cfg:
+        return cfg
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if host:
+        proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "http"
+        return f"{proto}://{host}"
+    return cfg or None
+
+
 def _set_session_cookie(response: Response, sid: str) -> None:
     s = get_settings()
     response.set_cookie(
@@ -66,7 +79,8 @@ async def register(body: RegisterRequest, request: Request,
     await RateLimiter().hit(f"register_ip:{ip}",
                             limit=get_settings().register_max_per_ip_per_hour, window=3600,
                             code="RATE_LIMIT_EXCEEDED")
-    user = await AuthService(db).register(body.email, body.password, body.username)
+    user = await AuthService(db).register(body.email, body.password, body.username,
+                                          base_url=_public_base_url(request))
     log.info("user_registered", user_id=str(user.id), ip=ip)
     return RegisterOut(id=str(user.id), email=user.email, status=user.status)
 
@@ -174,7 +188,8 @@ async def request_reset(body: RequestResetRequest, request: Request,
     ip = request.client.host if request.client else None
     await RateLimiter().hit(f"reset_ip:{ip}", limit=get_settings().login_max_per_ip_per_min,
                             window=60, code="RATE_LIMIT_EXCEEDED")
-    await AuthService(db).request_reset(body.email)  # 防枚举：恒静默成功
+    await AuthService(db).request_reset(body.email,  # 防枚举：恒静默成功
+                                        base_url=_public_base_url(request))
     return {"data": {"ok": True}}
 
 

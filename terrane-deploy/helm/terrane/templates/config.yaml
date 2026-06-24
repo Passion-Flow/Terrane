@@ -7,6 +7,8 @@ data:
   TZ: {{ .Values.global.timezone | quote }}
   TERRANE_LOG_LEVEL: {{ .Values.global.logLevel | quote }}
   SESSION_COOKIE_SECURE: {{ .Values.global.useTLS | toString | quote }}
+  # Public URL for verification / reset email links. Empty = auto-follow the visited host; set to pin.
+  FRONTEND_BASE_URL: {{ .Values.global.publicBaseUrl | default "" | quote }}
   DATABASE_HOST: {{ include "terrane.db.host" . | quote }}
   DATABASE_PORT: {{ include "terrane.db.port" . | quote }}
   DATABASE_USERNAME: {{ include "terrane.db.user" . | quote }}

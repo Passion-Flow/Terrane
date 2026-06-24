@@ -17,6 +17,9 @@ global:
   timezone: "Asia/Shanghai"
   # Backend log level: DEBUG | INFO | WARNING | ERROR.
   logLevel: "INFO"
+  # Public URL used to build verification / password-reset email links. Empty = auto-follow the
+  # address the user actually visited (recommended). Set to pin a fixed URL, e.g. https://kb.example.com
+  publicBaseUrl: ""
   # Default nodeSelector applied to every component pod unless the component overrides it. Empty = none.
   nodeSelector: {}
   # Extra labels applied to all Terrane workload Pods (Deployment/StatefulSet pod templates). Empty = none.

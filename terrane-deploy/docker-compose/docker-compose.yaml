@@ -16,6 +16,11 @@ x-shared-env: &backend-env
   # Session cookie Secure flag: keep TRUE behind TLS; set FALSE ONLY for a plain-HTTP trial,
   # otherwise the browser drops the cookie over HTTP and login silently never sticks.
   SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+  # ---- Public access URL (used to build verification / password-reset email links) ----
+  # Leave EMPTY (default) to auto-follow the exact address the user visited (IP / domain) — the link
+  # in emails tracks your deployment automatically, no config needed. Set it ONLY to pin a fixed
+  # public URL, e.g. behind an HTTPS reverse proxy: https://kb.example.com
+  FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-}
   # ---- database (one PostgreSQL, two logical DBs: terrane_main + terrane_admin) ----
   DATABASE_HOST: ${DATABASE_HOST:-postgres}
   DATABASE_PORT: ${DATABASE_PORT:-5432}
