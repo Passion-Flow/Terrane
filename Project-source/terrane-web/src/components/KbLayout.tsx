@@ -85,7 +85,7 @@ export function KbLayout() {
   const ctx: KbContext = { kb, sources, reload, reloadSources, canEdit, id, seg };
 
   return (
-    <div className="flex min-h-screen bg-canvas">
+    <div className="flex h-screen overflow-hidden bg-canvas">
       <aside className="flex w-64 shrink-0 flex-col border-e border-border/70 bg-surface/40">
         <div className="px-4 py-4">
           <NavLink to={`/${seg}/kb`}

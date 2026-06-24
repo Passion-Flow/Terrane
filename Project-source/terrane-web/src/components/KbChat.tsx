@@ -50,7 +50,7 @@ export function KbChat({ kbId }: { kbId: string }) {
   const examples = t("kb.chatExamples", { returnObjects: true }) as string[];
 
   return (
-    <div className="flex h-[calc(100vh-15rem)] min-h-[28rem] flex-col rounded-xl border border-border/70 bg-surface/40">
+    <div className="flex h-full min-h-0 flex-col rounded-xl border border-border/70 bg-surface/40">
       {msgs.length > 0 && (
         <div className="flex items-center justify-end border-b border-border/50 px-3 py-1.5">
           <button onClick={() => { if (!busy) setMsgs([]); }} disabled={busy}
