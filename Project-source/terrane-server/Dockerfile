@@ -17,7 +17,9 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
-ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PYTHONUNBUFFERED=1
+# UV_DEFAULT_INDEX:构建期走阿里云 PyPI 镜像(直连可靠/更快;仅影响 build,成品镜像不含 pip 源)。
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PYTHONUNBUFFERED=1 \
+    UV_DEFAULT_INDEX=https://mirrors.aliyun.com/pypi/simple/
 
 # 先装依赖(利用层缓存)
 COPY pyproject.toml ./
