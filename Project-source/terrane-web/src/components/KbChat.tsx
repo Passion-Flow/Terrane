@@ -1,6 +1,6 @@
 /** 知识库 RAG 问答面板 —— 流式答案 + 可点引用来源 + typing 动画 + 清空历史。 */
 
-import { ArrowClockwise, FileText, PaperPlaneRight, Trash } from "@phosphor-icons/react";
+import { ArrowClockwise, ChatCircleText, FileText, PaperPlaneRight, Trash } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router";
@@ -31,8 +31,8 @@ export function KbChat({ kbId }: { kbId: string }) {
     navigate(`/${seg}/kb/${kbId}/source/${s.source_id}`);
   }
 
-  async function send() {
-    const q = input.trim();
+  async function send(text?: string) {
+    const q = (text ?? input).trim();
     if (!q || busy) return;
     setInput(""); setBusy(true);
     setMsgs((m) => [...m, { role: "user", content: q }, { role: "assistant", content: "", sources: [] }]);
@@ -47,8 +47,10 @@ export function KbChat({ kbId }: { kbId: string }) {
     finally { setBusy(false); }
   }
 
+  const examples = t("kb.chatExamples", { returnObjects: true }) as string[];
+
   return (
-    <div className="flex h-[60vh] flex-col rounded-xl border border-border/70 bg-surface/40">
+    <div className="flex h-[calc(100vh-15rem)] min-h-[28rem] flex-col rounded-xl border border-border/70 bg-surface/40">
       {msgs.length > 0 && (
         <div className="flex items-center justify-end border-b border-border/50 px-3 py-1.5">
           <button onClick={() => { if (!busy) setMsgs([]); }} disabled={busy}
@@ -59,7 +61,22 @@ export function KbChat({ kbId }: { kbId: string }) {
       )}
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {msgs.length === 0 && (
-          <p className="py-16 text-center text-sm text-ink-faint">{t("kb.chatHint")}</p>
+          <div className="flex h-full flex-col items-center justify-center gap-4 px-4 text-center">
+            <span className="flex size-14 items-center justify-center rounded-full bg-accent-soft text-accent">
+              <ChatCircleText className="size-7" weight="duotone" />
+            </span>
+            <p className="max-w-sm text-sm text-ink-secondary">{t("kb.chatHint")}</p>
+            {Array.isArray(examples) && examples.length > 0 && (
+              <div className="flex max-w-md flex-wrap justify-center gap-2">
+                {examples.map((ex) => (
+                  <button key={ex} type="button" onClick={() => void send(ex)}
+                    className="rounded-full border border-border bg-canvas px-3 py-1.5 text-[12px] text-ink-secondary transition hover:border-accent hover:text-accent">
+                    {ex}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
         {msgs.map((m, i) => {
           const isLast = i === msgs.length - 1;

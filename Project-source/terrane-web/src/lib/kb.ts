@@ -189,8 +189,12 @@ export interface WikiPage {
 }
 
 export const compileWiki = (kbId: string) =>
-  request<WikiPage & { ok?: boolean; reason?: string }>(
+  request<{ job_id: string | null; status: string } & Partial<WikiPage> & { ok?: boolean; reason?: string }>(
     `/api/v1/knowledge-bases/${kbId}/wiki/compile`, opt("POST"));
+
+export const wikiStatus = (kbId: string) =>
+  request<{ status: "none" | "running" | "done" | "failed"; progress: number; error?: string | null }>(
+    `/api/v1/knowledge-bases/${kbId}/wiki/status`, { credentials: "include" });
 
 export const getWikiPage = (kbId: string, slug: string) =>
   request<WikiPage>(`/api/v1/knowledge-bases/${kbId}/wiki/${slug}`, { credentials: "include" });

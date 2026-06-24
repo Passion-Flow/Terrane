@@ -810,22 +810,60 @@ def _wiki_out(p) -> dict:
             "updated_at": p.updated_at.isoformat() if p.updated_at else None}
 
 
+async def _wiki_compile_bg(kb_id: uuid.UUID, ws_id: uuid.UUID, kb_name: str,
+                           job_id: uuid.UUID, sources: list[tuple[str, str]]) -> None:
+    """后台编译 Wiki + 回写 job 进度(状态持久化,前端刷新可续看)。自带 session。"""
+    from app.db.session import get_sessionmaker
+    try:
+        async with get_sessionmaker()() as db:
+            await db.execute(text("UPDATE ingest_jobs SET progress=25 WHERE id=:id"), {"id": str(job_id)})
+            await db.commit()
+            page = await wiki_service.compile_overview(db, kb_id, ws_id, kb_name, sources)
+            ok = page is not None
+            await db.execute(text("UPDATE ingest_jobs SET status=:s, progress=100, error=:e WHERE id=:id"),
+                             {"s": "done" if ok else "failed", "e": None if ok else "no_sources", "id": str(job_id)})
+            await db.commit()
+    except Exception as e:  # noqa: BLE001
+        log.warning("wiki_compile_failed", kb_id=str(kb_id), error=str(e))
+        try:
+            async with get_sessionmaker()() as d2:
+                await d2.execute(text("UPDATE ingest_jobs SET status='failed', error=:e WHERE id=:id"),
+                                 {"e": str(e)[:500], "id": str(job_id)})
+                await d2.commit()
+        except Exception:  # noqa: BLE001
+            pass
+
+
 @router.post("/{kb_id}/wiki/compile")
 async def compile_wiki(kb_id: str = Path(...), user: CurrentUser = Depends(get_current_user),
                        db: AsyncSession = Depends(get_db_session)) -> dict:
-    """知识复利:把库内各源 LLM 编译成结构化 Wiki 概览页。需 editor/owner。"""
+    """知识复利:把库内各源 LLM 编译成结构化 Wiki 概览页(后台 + 进度)。需 editor/owner。"""
     kb, role = await _load(db, kb_id, user)
     if role not in ("owner", "editor"):
         raise BizError("PERM_DENIED", {"need": "editor"})
     rows = (await db.execute(select(RawSource.title, RawSource.parsed_text)
                              .where(RawSource.kb_id == kb.id, RawSource.parsed_text.is_not(None)))).all()
-    try:
-        page = await wiki_service.compile_overview(db, kb.id, kb.workspace_id, kb.name, [(t, x) for t, x in rows])
-    except ModelError:
-        return {"ok": False, "reason": "model_error"}
-    if page is None:
-        return {"ok": False, "reason": "no_sources"}
-    return _wiki_out(page)
+    if not rows:
+        return {"job_id": None, "status": "failed", "reason": "no_sources"}
+    job = IngestJob(kb_id=kb.id, kind="wiki", status="running", progress=0)
+    db.add(job)
+    await db.flush()
+    jid = job.id
+    await db.commit()
+    asyncio.create_task(_wiki_compile_bg(kb.id, kb.workspace_id, kb.name, jid, [(t, x) for t, x in rows]))
+    return {"job_id": str(jid), "status": "running"}
+
+
+@router.get("/{kb_id}/wiki/status")
+async def wiki_status(kb_id: str = Path(...), user: CurrentUser = Depends(get_current_user),
+                      db: AsyncSession = Depends(get_db_session)) -> dict:
+    """最近一次 Wiki 编译任务的状态/进度(供前端轮询 + 刷新续接进度)。"""
+    kb, _ = await _load(db, kb_id, user)
+    j = (await db.execute(select(IngestJob).where(IngestJob.kb_id == kb.id, IngestJob.kind == "wiki")
+                          .order_by(IngestJob.created_at.desc()).limit(1))).scalar_one_or_none()
+    if j is None:
+        return {"status": "none", "progress": 0}
+    return {"status": j.status, "progress": j.progress, "error": j.error}
 
 
 @router.get("/{kb_id}/wiki")

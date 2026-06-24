@@ -19,6 +19,8 @@ export function McpPage() {
   useEffect(() => { void load(); }, [load]);
 
   const origin = window.location.origin;
+  // 按实际部署自动切换 scheme/host/port —— origin 已含 http(s) + IP/localhost/域名 + 非默认端口
+  const mcpUrl = origin + "/mcp";
 
   async function onCreate() {
     if (!name.trim() || busy) return;
@@ -30,9 +32,10 @@ export function McpPage() {
     if (!window.confirm(t("kb.mcpDeleteConfirm", { name: k.name }))) return;
     try { await deleteMcpKey(id, k.id); await load(); } catch { /* */ }
   }
-  const configSnippet = created
-    ? JSON.stringify({ mcpServers: { terrane: { url: created.url, headers: { Authorization: `Bearer ${created.token}` } } } }, null, 2)
-    : "";
+  const configSnippet = JSON.stringify(
+    { mcpServers: { terrane: { url: created?.url ?? mcpUrl, headers: { Authorization: `Bearer ${created?.token ?? "<YOUR_TOKEN>"}` } } } },
+    null, 2,
+  );
   const field = "w-full rounded-(--radius-control) border border-border bg-canvas px-3 py-2 text-sm text-ink outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30";
 
   return (
@@ -42,6 +45,15 @@ export function McpPage() {
         <p className="mt-1 text-sm text-ink-secondary">{t("kb.mcpDesc")}</p>
 
         <div className="mt-6 rounded-(--radius-card) border border-border/70 bg-surface/40 p-5">
+          <p className="text-[13px] font-medium text-ink">{t("kb.mcpEndpoint")}</p>
+          <p className="mt-1 text-[12px] text-ink-faint">{t("kb.mcpEndpointHint")}</p>
+          <div className="mt-2 flex items-center gap-2">
+            <code className="flex-1 truncate rounded bg-canvas px-2.5 py-1.5 text-xs text-ink">{mcpUrl}</code>
+            <button onClick={() => navigator.clipboard?.writeText(mcpUrl)} title={t("kb.mcpCopy")} className="rounded p-1.5 text-ink-secondary hover:bg-canvas"><Copy className="size-4" /></button>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-(--radius-card) border border-border/70 bg-surface/40 p-5">
           {created ? (
             <div className="space-y-2">
               <p className="text-[13px] font-medium text-danger">{t("kb.mcpTokenOnce")}</p>
@@ -71,6 +83,13 @@ export function McpPage() {
                   </div>
                 ))}
                 {keys.length === 0 && <p className="py-2 text-center text-xs text-ink-faint">{t("kb.mcpNoKeys")}</p>}
+              </div>
+              <div className="mt-5 border-t border-border/50 pt-4">
+                <p className="text-[12px] text-ink-faint">{t("kb.mcpConfigHint")}</p>
+                <div className="relative mt-2">
+                  <pre className="max-h-48 overflow-auto rounded-(--radius-control) bg-canvas p-3 text-[11px] leading-relaxed text-ink-secondary">{configSnippet}</pre>
+                  <button onClick={() => navigator.clipboard?.writeText(configSnippet)} title={t("kb.mcpCopy")} className="absolute end-2 top-2 rounded bg-surface p-1 text-ink-secondary hover:text-ink"><Copy className="size-3.5" /></button>
+                </div>
               </div>
             </>
           )}
