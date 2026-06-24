@@ -36,6 +36,7 @@ async def license_status(request: Request) -> dict:
     active_until = payload.get("active_until")
     return {
         "data": {
+            "required": state.required,  # 开源版 false → 前端隐藏激活/徽章、守卫放行
             "status": verdict.status,
             "unlocked": verdict.unlocked,
             "active_until": active_until,

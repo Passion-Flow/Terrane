@@ -5,9 +5,10 @@ import {
   ArrowLeft, Cards, ClockCounterClockwise, DownloadSimple, FileText, GraduationCap,
   ListChecks, Microphone, Presentation, Question, Sparkle, Table, TreeStructure, type Icon,
 } from "@phosphor-icons/react";
-import { Fragment, type ReactNode, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { Markdown } from "@/components/ui/Markdown";
 import {
   exportSlideDeck, generateAudioOverview, generateStudio,
   type DataTable, type Flashcard, type MindMap, type Podcast, type QuizItem,
@@ -26,27 +27,6 @@ const TILES: { kind: StudioKind; icon: Icon }[] = [
   { kind: "slide_deck", icon: Presentation },
   { kind: "audio_overview", icon: Microphone },
 ];
-
-function inline(s: string): ReactNode {
-  return s.split(/(\*\*[^*]+\*\*)/g).map((seg, i) =>
-    seg.startsWith("**") && seg.endsWith("**")
-      ? <strong key={i} className="font-semibold text-ink">{seg.slice(2, -2)}</strong>
-      : <Fragment key={i}>{seg}</Fragment>);
-}
-function Markdown({ md }: { md: string }) {
-  const out: ReactNode[] = []; let list: string[] = []; let k = 0;
-  const flush = () => { if (list.length) { out.push(<ul key={k++} className="my-2 ms-5 list-disc space-y-1 text-[13px] text-ink-secondary">{list.map((it, i) => <li key={i}>{inline(it)}</li>)}</ul>); list = []; } };
-  for (const ln of md.split("\n")) {
-    if (/^###?\s/.test(ln)) { flush(); out.push(<h3 key={k++} className="mt-4 text-sm font-semibold text-ink">{inline(ln.replace(/^###?\s/, ""))}</h3>); }
-    else if (/^#\s/.test(ln)) { flush(); out.push(<h2 key={k++} className="mt-4 text-base font-semibold text-ink">{inline(ln.slice(2))}</h2>); }
-    else if (/^\s*[-*]\s/.test(ln)) { list.push(ln.replace(/^\s*[-*]\s/, "")); }
-    else if (/^\s*\d+\.\s/.test(ln)) { list.push(ln.replace(/^\s*\d+\.\s/, "")); }
-    else if (ln.trim() === "") { flush(); }
-    else { flush(); out.push(<p key={k++} className="my-2 text-[13px] leading-relaxed text-ink-secondary">{inline(ln)}</p>); }
-  }
-  flush();
-  return <div>{out}</div>;
-}
 
 function Flashcards({ cards }: { cards: Flashcard[] }) {
   const [flipped, setFlipped] = useState<Set<number>>(new Set());
@@ -218,7 +198,7 @@ export function StudioPanel({ kbId }: { kbId: string }) {
         ) : result ? (
           <div>
             {result.kind === "slide_deck" ? <SlideDeckView deck={result.content as SlideDeck} kbId={kbId} />
-              : result.format === "markdown" ? <Markdown md={String(result.content)} />
+              : result.format === "markdown" ? <Markdown>{String(result.content)}</Markdown>
               : null}
             {result.kind === "flashcards" && <Flashcards cards={result.content as Flashcard[]} />}
             {result.kind === "quiz" && <Quiz items={result.content as QuizItem[]} />}

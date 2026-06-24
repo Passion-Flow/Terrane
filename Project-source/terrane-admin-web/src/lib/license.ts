@@ -3,6 +3,9 @@ import { request } from "@/lib/api";
 
 export interface LicenseCard {
   status: "active" | "expiring" | "expired" | "revoked" | "binding_mismatch" | "invalid_signature" | "locked";
+  /** 门控是否启用：开源版后端返回 false → 后台完全解锁（无激活页/无激活徽章/向导跳过 License 步）。
+   *  缺省（旧后端/加载中未定义）按商业模式处理，保持现有守卫行为。 */
+  required?: boolean;
   unlocked: boolean;
   fingerprint: string;
   license_id_masked: string | null;

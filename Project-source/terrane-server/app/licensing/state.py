@@ -26,6 +26,7 @@ log = structlog.get_logger("terrane.license")
 METHOD_OFFLINE = "offline"
 METHOD_ONLINE = "online"
 _NOT_ACTIVATED = Verdict("locked", "not_activated")
+_BYPASS = Verdict("active", "license_not_required")  # 门控关闭（开源版）时的合成解锁裁定
 
 
 def read_envelope(path: Path) -> tuple[str, str] | None:
@@ -64,15 +65,24 @@ class LicenseState:
         self.initial_checked = False  # readyz 就绪信号：首次验签已完成
 
     @property
+    def required(self) -> bool:
+        """门控是否启用（开源版默认 False → 全程放行）。"""
+        return self._settings.license_required
+
+    @property
     def fingerprint(self) -> str:
         return self._verifier.fingerprint
 
     @property
     def verdict(self) -> Verdict:
+        if not self._settings.license_required:
+            return _BYPASS
         return self._verdict
 
     @property
     def unlocked(self) -> bool:
+        if not self._settings.license_required:
+            return True
         return self._verdict.unlocked
 
     def _load_crl(self) -> tuple[set[str], int | None, str | None]:
@@ -119,6 +129,8 @@ class LicenseState:
     def verify_if_stale(self, max_age_seconds: float) -> None:
         """按需重验，但节流：距上次验签超过 max_age_seconds 才真验，否则吃缓存。
         用于状态接口让吊销/删除在 active 态也能近即时反映，同时限制在线模式打 edge 的频率。"""
+        if not self._settings.license_required:
+            return  # 门控关闭：不验签
         with self._verify_lock:
             if time.monotonic() - self._last_verify_mono >= max_age_seconds:
                 self._verify_now_locked()
@@ -157,6 +169,10 @@ class LicenseState:
         )
 
     async def start(self) -> None:
+        if not self._settings.license_required:
+            self.initial_checked = True
+            log.info("license.disabled")  # 开源版门控关闭：不验签、不起复验循环
+            return
         await asyncio.to_thread(self.verify_now)
         self.initial_checked = True
         log.info("license.initial", status=self._verdict.status,

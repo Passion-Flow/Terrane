@@ -11,7 +11,7 @@ import re
 import uuid
 
 import structlog
-from sqlalchemy import text
+from sqlalchemy import delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.kb_content import Chunk, RawSource
@@ -88,22 +88,56 @@ async def add_text_source(db: AsyncSession, *, kb_id: uuid.UUID, workspace_id: u
     return raw, len(pieces)
 
 
+async def create_pending_source(db: AsyncSession, *, kb_id: uuid.UUID, workspace_id: uuid.UUID,
+                                title: str, mime: str, size: int, status: str = "parsing") -> RawSource:
+    """先建一个「解析中」的文件源占位(异步摄入:上传即返,后台解析)。"""
+    raw = RawSource(kb_id=kb_id, workspace_id=workspace_id, kind="file", title=title,
+                    mime=mime or "application/octet-stream", size_bytes=size, status=status)
+    db.add(raw)
+    await db.flush()
+    await db.commit()
+    await db.refresh(raw)
+    return raw
+
+
+async def reingest(db: AsyncSession, raw: RawSource, body: str) -> int:
+    """给已存在的源写入解析文本 → 清旧切片 → 重新切片 + 回填向量 → status=parsed。返回 chunk 数。"""
+    await db.execute(delete(Chunk).where(Chunk.raw_source_id == raw.id))
+    raw.parsed_text = body
+    raw.status = "parsed"
+    raw.error = None
+    await db.flush()
+    pieces = chunk_text(body)
+    objs = [Chunk(kb_id=raw.kb_id, raw_source_id=raw.id, ord=i, content=p, token_count=max(1, len(p) // 4))
+            for i, p in enumerate(pieces)]
+    db.add_all(objs)
+    await db.flush()
+    embedded = await _embed_chunks(db, [c.id for c in objs], pieces)
+    await db.commit()
+    log.info("source_reingested", raw_id=str(raw.id), chunks=len(pieces), embedded=embedded)
+    return len(pieces)
+
+
 async def search_chunks(db: AsyncSession, *, kb_id: uuid.UUID, query: str, limit: int = 10,
-                        embed_model: str | None = None, rerank_model: str | None = None) -> list[dict]:
-    """混合检索:向量 + 词法召回 → rerank 精排(均优雅降级)。"""
+                        embed_model: str | None = None, rerank_model: str | None = None,
+                        raw_source_id: uuid.UUID | None = None) -> list[dict]:
+    """混合检索:向量 + 词法召回 → rerank 精排(均优雅降级)。
+    raw_source_id 指定 → 限定到该文档的切片(文档级问答)。"""
     q = query.strip()
     if not q:
         return []
+    sid = str(raw_source_id) if raw_source_id else None
 
     cand: dict[str, dict] = {}
 
-    # 词法召回(pg_trgm,中英通用)
+    # 词法召回(pg_trgm,中英通用);sid 非空时限定到该文档
     lex = (await db.execute(text("""
         SELECT c.id, c.content, c.ord, r.title AS src, r.id AS sid, similarity(c.content, :q) AS sc
         FROM chunks c JOIN raw_sources r ON r.id = c.raw_source_id
         WHERE c.kb_id = :kb AND (c.content ILIKE :like OR similarity(c.content, :q) > 0.05)
+          AND ((:sid)::uuid IS NULL OR c.raw_source_id = (:sid)::uuid)
         ORDER BY sc DESC LIMIT :n
-    """), {"kb": str(kb_id), "q": q, "like": f"%{q}%", "n": _RECALL})).mappings().all()
+    """), {"kb": str(kb_id), "q": q, "like": f"%{q}%", "n": _RECALL, "sid": sid})).mappings().all()
     for r in lex:
         cand[str(r["id"])] = {"chunk_id": str(r["id"]), "content": r["content"], "ord": r["ord"],
                               "source_title": r["src"], "source_id": str(r["sid"]),
@@ -121,8 +155,9 @@ async def search_chunks(db: AsyncSession, *, kb_id: uuid.UUID, query: str, limit
                    1 - (c.embedding <=> (:v)::halfvec) AS sc
             FROM chunks c JOIN raw_sources r ON r.id = c.raw_source_id
             WHERE c.kb_id = :kb AND c.embedding IS NOT NULL
+              AND ((:sid)::uuid IS NULL OR c.raw_source_id = (:sid)::uuid)
             ORDER BY c.embedding <=> (:v)::halfvec LIMIT :n
-        """), {"kb": str(kb_id), "v": _vec_literal(qvec), "n": _RECALL})).mappings().all()
+        """), {"kb": str(kb_id), "v": _vec_literal(qvec), "n": _RECALL, "sid": sid})).mappings().all()
         for r in vrows:
             cid = str(r["id"])
             if cid in cand:

@@ -75,8 +75,8 @@ export function OverviewPage() {
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {/* License 摘要 */}
-        {canLicense && (
+        {/* License 摘要 —— 开源版（门控关闭）隐藏整块 */}
+        {canLicense && lic.data?.required !== false && (
           <section className="rounded-xl border border-border/70 bg-surface/40 p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-ink">{t("overview.license")}</h2>

@@ -94,13 +94,31 @@ export const addMember = (kbId: string, input: { email: string; role: "viewer" |
 export const removeMember = (kbId: string, userId: string) =>
   request<{ ok: boolean }>(`/api/v1/knowledge-bases/${kbId}/members/${userId}`, opt("DELETE"));
 
-export async function uploadSourceFile(kbId: string, file: File): Promise<{ id?: string; title?: string; chunk_count?: number; ok?: boolean; reason?: string }> {
+export type ParseTier = "fast" | "standard" | "high";
+
+export async function uploadSourceFile(
+  kbId: string, file: File, tier: ParseTier = "standard",
+): Promise<{ id?: string; title?: string; status?: string; chunk_count?: number; ok?: boolean; reason?: string }> {
   const fd = new FormData();
   fd.append("file", file);
+  fd.append("tier", tier);
   const resp = await fetch(`${apiBase()}/api/v1/knowledge-bases/${kbId}/sources/upload`, {
     method: "POST", credentials: "include", body: fd,
   });
   if (!resp.ok) throw new Error("upload_failed_" + resp.status);
+  return resp.json();
+}
+
+/** 重新解析失败/想换档的源(form: tier),返回 {id, status}。 */
+export async function reparseSource(
+  kbId: string, sourceId: string, tier: ParseTier = "standard",
+): Promise<{ id?: string; status?: string }> {
+  const fd = new FormData();
+  fd.append("tier", tier);
+  const resp = await fetch(`${apiBase()}/api/v1/knowledge-bases/${kbId}/sources/${sourceId}/reparse`, {
+    method: "POST", credentials: "include", body: fd,
+  });
+  if (!resp.ok) throw new Error("reparse_failed_" + resp.status);
   return resp.json();
 }
 
@@ -129,10 +147,11 @@ export async function fetchSourceOriginal(kbId: string, sourceId: string): Promi
 export const deleteSource = (kbId: string, sourceId: string) =>
   request<{ ok: boolean }>(`/api/v1/knowledge-bases/${kbId}/sources/${sourceId}`, opt("DELETE"));
 
-export const searchKb = (kbId: string, q: string) => {
+export const searchKb = (kbId: string, q: string, sourceId?: string) => {
   const qs = new URLSearchParams({ q });
   if (getModelPref("embed")) qs.set("embed_model", getModelPref("embed"));
   if (getModelPref("rerank")) qs.set("rerank_model", getModelPref("rerank"));
+  if (sourceId) qs.set("source_id", sourceId);
   return request<{ query: string; hits: SearchHit[]; total: number }>(
     `/api/v1/knowledge-bases/${kbId}/search?${qs}`, { credentials: "include" });
 };
@@ -176,6 +195,21 @@ export const compileWiki = (kbId: string) =>
 export const getWikiPage = (kbId: string, slug: string) =>
   request<WikiPage>(`/api/v1/knowledge-bases/${kbId}/wiki/${slug}`, { credentials: "include" });
 
+export interface KbStats {
+  sources: number;
+  failed_sources: number;
+  chunks: number;
+  embedded_chunks: number;
+  graph_nodes: number;
+  has_wiki: boolean;
+}
+export interface KbLintIssue { level: "info" | "warn" | "error"; code: string; msg: string }
+export interface KbLint { score: number; stats: KbStats; issues: KbLintIssue[] }
+
+/** 库体检 / 统计(源/切片/嵌入/图谱节点 + 问题清单 + 评分)。 */
+export const lintKb = (kbId: string) =>
+  request<KbLint>(`/api/v1/knowledge-bases/${kbId}/lint`, { credentials: "include" });
+
 export interface ChatSource { n: number; source_title: string; source_id: string; content: string; score: number }
 
 export interface ChatHandlers {
@@ -185,12 +219,13 @@ export interface ChatHandlers {
   onDone?: () => void;
 }
 
-/** RAG 流式问答:消费 SSE(event: sources / delta / error / done)。 */
-export async function streamChat(kbId: string, query: string, h: ChatHandlers, signal?: AbortSignal): Promise<void> {
+/** RAG 流式问答:消费 SSE(event: sources / delta / error / done)。
+ *  传 sourceId → 仅基于该文档检索问答(文档级问答)。 */
+export async function streamChat(kbId: string, query: string, h: ChatHandlers, signal?: AbortSignal, sourceId?: string): Promise<void> {
   const resp = await fetch(`${apiBase()}/api/v1/knowledge-bases/${kbId}/chat`, {
     method: "POST", credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, model: getChatModelPref() || undefined }), signal,
+    body: JSON.stringify({ query, model: getChatModelPref() || undefined, ...(sourceId ? { source_id: sourceId } : {}) }), signal,
   });
   if (!resp.ok || !resp.body) { h.onError?.({ code: "HTTP_" + resp.status }); return; }
   const reader = resp.body.getReader();

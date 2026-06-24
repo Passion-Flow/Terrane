@@ -21,6 +21,9 @@ const (
 	methodOnline  = "online"
 )
 
+// bypassVerdict — 门控关闭（开源版）时的合成解锁裁定（表现为始终已激活）。
+var bypassVerdict = forge.Verdict{Status: forge.StatusActive, Reason: "license_not_required"}
+
 type envelope struct {
 	Method     string `json:"method"`
 	Credential string `json:"credential"`
@@ -48,15 +51,29 @@ func NewManager(cfg config.Config) *Manager {
 
 func (m *Manager) Fingerprint() string { return m.fv.Fingerprint }
 
+// Required 门控是否启用（开源版默认 false → 全程放行）。
+func (m *Manager) Required() bool { return m.cfg.LicenseRequired }
+
 func (m *Manager) Verdict() forge.Verdict {
+	if !m.cfg.LicenseRequired {
+		return bypassVerdict
+	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.verdict
 }
 
-func (m *Manager) Unlocked() bool { return m.Verdict().Unlocked() }
+func (m *Manager) Unlocked() bool {
+	if !m.cfg.LicenseRequired {
+		return true
+	}
+	return m.Verdict().Unlocked()
+}
 
 func (m *Manager) Ready() bool {
+	if !m.cfg.LicenseRequired {
+		return true // 门控关闭：无需验签即就绪
+	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.ready
@@ -170,6 +187,10 @@ func (m *Manager) verifyOnline(code string) forge.Verdict {
 
 // Run 启动验签一次 + 周期复验，直到 ctx 取消。
 func (m *Manager) Run(ctx context.Context) {
+	if !m.cfg.LicenseRequired {
+		slog.Info("license.disabled") // 开源版门控关闭：不验签、不起复验循环
+		return
+	}
 	v := m.VerifyNow()
 	slog.Info("license.initial", "status", v.Status, "reason", v.Reason, "fingerprint", m.fv.Fingerprint)
 	interval := time.Duration(max(m.cfg.LicenseRecheckSecs, 10)) * time.Second

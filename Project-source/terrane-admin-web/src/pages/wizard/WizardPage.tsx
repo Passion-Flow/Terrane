@@ -15,6 +15,7 @@ import { Select } from "@/components/Select";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { FALLBACK_LANG, isSupported } from "@/i18n/langs";
 import { ApiError } from "@/lib/api";
+import { getLicenseCard } from "@/lib/license";
 import {
   completeWizard,
   getWizard,
@@ -66,6 +67,9 @@ export function WizardPage() {
   const seg = lang && isSupported(lang) ? lang : FALLBACK_LANG;
 
   const { data: wiz } = useQuery({ queryKey: ["wizard"], queryFn: getWizard });
+  // 开源版（门控关闭）跳过 License 步：步骤轨不展示 license 项，直接走超管/邮件/Branding。
+  const { data: licenseCard } = useQuery({ queryKey: ["license"], queryFn: getLicenseCard });
+  const rail = licenseCard?.required === false ? RAIL.filter((s) => s.key !== "license") : RAIL;
   const [stepIdx, setStepIdx] = useState(0); // 0=email, 1=branding
   const [toast, setToast] = useState<ToastMsg | null>(null);
   const [busy, setBusy] = useState(false);
@@ -200,7 +204,7 @@ export function WizardPage() {
       <main className="mx-auto grid w-full max-w-3xl flex-1 grid-cols-[180px_1fr] gap-10 px-6 py-6">
         {/* 步骤轨 */}
         <nav className="space-y-3 pt-2">
-          {RAIL.map((s) => {
+          {rail.map((s) => {
             const st = statusOf(s.key);
             return (
               <div key={s.key} className="flex items-center gap-2 text-sm">

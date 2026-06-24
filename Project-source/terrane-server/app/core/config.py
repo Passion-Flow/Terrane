@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     frontend_base_url: str = "http://localhost:43000"
 
     # —— License gating（licensing.md / .agent.md [License gating]）——
+    # 开源版默认关闭门控：license_required=False 时所有受保护接口直接放行、前端不显示激活/徽章。
+    # 商业化部署设 LICENSE_REQUIRED=true 即恢复 Forge 验签门控（代码完整保留，可逆）。
+    license_required: bool = False
     # install_id 与激活信封同放 licenses/ 共享卷：三组件共享同一部署身份（反克隆双锁）。
     terrane_license_path: str = "licenses/active.forge"
     terrane_license_state_path: str = "licenses/verifier_state.json"  # 反时钟回拨/CRL 防重放硬化

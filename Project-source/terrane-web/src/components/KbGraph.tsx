@@ -1,6 +1,6 @@
 /** 知识图谱可视化 —— react-force-graph-2d 力导向布局 + 缩放/拖拽/悬停高亮 + 度数定大小,贴合 taste 主题。 */
 
-import { ArrowsOut, Graph as GraphIcon, Sparkle } from "@phosphor-icons/react";
+import { ArrowsOut, Graph as GraphIcon, MagnifyingGlass, Sparkle } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import { useTranslation } from "react-i18next";
@@ -49,6 +49,8 @@ export function KbGraph({ kbId, canEdit }: { kbId: string; canEdit: boolean }) {
   const [width, setWidth] = useState(640);
   const [hover, setHover] = useState<string | null>(null);
   const [palette, setPalette] = useState(readPalette);
+  const [nodeQuery, setNodeQuery] = useState("");
+  const [searchMiss, setSearchMiss] = useState(false);
 
   const load = useCallback(async () => {
     try { const d = await getGraph(kbId); setNodes(d.nodes); setEdges(d.edges); fitted.current = false; }
@@ -119,6 +121,17 @@ export function KbGraph({ kbId, canEdit }: { kbId: string; canEdit: boolean }) {
 
   const dim = (id: string) => hover !== null && hover !== id && !adj[hover]?.has(id);
 
+  function focusNode(name: string) {
+    const q = name.trim().toLowerCase();
+    if (!q) return;
+    const node = data.nodes.find((n) => n.id.toLowerCase() === q) ?? data.nodes.find((n) => n.id.toLowerCase().includes(q));
+    if (!node) { setSearchMiss(true); return; }
+    setSearchMiss(false);
+    setHover(node.id);
+    fgRef.current?.centerAt(node.x, node.y, 500);
+    fgRef.current?.zoom(3, 500);
+  }
+
   return (
     <div className="rounded-xl border border-border/70 bg-surface/40 p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -127,7 +140,14 @@ export function KbGraph({ kbId, canEdit }: { kbId: string; canEdit: boolean }) {
         </span>
         <div className="flex items-center gap-1.5">
           {data.nodes.length > 0 && (
-            <button onClick={() => fgRef.current?.zoomToFit(400, 40)} title={t("kb.graphFit", { defaultValue: "适配视图" })}
+            <form onSubmit={(e) => { e.preventDefault(); focusNode(nodeQuery); }} className="relative hidden sm:block">
+              <MagnifyingGlass className="absolute start-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-faint" />
+              <input value={nodeQuery} onChange={(e) => { setNodeQuery(e.target.value); setSearchMiss(false); }} placeholder={t("kb.graphSearchNode")}
+                className={`w-40 rounded-full border bg-canvas py-1.5 ps-8 pe-2 text-xs text-ink outline-none transition focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30 ${searchMiss ? "border-danger" : "border-border"}`} />
+            </form>
+          )}
+          {data.nodes.length > 0 && (
+            <button onClick={() => fgRef.current?.zoomToFit(400, 40)} title={t("kb.graphFit")}
               className="flex items-center gap-1 rounded-full border border-border px-2.5 py-1.5 text-xs text-ink-secondary transition hover:bg-canvas hover:text-ink">
               <ArrowsOut className="size-3.5" />
             </button>
@@ -199,7 +219,13 @@ export function KbGraph({ kbId, canEdit }: { kbId: string; canEdit: boolean }) {
         )}
       </div>
       {data.nodes.length > 0 && (
-        <p className="mt-2 text-[11px] text-ink-faint">{t("kb.graphHint", { defaultValue: "滚轮缩放 · 拖拽平移/移动节点 · 悬停高亮关联 · 点击聚焦" })}</p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] text-ink-faint">{t("kb.graphHint")}</p>
+          <span className="flex items-center gap-1.5 text-[11px] text-ink-faint">
+            <span className="inline-block size-2.5 rounded-full" style={{ background: palette.accent }} /> {t("kb.graphLegend")}
+            {searchMiss && <span className="ms-2 text-danger">{t("kb.graphNoNode")}</span>}
+          </span>
+        </div>
       )}
     </div>
   );

@@ -36,6 +36,9 @@ services:
       TERRANE_KEK: ${TERRANE_KEK}
       TERRANE_FORGE_EDGE_URL: ${TERRANE_FORGE_EDGE_URL}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE}
+      # License 门控总开关:开源版默认 false → 全程放行(表现为始终已激活)。
+      # 仅 LICENSE_REQUIRED=true 时下方 TERRANE_LICENSE_*/FORGE_EDGE 验签配置才生效(代码完整保留,可逆)。
+      LICENSE_REQUIRED: ${LICENSE_REQUIRED:-false}
       # License:共享卷(active.forge + install_id 三组件共享部署身份;激活持久化);verifier_state 各组件独立
       TERRANE_LICENSE_PATH: /var/lib/terrane/license/active.forge
       TERRANE_LICENSE_CRL_PATH: /var/lib/terrane/license/crl.forge
@@ -58,7 +61,15 @@ services:
 
   terrane-gateway:
     build: { context: ../terrane-gateway }
+    environment:
+      # 门控总开关(开源版默认 false → 数据面全程放行);仅 true 时下方 License 验签配置生效。
+      LICENSE_REQUIRED: ${LICENSE_REQUIRED:-false}
+      TERRANE_FORGE_EDGE_URL: ${TERRANE_FORGE_EDGE_URL}
+      TERRANE_LICENSE_PATH: /var/lib/terrane/license/active.forge
+      TERRANE_LICENSE_CRL_PATH: /var/lib/terrane/license/crl.forge
+      TERRANE_LICENSE_STATE_PATH: /var/lib/terrane/license/state_gateway.json
     depends_on: [ terrane-server, terrane-admin-server ]
+    volumes: [ "license:/var/lib/terrane/license" ]
     restart: unless-stopped
 
   terrane-web:

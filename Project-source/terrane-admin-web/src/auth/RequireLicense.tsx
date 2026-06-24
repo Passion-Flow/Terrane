@@ -14,9 +14,14 @@ export function RequireLicense() {
   const { data: card } = useQuery({
     queryKey: ["license"],
     queryFn: getLicenseCard,
-    refetchInterval: 8_000, // active 态轮询，捕获吊销/删除/过期
+    // 开源版（required===false）旁路门控：不再需要轮询吊销/删除。
+    refetchInterval: (query) => (query.state.data?.required === false ? false : 8_000),
   });
-  // 首次加载未知态时放行渲染（避免闪烁）；一旦确认未解锁 → 回激活页。
+  // 开源版：门控关闭 → 立即放行，永不重定向到激活页。
+  if (card?.required === false) {
+    return <Outlet />;
+  }
+  // 商业版（required 为 true 或加载中未定义）：保持原守卫——确认未解锁 → 回激活页。
   if (card && !card.unlocked) {
     return <Navigate to={`/${seg}/activate`} replace />;
   }

@@ -16,6 +16,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
   valueFrom: { secretKeyRef: { name: {{ .Release.Name }}-secrets, key: redisPassword } }
 - name: TERRANE_KEK
   valueFrom: { secretKeyRef: { name: {{ .Release.Name }}-secrets, key: kek } }
+- { name: LICENSE_REQUIRED, value: "{{ .Values.config.licenseRequired }}" }
 - { name: TERRANE_FORGE_EDGE_URL, value: "{{ .Values.config.forgeEdgeUrl }}" }
 - { name: SESSION_COOKIE_SECURE, value: "{{ .Values.config.sessionCookieSecure }}" }
 {{- end -}}

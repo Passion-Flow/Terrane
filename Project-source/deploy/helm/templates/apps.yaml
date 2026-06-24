@@ -62,6 +62,10 @@ spec:
       containers:
         - name: gateway
           image: "{{ .Values.image.registry }}/terrane-gateway:{{ .Values.image.tag }}"
+          env:
+            # 门控总开关(开源版默认 false → 数据面全程放行);仅 "true" 时下方 License 验签配置生效。
+            - { name: LICENSE_REQUIRED, value: "{{ .Values.config.licenseRequired }}" }
+            - { name: TERRANE_FORGE_EDGE_URL, value: "{{ .Values.config.forgeEdgeUrl }}" }
           ports: [ { containerPort: 43080 } ]
 ---
 apiVersion: v1

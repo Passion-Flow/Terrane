@@ -110,6 +110,7 @@ def _issued_from_id(license_id: str | None) -> str | None:
 def _card(state: LicenseState) -> dict:
     verdict, payload = state.verdict, state.verdict.payload or {}
     return {
+        "required": state.required,                # 开源版 false → 前端隐藏激活/徽章、守卫放行
         "status": verdict.status,
         "unlocked": verdict.unlocked,
         "fingerprint": state.fingerprint,          # 激活页显著展示的部署/集群 ID

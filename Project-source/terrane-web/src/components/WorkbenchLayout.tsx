@@ -65,6 +65,8 @@ export function WorkbenchLayout() {
 
   const W = collapsed ? "w-[4.25rem]" : "w-60";
   const active = (lic?.status === "active" || lic?.status === "expiring");
+  // 开源版（门控关闭）隐藏激活徽章；仅门控开启（required!==false）时展示。
+  const showLicenseBadge = lic != null && lic.required !== false;
 
   return (
     <div className="flex min-h-screen bg-canvas">
@@ -105,11 +107,13 @@ export function WorkbenchLayout() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-end gap-2.5 border-b border-border/70 bg-surface/30 px-6">
-          {/* 激活徽章 */}
-          <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${active ? "bg-success/10 text-success" : "bg-danger-soft text-danger"}`}>
-            <span className={`size-1.5 rounded-full ${active ? "bg-success" : "bg-danger"}`} />
-            {active ? t("topbar.activated") : t("topbar.inactive")}
-          </span>
+          {/* 激活徽章 —— 仅门控开启时展示 */}
+          {showLicenseBadge && (
+            <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${active ? "bg-success/10 text-success" : "bg-danger-soft text-danger"}`}>
+              <span className={`size-1.5 rounded-full ${active ? "bg-success" : "bg-danger"}`} />
+              {active ? t("topbar.activated") : t("topbar.inactive")}
+            </span>
+          )}
           <ThemeToggle />
           {/* 头像下拉菜单 */}
           <div ref={menuRef} className="relative">

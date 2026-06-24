@@ -21,7 +21,7 @@ import os
 import tempfile
 
 import structlog
-from fastapi import APIRouter, Depends, File, Path, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Path, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -288,9 +288,13 @@ _EXT_MIME = {
 
 @router.post("/{kb_id}/sources/upload", status_code=201)
 async def upload_source(kb_id: str = Path(...), file: UploadFile = File(...),
+                        tier: str = Form("standard"),
                         user: CurrentUser = Depends(get_current_user),
                         db: AsyncSession = Depends(get_db_session)) -> dict:
-    """上传文件 → Terrane Parse 解析(PDF/Office,CPU)或文本直读 → 切片/嵌入摄入。"""
+    """上传文件 → Terrane Parse 解析 → 切片/嵌入摄入。
+    tier 解析档位:fast=纯词法;standard=词法+VL(图片/扫描);high=整页 VL 版面解析(高保真表格/公式/版面)。"""
+    if tier not in ("fast", "standard", "high"):
+        tier = "standard"
     kb, role = await _load(db, kb_id, user)
     if role not in ("owner", "editor"):
         raise BizError("PERM_DENIED", {"need": "editor"})
@@ -302,50 +306,16 @@ async def upload_source(kb_id: str = Path(...), file: UploadFile = File(...),
     if len(data) > cap:
         raise BizError("VALIDATION_FAILED", {"reason": "file_too_large"})
 
-    if mime in video_parser.VIDEO_MIMES:
-        with tempfile.NamedTemporaryFile(suffix=ext or ".mp4", delete=False) as tf:
-            tf.write(data)
-            tmp = tf.name
+    is_text = mime not in video_parser.VIDEO_MIMES and mime not in parse_engine.SUPPORTED
+    if is_text:
         try:
-            text = await video_parser.parse_video(db, tmp)   # ffmpeg 抽帧/音轨 → VL+ASR
-        except Exception as e:  # noqa: BLE001
-            log.warning("video_parse_failed", file=fname, error=str(e))
-            text = None
-        finally:
-            os.unlink(tmp)
-        if not text or not text.strip():
-            return {"ok": False, "reason": "video_parse_empty"}
-    elif mime in parse_engine.SUPPORTED:
-        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
-            tf.write(data)
-            tmp = tf.name
-        try:
-            text = await run_in_threadpool(parse_engine.parse, tmp, mime)  # CPU 解析,丢线程池不堵事件循环
-        except Exception as e:  # noqa: BLE001
-            log.warning("parse_failed", file=fname, error=str(e))
-            text = None
-        finally:
-            os.unlink(tmp)
-        if not text or not text.strip():
-            return {"ok": False, "reason": "parse_failed_or_empty"}
-        # VL 增强(仅 PDF):扫描页 OCR + 嵌入图片描述。无 vl 渠道则原样,失败不阻断。
-        if mime == "application/pdf":
-            try:
-                text = await parse_vl.enhance_pdf(db, data, text)
-            except Exception as e:  # noqa: BLE001
-                log.warning("vl_enhance_failed", file=fname, error=str(e))
-    else:
-        try:
-            text = data.decode("utf-8")
+            data.decode("utf-8")
         except UnicodeDecodeError:
             raise BizError("VALIDATION_FAILED", {"reason": "unsupported_file_type"})
-        if not text.strip():
-            return {"ok": False, "reason": "empty"}
 
-    raw, n = await ingest_service.add_text_source(
-        db, kb_id=kb.id, workspace_id=kb.workspace_id, title=fname, body=text, kind="file")
-    # 存原始文件字节(供「原文/解析」对照预览);视频不存(过大且无版面渲染)。
-    # 优先入对象存储(originals/{rid}),失败降级 DB bytea(≤50MB)。可渲染类型(PDF/Office)再异步逐页 WebP。
+    # 先建「解析中」源并落原文/渲染,立即返回;解析+摄入异步进行(高精档 VL 慢,上传不阻塞)。
+    raw = await ingest_service.create_pending_source(
+        db, kb_id=kb.id, workspace_id=kb.workspace_id, title=fname, mime=mime, size=len(data))
     if mime not in video_parser.VIDEO_MIMES:
         in_obj = False
         try:
@@ -364,8 +334,113 @@ async def upload_source(kb_id: str = Path(...), file: UploadFile = File(...),
             await db.commit()
             if do_render:
                 asyncio.create_task(render_service.render_source_bg(raw.id, data, mime, ext))
-    asyncio.create_task(memory_service.consolidate_bg(uuid.UUID(user.user_id), text, "document"))
-    return {"id": str(raw.id), "title": raw.title, "status": raw.status, "chunk_count": n}
+    asyncio.create_task(_ingest_bg(raw.id, uuid.UUID(user.user_id), data, mime, ext, tier))
+    return {"id": str(raw.id), "title": raw.title, "status": raw.status}
+
+
+async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tier: str) -> str | None:
+    """按档位解析文件 → Markdown 文本。None/空串 = 失败。"""
+    if mime in video_parser.VIDEO_MIMES:
+        with tempfile.NamedTemporaryFile(suffix=ext or ".mp4", delete=False) as tf:
+            tf.write(data)
+            tmp = tf.name
+        try:
+            return await video_parser.parse_video(db, tmp)
+        except Exception as e:  # noqa: BLE001
+            log.warning("video_parse_failed", error=str(e))
+            return None
+        finally:
+            os.unlink(tmp)
+    if mime in parse_engine.SUPPORTED:
+        text = None
+        if mime == "application/pdf" and tier == "high":  # 高精:整页 VL 版面解析
+            try:
+                text = await parse_vl.parse_pdf_fullvl(db, data)
+            except Exception as e:  # noqa: BLE001
+                log.warning("vl_fullparse_failed", error=str(e))
+        if not text:  # fast/standard 或高精回退 → 词法
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
+                tf.write(data)
+                tmp = tf.name
+            try:
+                text = await run_in_threadpool(parse_engine.parse, tmp, mime)
+            except Exception as e:  # noqa: BLE001
+                log.warning("parse_failed", error=str(e))
+                text = None
+            finally:
+                os.unlink(tmp)
+            if text and mime == "application/pdf" and tier != "fast":  # 标准:+ VL 图片/扫描增强
+                try:
+                    text = await parse_vl.enhance_pdf(db, data, text)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("vl_enhance_failed", error=str(e))
+        return text
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+async def _ingest_bg(rid: uuid.UUID, user_id: uuid.UUID, data: bytes, mime: str, ext: str, tier: str) -> None:
+    """后台:按 tier 解析 → 写入源 + 切片/嵌入;失败置 status=failed。自带 session。"""
+    from app.db.session import get_sessionmaker
+    sm = get_sessionmaker()
+    try:
+        async with sm() as db:
+            raw = await db.get(RawSource, rid)
+            if raw is None:
+                return
+            text = await _parse_by_tier(db, data, mime, ext, tier)
+            if not text or not text.strip():
+                raw.status, raw.error = "failed", "parse_empty"
+                await db.commit()
+                return
+            await ingest_service.reingest(db, raw, text)
+        asyncio.create_task(memory_service.consolidate_bg(user_id, text, "document"))
+    except Exception as e:  # noqa: BLE001
+        log.warning("ingest_bg_failed", rid=str(rid), error=str(e))
+        try:
+            async with sm() as db:
+                raw = await db.get(RawSource, rid)
+                if raw:
+                    raw.status, raw.error = "failed", str(e)[:500]
+                    await db.commit()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+@router.post("/{kb_id}/sources/{source_id}/reparse")
+async def reparse_source(kb_id: str = Path(...), source_id: str = Path(...), tier: str = Form("standard"),
+                         user: CurrentUser = Depends(get_current_user),
+                         db: AsyncSession = Depends(get_db_session)) -> dict:
+    """重新解析(换档 / 失败重试):取原文 → 后台按 tier 重解析 + 重摄入。需 editor/owner。"""
+    if tier not in ("fast", "standard", "high"):
+        tier = "standard"
+    kb, role = await _load(db, kb_id, user)
+    if role not in ("owner", "editor"):
+        raise BizError("PERM_DENIED", {"need": "editor"})
+    try:
+        sid = uuid.UUID(source_id)
+    except ValueError:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    raw = await db.get(RawSource, sid)
+    if raw is None or raw.kb_id != kb.id:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    o = await db.get(RawSourceOriginal, sid)
+    if o is None:
+        raise BizError("VALIDATION_FAILED", {"reason": "no_original"})  # 无原文(如粘贴文本)不可重解析
+    data = o.data
+    if data is None:
+        try:
+            data = await storage.get_adapter().download(storage.original_key(sid))
+        except Exception:  # noqa: BLE001
+            raise BizError("RESOURCE_NOT_FOUND", {"resource": "original"})
+    raw.status, raw.error = "parsing", None
+    await db.commit()
+    o_mime = o.mime or raw.mime or ""
+    o_ext = os.path.splitext(raw.title)[1].lower()
+    asyncio.create_task(_ingest_bg(sid, uuid.UUID(user.user_id), data, o_mime, o_ext, tier))
+    return {"id": str(sid), "status": "parsing"}
 
 
 @router.get("/{kb_id}/sources")
@@ -445,10 +520,35 @@ async def get_source_page(kb_id: str = Path(...), source_id: str = Path(...), pa
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
     try:
         data = await storage.get_adapter().download(storage.page_key(sid, page_no))
-    except Exception:  # noqa: BLE001
-        raise BizError("RESOURCE_NOT_FOUND", {"resource": "page"})
+    except Exception:  # noqa: BLE001 —— 该页尚未渲染 → 大文档按需即时渲染(仅 PDF)
+        data = await _ondemand_page(db, sid, page_no)
+        if data is None:
+            raise BizError("RESOURCE_NOT_FOUND", {"resource": "page"})
     return StreamingResponse(io.BytesIO(data), media_type="image/webp",
                              headers={"Content-Disposition": "inline", "Cache-Control": "public, max-age=31536000, immutable"})
+
+
+async def _ondemand_page(db: AsyncSession, sid: uuid.UUID, page_no: int) -> bytes | None:
+    """按需渲染单页(滚到尚未渐进渲染到的页):取原文 PDF → 渲该页 → 存回 → 返回字节。
+    仅 PDF（Office 依赖后台渐进渲染，单页再转换代价高）。"""
+    o = await db.get(RawSourceOriginal, sid)
+    if o is None or (o.mime or "") != "application/pdf":
+        return None
+    data = o.data
+    if data is None:
+        try:
+            data = await storage.get_adapter().download(storage.original_key(sid))
+        except Exception:  # noqa: BLE001
+            return None
+    res = await run_in_threadpool(render_service.render_one_page, data, page_no)
+    if res is None:
+        return None
+    _w, _h, webp = res
+    try:
+        await storage.get_adapter().upload(storage.page_key(sid, page_no), webp, content_type="image/webp")
+    except Exception:  # noqa: BLE001
+        pass
+    return webp
 
 
 @router.get("/{kb_id}/sources/{source_id}/original")
@@ -511,12 +611,17 @@ async def delete_source(kb_id: str = Path(...), source_id: str = Path(...),
 
 @router.get("/{kb_id}/search")
 async def search_kb(kb_id: str = Path(...), q: str = "", limit: int = 10,
-                    embed_model: str = "", rerank_model: str = "",
+                    embed_model: str = "", rerank_model: str = "", source_id: str = "",
                     user: CurrentUser = Depends(get_current_user),
                     db: AsyncSession = Depends(get_db_session)) -> dict:
     kb, _ = await _load(db, kb_id, user)
+    try:
+        sid = uuid.UUID(source_id) if source_id else None
+    except ValueError:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
     hits = await ingest_service.search_chunks(db, kb_id=kb.id, query=q, limit=min(max(limit, 1), 50),
-                                              embed_model=embed_model or None, rerank_model=rerank_model or None)
+                                              embed_model=embed_model or None, rerank_model=rerank_model or None,
+                                              raw_source_id=sid)
     return {"query": q, "hits": hits, "total": len(hits)}
 
 
@@ -813,6 +918,7 @@ class ChatIn(BaseModel):
     query: str = Field(min_length=1, max_length=4000)
     top_k: int = Field(default=5, ge=1, le=12)
     model: str | None = Field(default=None, max_length=128)  # 前台「模型设置」选定的模型(可选)
+    source_id: str | None = Field(default=None)  # 指定 → 仅基于该文档问答(文档级问答)
 
 
 @router.post("/{kb_id}/chat")
@@ -822,7 +928,12 @@ async def chat_kb(body: ChatIn, kb_id: str = Path(...),
     """RAG 引用问答(SSE)。先发 sources(检索到的带编号切片),再流式发答案 delta,最后 done。
     注:检索 + 取渠道在返回前完成(DB 会话此时存活);生成器内只用已取好的渠道字段调模型,不碰 DB。"""
     kb, _ = await _load(db, kb_id, user)
-    hits = await ingest_service.search_chunks(db, kb_id=kb.id, query=body.query, limit=body.top_k)
+    try:
+        ssid = uuid.UUID(body.source_id) if body.source_id else None
+    except ValueError:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    hits = await ingest_service.search_chunks(db, kb_id=kb.id, query=body.query, limit=body.top_k,
+                                              raw_source_id=ssid)
     ch = (await get_channel_by_model(db, "chat", body.model)) if body.model else None
     if ch is None:
         ch = await get_channel(db, "chat")

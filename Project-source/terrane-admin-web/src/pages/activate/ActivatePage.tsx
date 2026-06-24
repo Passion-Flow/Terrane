@@ -267,10 +267,11 @@ export function ActivatePage() {
     refetchInterval: (query) => (query.state.data?.unlocked ? 8_000 : 3_000),
   });
 
+  // 开源版（门控关闭）→ 不展示激活，直接重定向登录页。
   // 激活成功（解锁）→ 跳登录页（认证在后续阶段落地）。
   useEffect(() => {
-    if (card?.unlocked) navigate(`/${seg}/login`, { replace: true });
-  }, [card?.unlocked, navigate, seg]);
+    if (card?.required === false || card?.unlocked) navigate(`/${seg}/login`, { replace: true });
+  }, [card?.required, card?.unlocked, navigate, seg]);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -284,7 +285,7 @@ export function ActivatePage() {
       </header>
 
       <main className="flex flex-1 items-center justify-center px-4 pb-24">
-        {card?.unlocked ? null : card ? (
+        {card?.required === false || card?.unlocked ? null : card ? (
           <LockedCard card={card} onActivate={() => setModalOpen(true)} />
         ) : error != null ? (
           <p role="alert" className="text-sm text-danger">

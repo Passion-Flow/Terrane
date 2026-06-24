@@ -1,40 +1,12 @@
-/** 知识 Wiki(知识复利投影)。owner/editor 可「编译 Wiki」;轻量 Markdown 渲染。 */
+/** 知识 Wiki(知识复利投影)。owner/editor 可「编译 Wiki」;用项目 Markdown 组件渲染(表格/代码/公式)。 */
 
 import { BookOpen, Sparkle } from "@phosphor-icons/react";
-import { Fragment, type ReactNode, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { Markdown } from "@/components/ui/Markdown";
 import { ApiError } from "@/lib/api";
 import { compileWiki, getWikiPage } from "@/lib/kb";
-
-function inline(s: string): ReactNode {
-  return s.split(/(\*\*[^*]+\*\*)/g).map((seg, i) =>
-    seg.startsWith("**") && seg.endsWith("**")
-      ? <strong key={i} className="font-semibold text-ink">{seg.slice(2, -2)}</strong>
-      : <Fragment key={i}>{seg}</Fragment>);
-}
-
-function renderMarkdown(md: string): ReactNode[] {
-  const out: ReactNode[] = [];
-  let list: string[] = [];
-  let key = 0;
-  const flush = () => {
-    if (list.length) {
-      out.push(<ul key={key++} className="my-2 ms-5 list-disc space-y-1 text-[13px] text-ink-secondary">{list.map((it, i) => <li key={i}>{inline(it)}</li>)}</ul>);
-      list = [];
-    }
-  };
-  for (const ln of md.split("\n")) {
-    if (/^### /.test(ln)) { flush(); out.push(<h3 key={key++} className="mt-4 text-sm font-semibold text-ink">{inline(ln.slice(4))}</h3>); }
-    else if (/^## /.test(ln)) { flush(); out.push(<h2 key={key++} className="mt-5 border-b border-border/50 pb-1 text-base font-semibold text-ink">{inline(ln.slice(3))}</h2>); }
-    else if (/^# /.test(ln)) { flush(); out.push(<h1 key={key++} className="mt-2 text-lg font-bold text-ink">{inline(ln.slice(2))}</h1>); }
-    else if (/^\s*[-*] /.test(ln)) { list.push(ln.replace(/^\s*[-*] /, "")); }
-    else if (ln.trim() === "") { flush(); }
-    else { flush(); out.push(<p key={key++} className="my-2 text-[13px] leading-relaxed text-ink-secondary">{inline(ln)}</p>); }
-  }
-  flush();
-  return out;
-}
 
 export function KbWiki({ kbId, canEdit }: { kbId: string; canEdit: boolean }) {
   const { t } = useTranslation();
@@ -57,20 +29,23 @@ export function KbWiki({ kbId, canEdit }: { kbId: string; canEdit: boolean }) {
   }
 
   return (
-    <div className="rounded-xl border border-border/70 bg-surface/40 p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-medium text-ink">{t("kb.wikiTitle")}{updated && <span className="ms-2 text-xs text-ink-faint">{t("kb.wikiUpdated")}</span>}</span>
+    <div className="rounded-xl border border-border/70 bg-surface/40">
+      <div className="flex items-center justify-between border-b border-border/50 px-5 py-3">
+        <span className="flex items-center gap-1.5 text-sm font-medium text-ink">
+          <BookOpen className="size-4 text-accent" weight="duotone" /> {t("kb.wikiTitle")}
+          {updated && <span className="ms-1 text-xs font-normal text-ink-faint">· {t("kb.wikiUpdated")}</span>}
+        </span>
         {canEdit && (
-          <button onClick={compile} disabled={busy} className="flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50">
-            <Sparkle className="size-3.5" /> {busy ? t("kb.wikiCompiling") : body ? t("kb.wikiRecompile") : t("kb.wikiCompile")}
+          <button onClick={compile} disabled={busy} className="flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:bg-accent-hover disabled:opacity-50">
+            <Sparkle className={`size-3.5 ${busy ? "animate-pulse" : ""}`} /> {busy ? t("kb.wikiCompiling") : body ? t("kb.wikiRecompile") : t("kb.wikiCompile")}
           </button>
         )}
       </div>
       {body ? (
-        <article className="max-w-none">{renderMarkdown(body)}</article>
+        <article className="max-w-none px-5 py-4"><Markdown>{body}</Markdown></article>
       ) : (
         <div className="flex h-[360px] flex-col items-center justify-center text-center">
-          <BookOpen className="size-10 text-ink-faint" />
+          <BookOpen className="size-10 text-ink-faint" weight="duotone" />
           <p className="mt-3 text-sm text-ink-secondary">{loaded ? t("kb.wikiEmpty") : t("common.loading")}</p>
         </div>
       )}

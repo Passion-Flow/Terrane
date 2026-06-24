@@ -24,6 +24,7 @@ import {
   UsersThree,
   type Icon,
 } from "@phosphor-icons/react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router";
@@ -33,6 +34,7 @@ import { LanguageSelect } from "@/components/LanguageSelect";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { FALLBACK_LANG, isSupported } from "@/i18n/langs";
+import { getLicenseCard } from "@/lib/license";
 
 interface NavItem {
   to: string;
@@ -166,6 +168,17 @@ export function AdminLayout() {
   const [drawer, setDrawer] = useState(false);
   const navBase = `/${seg}/admin`;
 
+  // 开源版（门控关闭）隐藏 License 设置导航项（页面 URL 仍可达）。
+  const { data: licenseCard } = useQuery({ queryKey: ["license"], queryFn: getLicenseCard });
+  const licenseOff = licenseCard?.required === false;
+  const navGroups: NavGroupDef[] = licenseOff
+    ? NAV_GROUPS.map((g) =>
+        g.basePath === "settings"
+          ? { ...g, children: g.children.filter((c) => c.to !== "settings/license") }
+          : g,
+      )
+    : NAV_GROUPS;
+
   async function onLogout() {
     await logout();
     navigate(`/${seg}/login`, { replace: true });
@@ -203,7 +216,7 @@ export function AdminLayout() {
             </li>
           ),
         )}
-        {NAV_GROUPS.map((g) => (
+        {navGroups.map((g) => (
           <NavGroup key={g.basePath} navBase={navBase} group={g} onNavigate={() => setDrawer(false)} />
         ))}
       </ul>

@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     twofa_issuer: str = "Terrane"
 
     # —— License gating（后台是激活写入方；server/gateway 只读同一共享卷）——
+    # 开源版默认关闭门控：license_required=False 时所有受保护接口直接放行、前端不显示激活/徽章。
+    # 商业化部署设 LICENSE_REQUIRED=true 即恢复 Forge 验签门控（代码完整保留，可逆）。
+    license_required: bool = False
     terrane_license_path: str = "licenses/active.forge"
     terrane_license_state_path: str = "licenses/verifier_state.json"
     terrane_license_crl_path: str = "licenses/crl.forge"
