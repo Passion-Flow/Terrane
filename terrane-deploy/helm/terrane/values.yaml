@@ -275,6 +275,11 @@ license:
   # Online-activation edge URL (Forge). Leave EMPTY for offline-only (air-gapped) activation, where an
   # operator pastes a signed .forge license blob in the admin console instead. Example: http://forge-edge:8081
   forgeEdgeUrl: ""
+  # Shared deployment identity for ALL components (server / admin-server / gateway). REQUIRED so that
+  # activating in the admin console also unlocks the front app — without it each pod gets its own
+  # fingerprint and you'll see "后台已激活、前台仍未激活". Generate ONCE: openssl rand -hex 16. One
+  # cluster = one uid; do NOT change after activating (would require re-activation).
+  deploymentUid: "#REPLACE_ME#"
   # Shared license volume holding active.forge + install_id, so the three control planes (server /
   # admin-server / gateway) share ONE deployment identity (anti-clone double-lock) and activation
   # survives restarts. Empty = use the cluster default StorageClass.

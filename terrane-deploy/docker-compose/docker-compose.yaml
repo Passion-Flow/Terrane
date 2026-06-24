@@ -34,6 +34,12 @@ x-shared-env: &backend-env
   # identity (anti-clone double-lock) and activation persists across restarts.
   TERRANE_LICENSE_PATH: /var/lib/terrane/license/active.forge
   TERRANE_LICENSE_CRL_PATH: /var/lib/terrane/license/crl.forge
+  # ---- 多组件部署身份(关键!)----
+  # Same value across server / admin-server / gateway → inside containers they derive ONE shared
+  # deployment fingerprint, so online activation is shared across components. WITHOUT this, each
+  # container uses its own random machine-id and the admin activating does NOT unlock the front
+  # ("后台已激活、前台仍显示未激活"). Generate once: openssl rand -hex 16. Do NOT change after activating.
+  FORGE_DEPLOYMENT_UID: ${FORGE_DEPLOYMENT_UID:-#REPLACE_ME#}
   # ---- private CA (optional): trust a self-signed / private-CA https endpoint (信创 intranet) ----
   SSL_CERT_FILE: ${TERRANE_CA_FILE:+/etc/terrane/ca-bundle.crt}
   REQUESTS_CA_BUNDLE: ${TERRANE_CA_FILE:+/etc/terrane/ca-bundle.crt}
@@ -96,6 +102,7 @@ services:
     restart: always
     environment:
       TERRANE_LICENSE_STATE_PATH: /var/lib/terrane/license/state_gateway.json
+      FORGE_DEPLOYMENT_UID: ${FORGE_DEPLOYMENT_UID:-#REPLACE_ME#}
     volumes:
       - license:/var/lib/terrane/license
     depends_on:

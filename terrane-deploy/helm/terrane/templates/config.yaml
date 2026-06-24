@@ -16,6 +16,9 @@ data:
   TERRANE_FORGE_EDGE_URL: {{ .Values.license.forgeEdgeUrl | quote }}
   TERRANE_LICENSE_PATH: /var/lib/terrane/license/active.forge
   TERRANE_LICENSE_CRL_PATH: /var/lib/terrane/license/crl.forge
+  # Shared deployment identity → all components (server/admin/gateway) get ONE fingerprint, so online
+  # activation in the admin also unlocks the front. REQUIRED. Generate once: openssl rand -hex 16.
+  FORGE_DEPLOYMENT_UID: {{ .Values.license.deploymentUid | quote }}
 ---
 apiVersion: v1
 kind: Secret

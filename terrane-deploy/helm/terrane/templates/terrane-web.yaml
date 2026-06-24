@@ -40,6 +40,8 @@ spec:
           env:
             - name: TERRANE_LICENSE_STATE_PATH
               value: /var/lib/terrane/license/state_gateway.json
+            - name: FORGE_DEPLOYMENT_UID
+              value: {{ .Values.license.deploymentUid | quote }}
             {{- with .Values.gateway.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
