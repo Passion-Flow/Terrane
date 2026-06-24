@@ -59,9 +59,9 @@ export function KbChat({ kbId }: { kbId: string }) {
           </button>
         </div>
       )}
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         {msgs.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center gap-4 px-4 text-center">
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 text-center">
             <span className="flex size-14 items-center justify-center rounded-full bg-accent-soft text-accent">
               <ChatCircleText className="size-7" weight="duotone" />
             </span>
