@@ -10,13 +10,21 @@ import { RequireLicense } from "@/auth/RequireLicense";
 import { applyLang } from "@/i18n";
 import { detectLang, isSupported } from "@/i18n/langs";
 import { WorkbenchLayout } from "@/components/WorkbenchLayout";
+import { KbLayout } from "@/components/KbLayout";
 import { ChatPage } from "@/pages/ChatPage";
 import { GraphPage } from "@/pages/GraphPage";
 import { HomePage } from "@/pages/HomePage";
-import { KbDetailPage } from "@/pages/KbDetailPage";
 import { MemoryPage } from "@/pages/MemoryPage";
 import { OverviewPage } from "@/pages/OverviewPage";
 import { SourcePreviewPage } from "@/pages/SourcePreviewPage";
+import { OverviewPage as KbOverviewPage } from "@/pages/kb/OverviewPage";
+import { SourcesPage } from "@/pages/kb/SourcesPage";
+import { StudioPage } from "@/pages/kb/StudioPage";
+import { WikiPage } from "@/pages/kb/WikiPage";
+import { QaPage } from "@/pages/kb/QaPage";
+import { RecallPage } from "@/pages/kb/RecallPage";
+import { McpPage } from "@/pages/kb/McpPage";
+import { SettingsPage as KbSettingsPage } from "@/pages/kb/SettingsPage";
 import { ModelSettingsPage } from "@/pages/settings/ModelSettingsPage";
 import { LanguageSettingsPage } from "@/pages/settings/LanguageSettingsPage";
 import { SecuritySettingsPage } from "@/pages/settings/SecuritySettingsPage";
@@ -81,8 +89,6 @@ export const router = createBrowserRouter([
                 children: [
                   { index: true, element: <OverviewPage /> },
                   { path: "kb", element: <HomePage /> },
-                  { path: "kb/:kbId", element: <KbDetailPage /> },
-                  { path: "kb/:kbId/source/:sourceId", element: <SourcePreviewPage /> },
                   { path: "graph", element: <GraphPage /> },
                   { path: "memory", element: <MemoryPage /> },
                   { path: "chat", element: <ChatPage /> },
@@ -92,6 +98,24 @@ export const router = createBrowserRouter([
                   { path: "account", element: <Navigate to="../settings/security" replace /> },
                 ],
               },
+              // 知识库外壳（Dify 式 IA）：进入某个库 → 左侧变库功能导航，子页独立。
+              {
+                path: "kb/:kbId",
+                element: <KbLayout />,
+                children: [
+                  { index: true, element: <Navigate to="overview" replace /> },
+                  { path: "overview", element: <KbOverviewPage /> },
+                  { path: "sources", element: <SourcesPage /> },
+                  { path: "studio", element: <StudioPage /> },
+                  { path: "wiki", element: <WikiPage /> },
+                  { path: "qa", element: <QaPage /> },
+                  { path: "recall", element: <RecallPage /> },
+                  { path: "mcp", element: <McpPage /> },
+                  { path: "settings", element: <KbSettingsPage /> },
+                ],
+              },
+              // 源整页预览（不带库侧栏，自带返回）。
+              { path: "kb/:kbId/source/:sourceId", element: <SourcePreviewPage /> },
             ],
           },
         ],

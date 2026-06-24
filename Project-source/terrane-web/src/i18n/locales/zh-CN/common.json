@@ -9,6 +9,7 @@
   "common": {
     "loading": "加载中…",
     "cancel": "取消",
+    "save": "保存",
     "saving": "保存中…",
     "close": "关闭",
     "back": "返回",
@@ -281,6 +282,30 @@
     "collapse": "折叠/展开",
     "editProfile": "编辑资料"
   },
+  "kbNav": {
+    "back": "返回知识库",
+    "overview": "概览",
+    "sources": "数据源",
+    "studio": "Studio",
+    "wiki": "Wiki",
+    "qa": "问答",
+    "recall": "召回测试",
+    "mcp": "MCP",
+    "settings": "设置"
+  },
+  "kbPages": {
+    "overviewSubtitle": "知识库统计、健康度与待办建议。",
+    "sourcesSubtitle": "上传文件或添加文本,系统会自动解析并编译成可检索的知识。",
+    "qaSubtitle": "向知识库提问,答案基于库内资料并标注引用来源。",
+    "recallSubtitle": "测试检索召回:向量语义 + 词法混合检索 + 重排,查看命中分数。",
+    "settingsSubtitle": "管理库的基本信息、共享成员与删除。"
+  },
+  "kbSettings": {
+    "basics": "基本信息",
+    "saved": "已保存",
+    "dangerZone": "危险操作",
+    "deleteHint": "删除后库内全部数据源、切片、图谱与 Wiki 将一并永久删除,不可撤销。"
+  },
   "memory": {
     "title": "我的记忆",
     "subtitle": "你的专属长期记忆:从聊天与上传文档自动记忆,也可手动添加。仅你可见。",
@@ -448,8 +473,11 @@
     "noOriginal": "无原文可预览",
     "modeChat": "对话",
     "modeCompare": "解析对比",
+    "askThisDoc": "就这份文档提问",
     "askThisDocHint": "就这份文档提问 —— 答案仅基于本文档检索,并附引用来源。",
     "askThisDocPlaceholder": "向这份文档提问…",
+    "minimize": "最小化",
+    "resize": "拖拽缩放",
     "send": "发送",
     "generatedProgress": "已生成 {x}/{y} 页",
     "pageLabel": "第 {n} 页",

@@ -1,8 +1,8 @@
-/** 源「整页」预览(非弹窗)。两种模式:
- *  - 对话:整宽,基于本文档的 RAG 问答(DocumentSourceChat)。
- *  - 解析对比:左 = 原文版面(逐页 WebP 懒加载 / 回退 OriginalPreview),右 = 解析结果(Markdown)。
- *  版面图渐进消费:render_status 为 pending/rendering 时每 ~2s 轮询 /pages,把逐步增长的 pages 喂给 LazyPageViewer。 */
-import { ArrowLeft, ChatCircleText, Columns, DownloadSimple } from "@phosphor-icons/react";
+/** 源「整页」预览(非弹窗)。常驻解析对比:
+ *  左 = 原文版面(逐页 WebP 懒加载 / 回退 OriginalPreview),右 = 解析结果(Markdown)。
+ *  右下角问答浮球 → 打开可拖拽 + 可缩放的问答浮窗(内嵌 DocumentSourceChat)。
+ *  版面图渐进消费:render_status 为 pending/rendering 时每 ~2s 轮询 /pages。 */
+import { ArrowLeft, ChatCircleText, DownloadSimple, Minus, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router";
@@ -15,10 +15,13 @@ import { FALLBACK_LANG, isSupported } from "@/i18n/langs";
 import { ApiError } from "@/lib/api";
 import {
   getSource, getSourcePages, sourceOriginalUrl,
-  type ChatSource, type KbSourceDetail, type SourcePage,
+  type KbSourceDetail, type SourcePage,
 } from "@/lib/kb";
 
-type Mode = "chat" | "compare";
+// 浮窗尺寸/位置约束
+const MIN_W = 300;
+const MIN_H = 320;
+const MARGIN = 16;
 
 export function SourcePreviewPage() {
   const { t } = useTranslation();
@@ -28,7 +31,6 @@ export function SourcePreviewPage() {
   const kb = kbId ?? "";
   const sid = sourceId ?? "";
 
-  const [mode, setMode] = useState<Mode>("chat");
   const [detail, setDetail] = useState<KbSourceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -46,7 +48,6 @@ export function SourcePreviewPage() {
       const r = await getSourcePages(kb, sid);
       setRenderStatus(r.status);
       setPageCount(r.page_count);
-      // 渐进:始终消费当前已返回的 pages(rendering 期间会逐步增长)。
       if (r.pages?.length) setPages(r.pages);
       if (r.status === "pending" || r.status === "rendering") {
         pollRef.current = window.setTimeout(() => { void loadPages(); }, 2000);
@@ -80,14 +81,9 @@ export function SourcePreviewPage() {
 
   const goBack = () => navigate(`/${seg}/kb/${kb}`);
 
-  // 点引用 → 切到解析对比,并尝试滚动到对应页(若引用切片带页码语义可扩展;暂滚到首屏)。
-  const onCite = useCallback((_s: ChatSource) => {
-    setMode("compare");
-  }, []);
-
   if (notFound) {
     return (
-      <main className="flex min-h-[70vh] items-center justify-center">
+      <main className="flex min-h-screen items-center justify-center bg-canvas">
         <div className="text-center">
           <p className="text-sm text-ink-secondary">{t("kb.notFound")}</p>
           <button onClick={goBack} className="mt-3 text-sm text-accent hover:underline">{t("kb.back")}</button>
@@ -101,9 +97,9 @@ export function SourcePreviewPage() {
   const canDownload = detail?.has_original;
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col">
+    <div className="relative flex h-screen min-h-0 flex-col bg-canvas">
       {/* 顶栏 */}
-      <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border/60 px-5 py-3">
+      <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border/60 bg-surface/30 px-5 py-3">
         <button onClick={goBack} title={t("kb.back")}
           className="flex shrink-0 items-center gap-1 rounded-(--radius-control) px-2 py-1 text-sm text-ink-secondary transition hover:bg-canvas hover:text-ink">
           <ArrowLeft className="size-4" /> <span className="hidden sm:inline">{t("kb.back")}</span>
@@ -117,21 +113,6 @@ export function SourcePreviewPage() {
           </p>
         </div>
 
-        {/* 分段控件:对话 / 解析对比 */}
-        <div className="flex shrink-0 items-center rounded-(--radius-control) bg-canvas p-0.5 ring-1 ring-border/60">
-          {([
-            { k: "chat" as const, icon: <ChatCircleText className="size-4" />, label: t("source.modeChat") },
-            { k: "compare" as const, icon: <Columns className="size-4" />, label: t("source.modeCompare") },
-          ]).map((m) => (
-            <button key={m.k} onClick={() => setMode(m.k)} aria-pressed={mode === m.k}
-              className={`flex items-center gap-1.5 whitespace-nowrap rounded-(--radius-control) px-3 py-1.5 text-sm font-medium transition ${
-                mode === m.k ? "bg-surface text-ink shadow-sm ring-1 ring-border/50" : "text-ink-secondary hover:text-ink"
-              }`}>
-              {m.icon} <span className="hidden sm:inline">{m.label}</span>
-            </button>
-          ))}
-        </div>
-
         {canDownload && (
           <a href={sourceOriginalUrl(kb, sid)} download={detail?.title}
             className="flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-border px-3 py-1.5 text-sm text-ink-secondary transition hover:bg-canvas hover:text-ink">
@@ -140,61 +121,164 @@ export function SourcePreviewPage() {
         )}
       </header>
 
-      {/* 主体 */}
-      {mode === "chat" ? (
-        <div className="min-h-0 flex-1">
-          <DocumentSourceChat kbId={kb} sourceId={sid} onCite={onCite} />
-        </div>
-      ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
-          {/* 左:原文版面 */}
-          <section className="flex min-h-0 flex-col border-b border-border/60 lg:border-b-0 lg:border-e">
-            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/40 px-4 py-1.5 text-[11px] font-medium text-ink-faint">
-              <span>{t("source.originalLayout")}</span>
-              {isRendering && pageCount > 0 && (
-                <span className="flex items-center gap-1.5 text-accent">
-                  <span className="size-3 animate-spin rounded-full border-2 border-border border-t-accent" />
-                  {t("source.generatedProgress", { x: pages.length, y: pageCount })}
-                </span>
-              )}
-            </div>
-            <div className="min-h-0 flex-1">
-              {loading ? (
-                <div className="flex h-full items-center justify-center text-xs text-ink-faint">{t("common.loading")}</div>
-              ) : hasRenderedPages ? (
-                <LazyPageViewer ref={viewerRef} kbId={kb} sourceId={sid} pages={pages} pageCount={pageCount} />
-              ) : isRendering ? (
-                <div className="flex h-full flex-col items-center justify-center gap-3 text-ink-faint">
-                  <span className="size-6 animate-spin rounded-full border-2 border-border border-t-accent" />
-                  <p className="text-sm">{t("source.generatingLayout")}</p>
-                </div>
-              ) : detail?.has_original ? (
-                <div className="h-full overflow-auto bg-canvas">
-                  <OriginalPreview kbId={kb} sourceId={sid} mime={detail.mime} title={detail.title} />
-                </div>
-              ) : (
-                <div className="flex h-full items-center justify-center text-xs text-ink-faint">{t("source.noOriginal")}</div>
-              )}
-            </div>
-          </section>
+      {/* 主体:常驻解析对比 */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
+        {/* 左:原文版面 */}
+        <section className="flex min-h-0 flex-col border-b border-border/60 lg:border-b-0 lg:border-e">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/40 px-4 py-1.5 text-[11px] font-medium text-ink-faint">
+            <span>{t("source.originalLayout")}</span>
+            {isRendering && pageCount > 0 && (
+              <span className="flex items-center gap-1.5 text-accent">
+                <span className="size-3 animate-spin rounded-full border-2 border-border border-t-accent" />
+                {t("source.generatedProgress", { x: pages.length, y: pageCount })}
+              </span>
+            )}
+          </div>
+          <div className="min-h-0 flex-1">
+            {loading ? (
+              <div className="flex h-full items-center justify-center text-xs text-ink-faint">{t("common.loading")}</div>
+            ) : hasRenderedPages ? (
+              <LazyPageViewer ref={viewerRef} kbId={kb} sourceId={sid} pages={pages} pageCount={pageCount} />
+            ) : isRendering ? (
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-ink-faint">
+                <span className="size-6 animate-spin rounded-full border-2 border-border border-t-accent" />
+                <p className="text-sm">{t("source.generatingLayout")}</p>
+              </div>
+            ) : detail?.has_original ? (
+              <div className="h-full overflow-auto bg-canvas">
+                <OriginalPreview kbId={kb} sourceId={sid} mime={detail.mime} title={detail.title} />
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-ink-faint">{t("source.noOriginal")}</div>
+            )}
+          </div>
+        </section>
 
-          {/* 右:解析结果 */}
-          <section className="flex min-h-0 flex-col">
-            <div className="shrink-0 border-b border-border/40 px-4 py-1.5 text-[11px] font-medium text-ink-faint">{t("source.parsedResult")}</div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-              {loading ? (
-                <div className="space-y-2">{[...Array(8)].map((_, i) => <div key={i} className="h-3.5 animate-pulse rounded bg-canvas" style={{ width: `${95 - i * 6}%` }} />)}</div>
-              ) : detail?.error ? (
-                <p className="text-sm text-danger">{detail.error}</p>
-              ) : detail?.parsed_text.trim() ? (
-                <Markdown>{detail.parsed_text}</Markdown>
-              ) : (
-                <p className="py-10 text-center text-sm text-ink-faint">{t("kb.previewEmpty")}</p>
-              )}
-            </div>
-          </section>
+        {/* 右:解析结果 */}
+        <section className="flex min-h-0 flex-col">
+          <div className="shrink-0 border-b border-border/40 px-4 py-1.5 text-[11px] font-medium text-ink-faint">{t("source.parsedResult")}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+            {loading ? (
+              <div className="space-y-2">{[...Array(8)].map((_, i) => <div key={i} className="h-3.5 animate-pulse rounded bg-canvas" style={{ width: `${95 - i * 6}%` }} />)}</div>
+            ) : detail?.error ? (
+              <p className="text-sm text-danger">{detail.error}</p>
+            ) : detail?.parsed_text.trim() ? (
+              <Markdown>{detail.parsed_text}</Markdown>
+            ) : (
+              <p className="py-10 text-center text-sm text-ink-faint">{t("kb.previewEmpty")}</p>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* 问答浮窗(浮球 + 可拖拽可缩放) */}
+      <AskFloat kbId={kb} sourceId={sid} />
+    </div>
+  );
+}
+
+/** 右下角问答浮球 → 可拖拽 + 可缩放的浮窗。纯前端鼠标事件实现,不加重依赖。 */
+function AskFloat({ kbId, sourceId }: { kbId: string; sourceId: string }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+
+  // 默认右下定位 + 尺寸。位置以 left/top 像素表示(初次打开时根据视口算出右下角)。
+  const [box, setBox] = useState({ x: 0, y: 0, w: 400, h: 520, placed: false });
+  const dragRef = useRef<{ mode: "move" | "resize"; px: number; py: number; bx: number; by: number; bw: number; bh: number } | null>(null);
+
+  const clamp = useCallback((b: { x: number; y: number; w: number; h: number }) => {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const w = Math.min(Math.max(b.w, MIN_W), vw - MARGIN * 2);
+    const h = Math.min(Math.max(b.h, MIN_H), vh - MARGIN * 2);
+    const x = Math.min(Math.max(b.x, MARGIN), vw - w - MARGIN);
+    const y = Math.min(Math.max(b.y, MARGIN), vh - h - MARGIN);
+    return { x, y, w, h };
+  }, []);
+
+  // 打开时若尚未定位,放到右下角。
+  useEffect(() => {
+    if (open && !box.placed) {
+      const w = 400, h = 520;
+      const x = window.innerWidth - w - MARGIN;
+      const y = window.innerHeight - h - MARGIN;
+      setBox({ ...clamp({ x, y, w, h }), placed: true });
+    }
+  }, [open, box.placed, clamp]);
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      const d = dragRef.current;
+      if (!d) return;
+      const dx = e.clientX - d.px, dy = e.clientY - d.py;
+      if (d.mode === "move") {
+        setBox((b) => ({ ...b, ...clamp({ x: d.bx + dx, y: d.by + dy, w: b.w, h: b.h }) }));
+      } else {
+        setBox((b) => ({ ...b, ...clamp({ x: b.x, y: b.y, w: d.bw + dx, h: d.bh + dy }) }));
+      }
+    }
+    function onUp() { dragRef.current = null; document.body.style.userSelect = ""; }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, [clamp]);
+
+  const startMove = (e: React.MouseEvent) => {
+    dragRef.current = { mode: "move", px: e.clientX, py: e.clientY, bx: box.x, by: box.y, bw: box.w, bh: box.h };
+    document.body.style.userSelect = "none";
+  };
+  const startResize = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    dragRef.current = { mode: "resize", px: e.clientX, py: e.clientY, bx: box.x, by: box.y, bw: box.w, bh: box.h };
+    document.body.style.userSelect = "none";
+  };
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} title={t("source.askThisDoc")}
+        className="fixed bottom-6 end-6 z-40 flex size-14 items-center justify-center rounded-full bg-accent text-white shadow-lg transition hover:bg-accent-hover hover:shadow-xl active:translate-y-px">
+        <ChatCircleText className="size-7" weight="duotone" />
+      </button>
+    );
+  }
+
+  if (minimized) {
+    return (
+      <button onClick={() => setMinimized(false)} title={t("source.askThisDoc")}
+        className="fixed bottom-6 end-6 z-40 flex items-center gap-2 rounded-full bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-lg transition hover:bg-accent-hover active:translate-y-px">
+        <ChatCircleText className="size-5" weight="duotone" /> {t("source.askThisDoc")}
+      </button>
+    );
+  }
+
+  return (
+    <div className="fixed z-40 flex flex-col overflow-hidden rounded-(--radius-card) border border-border bg-surface shadow-2xl"
+      style={{ left: box.x, top: box.y, width: box.w, height: box.h }}>
+      {/* 标题栏:可拖动定位 */}
+      <div onMouseDown={startMove}
+        className="flex shrink-0 cursor-move items-center justify-between gap-2 border-b border-border/60 bg-surface/80 px-3 py-2">
+        <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-ink">
+          <ChatCircleText className="size-4 shrink-0 text-accent" weight="duotone" />
+          <span className="truncate">{t("source.askThisDoc")}</span>
+        </span>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setMinimized(true)} title={t("source.minimize")}
+            className="rounded p-1 text-ink-faint transition hover:bg-canvas hover:text-ink"><Minus className="size-4" /></button>
+          <button onMouseDown={(e) => e.stopPropagation()} onClick={() => setOpen(false)} title={t("common.close")}
+            className="rounded p-1 text-ink-faint transition hover:bg-canvas hover:text-ink"><X className="size-4" /></button>
         </div>
-      )}
+      </div>
+
+      {/* 内容:文档问答 */}
+      <div className="min-h-0 flex-1">
+        <DocumentSourceChat kbId={kbId} sourceId={sourceId} />
+      </div>
+
+      {/* 右下角缩放手柄 */}
+      <div onMouseDown={startResize} title={t("source.resize")}
+        className="absolute bottom-0 end-0 size-4 cursor-nwse-resize">
+        <span className="absolute bottom-1 end-1 size-0 border-b-[7px] border-s-[7px] border-b-border border-s-transparent" />
+      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@
   "common": {
     "loading": "Loading…",
     "cancel": "Cancel",
+    "save": "Save",
     "saving": "Saving…",
     "close": "Close",
     "back": "Back",
@@ -281,6 +282,30 @@
     "collapse": "Collapse",
     "editProfile": "Edit profile"
   },
+  "kbNav": {
+    "back": "Back to knowledge",
+    "overview": "Overview",
+    "sources": "Sources",
+    "studio": "Studio",
+    "wiki": "Wiki",
+    "qa": "Q&A",
+    "recall": "Recall test",
+    "mcp": "MCP",
+    "settings": "Settings"
+  },
+  "kbPages": {
+    "overviewSubtitle": "Knowledge base stats, health score and suggested actions.",
+    "sourcesSubtitle": "Upload files or add text — they're parsed and compiled into retrievable knowledge.",
+    "qaSubtitle": "Ask the knowledge base; answers are grounded in its sources with citations.",
+    "recallSubtitle": "Test retrieval recall: hybrid vector + lexical search with reranking and hit scores.",
+    "settingsSubtitle": "Manage basics, shared members and deletion of this base."
+  },
+  "kbSettings": {
+    "basics": "Basics",
+    "saved": "Saved",
+    "dangerZone": "Danger zone",
+    "deleteHint": "Deleting permanently removes all sources, chunks, graph and wiki. This cannot be undone."
+  },
   "memory": {
     "title": "My memory",
     "subtitle": "Your long-term memory: auto-remembered from chats & uploaded docs, or add manually. Only you can see it.",
@@ -448,8 +473,11 @@
     "noOriginal": "No original to preview",
     "modeChat": "Chat",
     "modeCompare": "Compare parse",
+    "askThisDoc": "Ask this document",
     "askThisDocHint": "Ask a question about just this document — answers are grounded in it with citations.",
     "askThisDocPlaceholder": "Ask about this document…",
+    "minimize": "Minimize",
+    "resize": "Drag to resize",
     "send": "Send",
     "generatedProgress": "Generated {x}/{y} pages",
     "pageLabel": "Page {n}",
