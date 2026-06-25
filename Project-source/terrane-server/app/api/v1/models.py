@@ -1,4 +1,4 @@
-"""可用模型 API（前台 /api/v1/models）—— 列后台「模型渠道」里启用的模型,供前台「模型设置」下拉选。"""
+"""Available models API (frontend /api/v1/models) — lists the models enabled under "Model Channels" in the admin console, for the frontend's "Model Settings" dropdown."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/v1/models", tags=["models"])
 @router.get("")
 async def list_models(_=Depends(get_current_user),
                       db: AsyncSession = Depends(get_db_session)) -> dict:
-    """各用途的可选模型(name=渠道名,model=模型标识)。前台主要用 chat 列表做下拉。"""
+    """Selectable models per purpose (name=channel name, model=model identifier). The frontend mainly uses the chat list as a dropdown."""
     out: dict[str, list[dict]] = {}
     for kind in ("chat", "vl", "embed", "rerank"):
         chans = await model_channels.list_channels(db, kind)

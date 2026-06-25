@@ -1,10 +1,10 @@
-"""异步 Engine + Session 工厂（信创 DB 适配矩阵；postgres / asyncpg 默认）。
+"""Async Engine + Session factory (Xinchuang (domestic) DB compatibility matrix; postgres / asyncpg default).
 
-照搬 Forge app/db/session.py 的 API 面（get_engine / get_sessionmaker / get_db_session /
-reset_engine）。由字段化配置拼 async DSN（禁 connection-string env）。
+Ports the API surface of Forge app/db/session.py (get_engine / get_sessionmaker / get_db_session /
+reset_engine). Builds the async DSN from field-based config (no connection-string env).
 
-DATABASE_TYPE（默认 postgres）经 app/db/dialects.py 映射为 SQLAlchemy 方言 + async 驱动，
-支持信创国产库。默认 postgres 行为与原实现逐字一致（postgresql+asyncpg）。
+DATABASE_TYPE (default postgres) is mapped via app/db/dialects.py to a SQLAlchemy dialect + async driver,
+supporting Xinchuang (domestic) databases. The default postgres behavior is byte-for-byte identical to the original implementation (postgresql+asyncpg).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 
 def build_dsn(*, hide_password: bool = False) -> URL:
-    """由字段化配置拼 async DSN（按 DATABASE_TYPE 选方言+驱动；默认 postgres/asyncpg）。"""
+    """Build the async DSN from field-based config (select dialect+driver by DATABASE_TYPE; default postgres/asyncpg)."""
     s = get_settings()
     spec = resolve_dialect(s.database_type)
     return URL.create(
@@ -54,7 +54,7 @@ def get_engine() -> AsyncEngine:
     global _engine, _sessionmaker
     if _engine is None:
         s = get_settings()
-        ensure_driver(resolve_dialect(s.database_type))  # 缺驱动 → 清晰 ImportError
+        ensure_driver(resolve_dialect(s.database_type))  # missing driver → clear ImportError
         _engine = create_async_engine(
             build_dsn(),
             echo=s.database_echo,
@@ -76,13 +76,13 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:
-    """FastAPI 依赖：每请求一个 session。"""
+    """FastAPI dependency: one session per request."""
     async with get_sessionmaker()() as session:
         yield session
 
 
 def reset_engine() -> None:
-    """清缓存（测试支持）。"""
+    """Clear caches (test support)."""
     global _engine, _sessionmaker
     _engine = None
     _sessionmaker = None

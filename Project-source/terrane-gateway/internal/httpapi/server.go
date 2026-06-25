@@ -1,5 +1,5 @@
-// Package httpapi — 数据面 HTTP 入口（阶段①：探针 + License 锁定拦截）。
-// 业务路由（/v1/* 六路收口）在阶段③接入。
+// Package httpapi — data-plane HTTP entry point (stage 1: probes + License lock interception).
+// Business routes (the six /v1/* endpoints) are wired in at stage 3.
 package httpapi
 
 import (
@@ -9,7 +9,8 @@ import (
 	"github.com/navtra/terrane/gateway/internal/license"
 )
 
-// openaiError — 对外统一 OpenAI 兼容错误结构（03-api.md 双轨：对外兼容 / 对内 TRN_）。
+// openaiError — the unified outward-facing OpenAI-compatible error shape (03-api.md dual track:
+// OpenAI-compatible externally / TRN_ internally).
 type openaiError struct {
 	Error struct {
 		Message string `json:"message"`
@@ -51,8 +52,9 @@ func NewHandler(mgr *license.Manager) http.Handler {
 		})
 	})
 
-	// 其余一切路径：锁定态 403（OpenAI 兼容）；解锁后未匹配业务路由 → 404。
-	// 数据面独立验签 = 多点防绕过：即便控制面被 patch 放行，此处仍以内嵌公钥拦截。
+	// All other paths: 403 when locked (OpenAI-compatible); once unlocked, an unmatched business
+	// route → 404. Independent data-plane verification = defense in depth: even if the control
+	// plane is patched to pass traffic, this point still intercepts using the embedded public key.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if !mgr.Unlocked() {
 			writeError(w, http.StatusForbidden, "forbidden",

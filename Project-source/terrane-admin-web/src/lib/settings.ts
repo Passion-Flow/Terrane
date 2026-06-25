@@ -1,5 +1,5 @@
-/** 后台设置 API（/admin-api/v1/settings）— 向导后随时编辑邮件 / 品牌。
- *  复用向导的 Email/Branding/Preset 类型；邮件 GET 脱敏（不回传密码）。 */
+/** Admin settings API (/admin-api/v1/settings) — edit email / branding any time after the wizard.
+ *  Reuses the wizard's Email/Branding/Preset types; the email GET is redacted (the password is not returned). */
 
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
@@ -39,7 +39,7 @@ export function useSettings(): UseQueryResult<SettingsState, unknown> {
   return useQuery({ queryKey: ["settings"], queryFn: getSettings });
 }
 
-// ── 安全策略（密码规则）──
+// ── Security policy (password rules) ──
 export interface SecurityPolicy {
   password_min_length: number;
   password_require_char_classes: number;

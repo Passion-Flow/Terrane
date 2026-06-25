@@ -1,7 +1,8 @@
-"""知识库内容存储 ORM（平台库 terrane_main）：RawSource / Chunk / WikiPage / IngestJob。
+"""Knowledge base content storage ORM (platform DB terrane_main): RawSource / Chunk / WikiPage / IngestJob.
 
-chunks.embedding(halfvec) 与 content_tsv(生成列)不映射进 ORM —— 本机未装 pgvector,向量读写走原始 SQL
-(::halfvec 转型);ORM 只管结构化字段。硬删除:随 kb 级联真删。
+chunks.embedding (halfvec) and content_tsv (generated column) are not mapped into the ORM — pgvector is not
+installed locally, so vector read/write goes through raw SQL (::halfvec cast); the ORM only handles
+structured fields. Hard delete: cascades from the KB as a real delete.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ class RawSource(UUIDMixin, HardTimestampMixin, Base):
 
 
 class Chunk(UUIDMixin, Base):
-    """切片。embedding(halfvec)/content_tsv(生成列)不在 ORM,见模块注释。"""
+    """Chunk. embedding (halfvec) / content_tsv (generated column) are not in the ORM; see the module docstring."""
 
     __tablename__ = "chunks"
 
@@ -46,22 +47,26 @@ class Chunk(UUIDMixin, Base):
 
 
 class RawSourceOriginal(Base):
-    """上传文件原始字节的元信息。字节优先存对象存储（key=originals/{rid}），data 仅旧数据/降级时用。
-    单独成表,list/get 不加载 blob。随源级联硬删（对象存储侧由 delete 钩子清理）。"""
+    """Metadata for the raw bytes of an uploaded file. Bytes are stored in object storage first
+    (key=originals/{rid}); the data column is only used for legacy data / fallback. Kept in a separate
+    table so list/get don't load the blob. Hard-deleted by cascade from the source (object-storage side
+    is cleaned up by the delete hook)."""
 
     __tablename__ = "raw_source_originals"
 
     raw_source_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
     mime: Mapped[str | None] = mapped_column(String(128), nullable=True)
     size: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
-    # data 可空：对象存储成功时为 NULL（字节在 bucket）；存储不可用时降级把字节存这里。
+    # data is nullable: NULL when object storage succeeds (bytes live in the bucket); on storage failure, fall back to storing the bytes here.
     data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class RawSourceRender(Base):
-    """原文逐页 WebP 版面图的渲染状态。页面图字节存对象存储（key=pages/{rid}/{n}.webp），
-    本表只存元信息（页数 + 每页尺寸），前端据此按视口懒加载单页。随源级联硬删。"""
+    """Render status of per-page WebP layout images of the original document. Page-image bytes are stored in
+    object storage (key=pages/{rid}/{n}.webp); this table only stores metadata (page count + per-page
+    dimensions), which the front end uses to lazy-load single pages by viewport. Hard-deleted by cascade
+    from the source."""
 
     __tablename__ = "raw_source_renders"
 

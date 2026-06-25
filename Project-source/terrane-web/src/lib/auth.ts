@@ -1,5 +1,5 @@
-/** 前台用户鉴权 API（/api/v1/auth）。Cookie 会话（HttpOnly terrane_session）。
- *  错误按 code 走 i18n（lib/api 归一化 ApiError）。 */
+/** Frontend user auth API (/api/v1/auth). Cookie session (HttpOnly terrane_session).
+ *  Errors resolve i18n by code (lib/api normalizes into ApiError). */
 
 import { request } from "@/lib/api";
 

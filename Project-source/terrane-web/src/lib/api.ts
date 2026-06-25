@@ -1,4 +1,5 @@
-/** fetch 封装 — 错误信封归一化（{code,message,details,request_id}），前端按 code 走 i18n。 */
+/** fetch wrapper — normalizes the error envelope ({code,message,details,request_id});
+ *  the frontend resolves i18n by code. */
 import { apiBase } from "@/lib/config";
 
 export class ApiError extends Error {
@@ -24,7 +25,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     body = await resp.json();
   } catch {
-    /* 非 JSON 响应按状态码处理 */
+    /* Non-JSON responses are handled by status code */
   }
   if (!resp.ok) {
     const err = (body ?? {}) as {

@@ -1,6 +1,7 @@
-/** License 守卫 —— 包住激活后的所有区域（登录/管理控制台）。
- *  持续轮询 License 状态：后端检测到吊销/删除会重新锁定，前端轮询到 !unlocked 即踢回激活页。
- *  与 ActivatePage 共用 ["license"] 查询缓存，激活/吊销双向近即时反映。 */
+/** License guard — wraps every post-activation area (login / management console).
+ *  Continuously polls License status: when the backend detects revocation/deletion it re-locks, and the
+ *  frontend kicks back to the activation page as soon as it polls !unlocked.
+ *  Shares the ["license"] query cache with ActivatePage, so activation/revocation are reflected near-instantly in both directions. */
 
 import { useQuery } from "@tanstack/react-query";
 import { Navigate, Outlet, useParams } from "react-router";
@@ -14,14 +15,14 @@ export function RequireLicense() {
   const { data: card } = useQuery({
     queryKey: ["license"],
     queryFn: getLicenseCard,
-    // 开源版（required===false）旁路门控：不再需要轮询吊销/删除。
+    // Open-source edition (required===false) bypasses gating: no longer needs to poll for revocation/deletion.
     refetchInterval: (query) => (query.state.data?.required === false ? false : 8_000),
   });
-  // 开源版：门控关闭 → 立即放行，永不重定向到激活页。
+  // Open-source edition: gating disabled → allow through immediately, never redirect to the activation page.
   if (card?.required === false) {
     return <Outlet />;
   }
-  // 商业版（required 为 true 或加载中未定义）：保持原守卫——确认未解锁 → 回激活页。
+  // Commercial edition (required is true or undefined while loading): keep the original guard — confirmed not unlocked → back to the activation page.
   if (card && !card.unlocked) {
     return <Navigate to={`/${seg}/activate`} replace />;
   }

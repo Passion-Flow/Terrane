@@ -1,7 +1,9 @@
-"""ModelChannel（平台库 terrane_main）—— 模型渠道 schema 权威。
+"""ModelChannel (platform DB terrane_main) — authoritative schema for model channels.
 
-admin 后台经 PlatformBase mirror 写入;前台(摄入/检索/RAG/图谱/Agent)直读本表选渠道调模型。
-kind: chat/embed/rerank/web_search。api_key=L5 敏感(暂明文,KEK 落地字段级加密)。硬删除(无 deleted_at)。
+The admin console writes via the PlatformBase mirror; the front end (ingestion/retrieval/RAG/graph/Agent)
+reads this table directly to pick a channel and call the model.
+kind: chat/embed/rerank/web_search. api_key = L5 sensitive (plaintext for now; field-level encryption
+once KEK lands). Hard delete (no deleted_at).
 """
 
 from __future__ import annotations

@@ -59,7 +59,7 @@ kubectl -n terrane get pods -w     # admin-server auto-migrates + bootstraps the
 | `redis.enabled` | false → external Redis (`externalRedis.*`) |
 | `license.accessMode` | `ReadWriteMany` + RWX class for multi-replica/cross-node |
 | `global.useTLS` | false = HTTP trial (cookie not Secure); true for production |
-| `global.customCA` | trust a private-CA (信创 intranet) |
+| `global.customCA` | trust a private-CA (Xinchuang (domestic) intranet) |
 | `ingress.*` | front/admin hosts + TLS secrets |
 
 ## 5. Upgrade / uninstall
@@ -74,7 +74,7 @@ helm upgrade terrane terrane-deploy/helm/terrane -n terrane --reuse-values \
 helm uninstall terrane -n terrane   # PVCs kept by default
 ```
 
-## 6. Domestic / offline
+## 6. Xinchuang (domestic) / offline
 
 `docker save` → `docker load` → internal Harbor → point each component's `image.repository` (one per
 service in values.yaml). Offline License: leave

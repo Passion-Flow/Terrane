@@ -1,4 +1,4 @@
-/** 可用模型 API（同步后台「模型渠道」)+ 各用途选中的模型(localStorage,per-kind)。 */
+/** Available models API (synced with the admin "model channels") + the model selected per purpose (localStorage, per-kind). */
 import { request } from "@/lib/api";
 
 export interface ModelOption { name: string; model: string }

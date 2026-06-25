@@ -1,4 +1,4 @@
-/** 知识图谱可视化 —— react-force-graph-2d 力导向布局 + 缩放/拖拽/悬停高亮 + 度数定大小,贴合 taste 主题。 */
+/** Knowledge graph visualization — react-force-graph-2d force-directed layout + zoom/drag/hover highlight + degree-based sizing, styled to the taste theme. */
 
 import { ArrowsOut, Graph as GraphIcon, MagnifyingGlass, Sparkle } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -9,7 +9,7 @@ import { buildGraph, getGraph, graphStatus, type GraphEdge, type GraphNode } fro
 
 const HEIGHT = 480;
 
-/** 把 CSS 变量解析成 canvas 可用的 rgb() 颜色。 */
+/** Resolve a CSS variable into an rgb() color usable on the canvas. */
 function cssColor(varName: string, fallback: string): string {
   try {
     const el = document.createElement("span");
@@ -58,7 +58,7 @@ export function KbGraph({ kbId, canEdit }: { kbId: string; canEdit: boolean }) {
   }, [kbId]);
   useEffect(() => { void load(); }, [load]);
 
-  // 容器宽度自适应
+  // Adapt to container width
   useEffect(() => {
     if (!wrapRef.current) return;
     const ro = new ResizeObserver((es) => { for (const e of es) setWidth(e.contentRect.width); });
@@ -66,7 +66,7 @@ export function KbGraph({ kbId, canEdit }: { kbId: string; canEdit: boolean }) {
     return () => ro.disconnect();
   }, []);
 
-  // 主题切换时重取调色板
+  // Re-read the palette on theme change
   useEffect(() => {
     const mo = new MutationObserver(() => setPalette(readPalette()));
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme", "style"] });
@@ -85,7 +85,7 @@ export function KbGraph({ kbId, canEdit }: { kbId: string; canEdit: boolean }) {
     }, 2000);
   }, [kbId, load, stopPoll]);
 
-  // 进入/刷新:若有正在跑的构建,续接进度条
+  // On enter/refresh: if a build is already running, resume the progress bar
   useEffect(() => {
     graphStatus(kbId).then((s) => { if (s.status === "running") { setBuilding(true); setProgress(s.progress); startPoll(); } }).catch(() => {});
     return () => stopPoll();
@@ -96,18 +96,18 @@ export function KbGraph({ kbId, canEdit }: { kbId: string; canEdit: boolean }) {
     try {
       const r = await buildGraph(kbId);
       if (r.status === "running") startPoll();
-      else { setBuilding(false); await load(); }   // 没源等即时返回
+      else { setBuilding(false); await load(); }   // returns immediately when there are no sources, etc.
     } catch { setBuilding(false); }
   }
 
-  // 邻接表(悬停高亮)
+  // Adjacency map (for hover highlighting)
   const adj = useMemo(() => {
     const m: Record<string, Set<string>> = {};
     edges.forEach((e) => { (m[e.source] ??= new Set()).add(e.target); (m[e.target] ??= new Set()).add(e.source); });
     return m;
   }, [edges]);
 
-  // force-graph 数据(name 作为 id;度数定大小;补齐边端点)
+  // force-graph data (name as id; degree determines size; backfill edge endpoints)
   const data = useMemo(() => {
     const deg: Record<string, number> = {};
     edges.forEach((e) => { deg[e.source] = (deg[e.source] ?? 0) + 1; deg[e.target] = (deg[e.target] ?? 0) + 1; });

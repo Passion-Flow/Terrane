@@ -1,10 +1,10 @@
-"""Terrane Parse —— 自研文档解析引擎(纯 CPU,无 GPU)。见 design/07-parse-engine.md。
+"""Terrane Parse -- in-house document parsing engine (pure CPU, no GPU). See design/07-parse-engine.md.
 
-底层取原语用成熟库(PyMuPDF/python-docx…=字体光栅化层);版面重建/表格重建等「智能」100% 自研:
-- 阅读序:列检测(垂直空白)+ 列内 top→down(XY-Cut 思想)。
-- 标题:字号相对正文分级。
-- 表格:有框线→矢量线网格求交;无框线→文字坐标聚类(本版先做有框线,无框线为增强)。
-输出结构化 Markdown,接既有切片/嵌入/图谱链路。
+Mature libraries (PyMuPDF / python-docx ... = the font rasterization layer) provide the low-level primitives; the "intelligence" -- layout reconstruction, table reconstruction, etc. -- is 100% in-house:
+- Reading order: column detection (vertical whitespace) + top->down within a column (XY-Cut idea).
+- Headings: graded by font size relative to body text.
+- Tables: ruled -> intersect a grid from vector lines; unruled -> cluster text coordinates (this version does ruled tables first; unruled is an enhancement).
+Outputs structured Markdown and feeds into the existing chunking / embedding / graph pipeline.
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ import structlog
 
 log = structlog.get_logger("terrane.parse")
 
-# 公式检测:数学字体 或 Unicode 数学符号高密度。自研,保守(避免误判正文)。
+# Formula detection: math font OR a high density of Unicode math symbols. In-house, conservative (avoids misclassifying body text).
 _MATH_FONT = re.compile(r"math|cmmi|cmsy|cmex|stix|mathjax|msam|msbm", re.I)
-# 仅收明确的数学符号(不含 ·/°/× 等常见或歧义字符,避免误判正文/占位符)。
+# Only accept unambiguous math symbols (excluding common or ambiguous characters like ·/°/×, to avoid misclassifying body text / placeholders).
 _MATH_CHARS = set("∑∫√∞≤≥≠≈≅∀∃∈∉⊂⊆⊃∪∩∂∇∆∏≡∝⊥∠⇒⇔↦∮∭∬")
 
 
@@ -29,7 +29,7 @@ def _line_is_formula(spans: list) -> bool:
     if len(stripped) < 2:
         return False
     m = sum(1 for c in stripped if c in _MATH_CHARS)
-    return m >= 3 and m / len(stripped) > 0.2   # 严阈值:至少 3 个强数学符号且密度高
+    return m >= 3 and m / len(stripped) > 0.2   # Strict threshold: at least 3 strong math symbols and a high density
 
 SUPPORTED = {
     "application/pdf": "pdf",
@@ -40,7 +40,7 @@ SUPPORTED = {
 
 
 def _cluster(vals: list[float], tol: float = 3.0) -> list[float]:
-    """把相近坐标聚成一条(返回每簇均值,升序)。"""
+    """Cluster nearby coordinates into a single line (returns each cluster's mean, ascending)."""
     if not vals:
         return []
     vs = sorted(vals)
@@ -54,7 +54,7 @@ def _cluster(vals: list[float], tol: float = 3.0) -> list[float]:
 
 
 def _ruled_tables(page) -> list[dict]:
-    """从矢量线重建有框线表格。返回 [{bbox, md}]。自研:线→网格→cell→归位。"""
+    """Reconstruct ruled tables from vector lines. Returns [{bbox, md}]. In-house: lines -> grid -> cells -> placement."""
     hlines: list[tuple[float, float, float]] = []  # (y, x0, x1)
     vlines: list[tuple[float, float, float]] = []  # (x, y0, y1)
     for d in page.get_drawings():
@@ -76,7 +76,7 @@ def _ruled_tables(page) -> list[dict]:
     if len(ys) < 2 or len(xs) < 2:
         return []
     x0, x1, y0, y1 = xs[0], xs[-1], ys[0], ys[-1]
-    # 取表格区域内的文字 span,按 cell 归位
+    # Take text spans within the table region and place them into cells
     words = page.get_text("words")  # (x0,y0,x1,y1,word,block,line,word_no)
     rows_md: list[list[str]] = []
     for ri in range(len(ys) - 1):
@@ -103,18 +103,18 @@ def _rows_to_md(rows: list[list[str]]) -> str:
     return "\n".join(out)
 
 
-_COL_GAP = 18.0   # 列间最小水平间隙(pt)
+_COL_GAP = 18.0   # Minimum horizontal gap between columns (pt)
 
 
 def _borderless_regions(blocks: list[dict]) -> list[dict]:
-    """页级无框线表格重建(自研):全页 span 按 y 聚成行、行内按 x 间隙切 cell,
-    连续 ≥2 多列且列数一致的行段 → 一张表。保守,严防误判正文。返回 [{bbox, md}]。"""
+    """Page-level unruled table reconstruction (in-house): cluster all page spans into rows by y, split each row into cells by x gaps,
+    and a run of >=2 consecutive multi-column rows with a consistent column count -> one table. Conservative, guards strictly against misclassifying body text. Returns [{bbox, md}]."""
     spans = [s for b in blocks for ln in b.get("lines", []) for s in ln.get("spans", [])
              if s.get("text", "").strip()]
     if len(spans) < 4:
         return []
     spans.sort(key=lambda s: (s["bbox"][1] + s["bbox"][3]) / 2)
-    # 聚成行
+    # Cluster into rows
     rows: list[list] = []
     for s in spans:
         yc = (s["bbox"][1] + s["bbox"][3]) / 2
@@ -122,7 +122,7 @@ def _borderless_regions(blocks: list[dict]) -> list[dict]:
             rows[-1].append(s)
         else:
             rows.append([s])
-    # 行→cell(按 x 间隙)
+    # Row -> cells (by x gaps)
     rc: list[list[tuple[float, str]]] = []
     for r in rows:
         r.sort(key=lambda s: s["bbox"][0])
@@ -140,12 +140,12 @@ def _borderless_regions(blocks: list[dict]) -> list[dict]:
         if len(rc[i]) < 2:
             i += 1
             continue
-        # 向下收集列数相同(±0)的连续多列行
+        # Collect downward the consecutive multi-column rows with the same column count (+/-0)
         j = i
         while j < len(rc) and len(rc[j]) == len(rc[i]) and len(rc[j]) >= 2:
             j += 1
         run = rc[i:j]
-        if len(run) >= 2:   # ≥2 行成表
+        if len(run) >= 2:   # >=2 rows form a table
             xs = _cluster(sorted(x for r in run for x, _ in r), tol=12)
             if len(xs) >= 2:
                 grid = []
@@ -171,13 +171,13 @@ def _inside(bbox, region, pad: float = 2.0) -> bool:
 
 
 def _reading_order(blocks: list[dict], page_w: float) -> list[dict]:
-    """列检测(简化 XY-Cut):按 x 中心分 1–2 栏,栏内 top→down。"""
+    """Column detection (simplified XY-Cut): split into 1-2 columns by x center, top->down within a column."""
     if not blocks:
         return []
     mid = page_w / 2
     left = [b for b in blocks if (b["bbox"][0] + b["bbox"][2]) / 2 < mid]
     right = [b for b in blocks if (b["bbox"][0] + b["bbox"][2]) / 2 >= mid]
-    # 仅当两栏都有实质内容且少有跨栏块时才当双栏
+    # Treat as two columns only when both columns have substantial content and few blocks straddle the divide
     straddle = [b for b in blocks if b["bbox"][0] < mid - page_w * 0.08 and b["bbox"][2] > mid + page_w * 0.08]
     if len(left) >= 2 and len(right) >= 2 and len(straddle) <= len(blocks) * 0.2:
         return sorted(left, key=lambda b: b["bbox"][1]) + sorted(right, key=lambda b: b["bbox"][1])
@@ -212,7 +212,7 @@ def _parse_pdf(path: str) -> str:
                 if not txt:
                     continue
                 if _line_is_formula(spans):
-                    page_md.append(f"$$ {txt} $$")   # 公式块
+                    page_md.append(f"$$ {txt} $$")   # Formula block
                     continue
                 mx = max((s["size"] for s in spans), default=body)
                 bold = any(s.get("flags", 0) & 16 for s in spans)
@@ -275,7 +275,7 @@ def _parse_pptx(path: str) -> str:
     prs = pptx.Presentation(path)
     out: list[str] = []
     for i, slide in enumerate(prs.slides, 1):
-        out.append(f"## 幻灯片 {i}")
+        out.append(f"## Slide {i}")
         for shape in slide.shapes:
             if shape.has_text_frame:
                 for para in shape.text_frame.paragraphs:
@@ -286,7 +286,7 @@ def _parse_pptx(path: str) -> str:
 
 
 def parse(path: str, mime: str) -> str:
-    """解析文档为结构化 Markdown。不支持的类型抛 ValueError。"""
+    """Parse a document into structured Markdown. Raises ValueError for unsupported types."""
     kind = SUPPORTED.get(mime)
     if kind == "pdf":
         return _parse_pdf(path)

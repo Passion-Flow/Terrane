@@ -39,5 +39,15 @@ tmp/
 .idea/
 .vscode/
 
-# ---- 内部 AI-agent 规则文档(含开发凭据,不进公开仓)----
+# ---- Internal AI-agent rule docs (contain dev credentials, not for public repo) ----
 .agent.md
+
+# Internal design / shared specs / planning (not published)
+Project-design/
+terrane-shared/
+知识库深度优化方案.md
+
+# Irrelevant to the public repo (duplicate deploy dir / ops scratch / local debug)
+Project-source/deploy/
+ops/
+Project-source/local-dev-issue.py

@@ -1,4 +1,4 @@
-/** 概览 —— SaaS 仪表盘:统计卡 + 最近知识库 + 快速开始。 */
+/** Overview — SaaS dashboard: stat cards + recent knowledge bases + quick start. */
 
 import { Books, Brain, ChatCircleText, Plus, Sparkle } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
@@ -51,13 +51,13 @@ export function OverviewPage() {
           ))}
         </div>
 
-        {/* 快速开始 */}
+        {/* Quick start */}
         <div className="mt-4 flex flex-wrap gap-2.5">
           <button onClick={() => navigate(`/${seg}/kb`)} className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-white transition active:translate-y-px hover:bg-accent-hover"><Plus className="size-4" weight="bold" /> {t("kb.create")}</button>
           <button onClick={() => navigate(`/${seg}/chat`)} className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-medium text-ink-secondary transition hover:bg-canvas hover:text-ink"><Sparkle className="size-4" /> {t("overview.startChat")}</button>
         </div>
 
-        {/* 最近知识库 */}
+        {/* Recent knowledge bases */}
         <h2 className="mt-9 mb-3 text-sm font-semibold text-ink">{t("overview.recent")}</h2>
         {kbs === null ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{[...Array(3)].map((_, i) => <div key={i} className="h-28 animate-pulse rounded-(--radius-card) border border-border/60 bg-surface/40" />)}</div>

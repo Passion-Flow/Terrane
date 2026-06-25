@@ -75,7 +75,7 @@ class OnlineClient:
                  *, install_id: str | None = None, signals: dict | None = None,
                  deployment_uid: str | None = None) -> Verdict:
         body = {"online_code": online_code, "fingerprint": fingerprint, "cluster_id": cluster_id}
-        # 反克隆身份字段（design 07）：仅在有值时附带，旧 edge 收不到也不影响（新 edge 先行部署）。
+        # Anti-clone identity fields (design 07): attached only when present, harmless if an old edge does not receive them (the new edge is deployed first).
         if install_id:
             body["install_id"] = install_id
         if signals:

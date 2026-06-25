@@ -1,5 +1,5 @@
-"""个人 AI 助手（前台 /api/v1/assistant）—— Kimi 式:跨「用户全部知识库」自动检索 + 记忆唤回
-   + 持久化对话历史。可问任何问题,知识库/记忆相关时优先采用并标引用。SSE 流式。
+"""Personal AI assistant (frontend /api/v1/assistant) — Kimi-style: automatic retrieval across "all of the user's knowledge bases" + memory recall
+   + persistent conversation history. Can answer any question; when knowledge base / memory content is relevant, it's used preferentially with citations. SSE streaming.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def _sse(event: str, data: dict) -> str:
 
 
 async def _parse_attachment(db: AsyncSession, att: dict) -> str:
-    """聊天附件 → 文本上下文:图片→VL、音频→ASR、视频→抽帧+ASR、文档→解析引擎、文本→直读。"""
+    """Chat attachment -> text context: image->VL, audio->ASR, video->frame extraction+ASR, document->parse engine, text->read directly."""
     from fastapi.concurrency import run_in_threadpool
     name = att.get("name", "file")
     mime = att.get("mime", "") or ""
@@ -96,7 +96,7 @@ async def _accessible_kb_ids(db: AsyncSession, user: CurrentUser) -> list[uuid.U
 
 async def _search_all(db: AsyncSession, kb_ids: list[uuid.UUID], query: str, limit: int,
                       embed_model: str | None, rerank_model: str | None) -> list[dict]:
-    """跨用户全部知识库的混合检索(嵌入一次 + 向量/词法 across kb_ids + rerank)。"""
+    """Hybrid retrieval across all of the user's knowledge bases (embed once + vector/lexical across kb_ids + rerank)."""
     if not kb_ids or not query.strip():
         return []
     ids = [str(i) for i in kb_ids]
@@ -134,7 +134,7 @@ async def _search_all(db: AsyncSession, kb_ids: list[uuid.UUID], query: str, lim
     return ordered
 
 
-# ---- 对话 CRUD ----
+# ---- Conversation CRUD ----
 
 @router.get("/conversations")
 async def list_conversations(user: CurrentUser = Depends(get_current_user),
@@ -176,7 +176,7 @@ async def _load_conv(db: AsyncSession, cid: str, user: CurrentUser) -> Conversat
     return c
 
 
-# ---- 助手对话(SSE)----
+# ---- Assistant chat (SSE) ----
 
 class AssistChatIn(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
@@ -186,31 +186,31 @@ class AssistChatIn(BaseModel):
     embed_model: str | None = Field(default=None, max_length=128)
     rerank_model: str | None = Field(default=None, max_length=128)
     attachments: list[dict] = Field(default_factory=list)  # [{name, mime, data(base64)}]
-    att_meta: list[dict] = Field(default_factory=list)      # 气泡缩略图元信息 [{name, mime, thumb}]
-    use_kb: bool = False                                    # 知识库开关(默认关=普通问答)
-    kb_ids: list[str] = Field(default_factory=list)         # 指定库(空=全部可见库)
-    web_search: bool = False                                # 联网搜索开关(默认关)
+    att_meta: list[dict] = Field(default_factory=list)      # bubble thumbnail metadata [{name, mime, thumb}]
+    use_kb: bool = False                                    # knowledge base toggle (default off = plain Q&A)
+    kb_ids: list[str] = Field(default_factory=list)         # specified KBs (empty = all visible KBs)
+    web_search: bool = False                                # web search toggle (default off)
 
 
 @router.post("/chat")
 async def assistant_chat(body: AssistChatIn, user: CurrentUser = Depends(get_current_user),
                          db: AsyncSession = Depends(get_db_session)) -> StreamingResponse:
     uid = uuid.UUID(user.user_id)
-    # 对话:加载或新建
+    # Conversation: load or create
     if body.conversation_id:
         conv = await _load_conv(db, body.conversation_id, user)
     else:
         conv = Conversation(id=uuid.uuid4(), user_id=uid, title=body.query[:40])
         db.add(conv)
         await db.flush()
-    # 历史(最近 8 条)
+    # History (most recent 8)
     hist = (await db.execute(select(Message).where(Message.conversation_id == conv.id)
                              .order_by(Message.created_at.desc()).limit(8))).scalars().all()
     history = [{"role": m.role, "content": m.content} for m in reversed(hist)]
-    # 存用户消息(附件缩略图元信息进 meta,供气泡 + 重载显示)
+    # Store the user message (attachment thumbnail metadata goes into meta, for bubble + reload display)
     db.add(Message(id=uuid.uuid4(), conversation_id=conv.id, role="user", content=body.query,
                    meta={"attachments": body.att_meta[:8]} if body.att_meta else {}))
-    # 知识库检索(仅当开启;可指定库,否则全部可见库)
+    # Knowledge base retrieval (only when enabled; specific KBs can be given, otherwise all visible KBs)
     hits: list[dict] = []
     if body.use_kb:
         accessible = await _accessible_kb_ids(db, user)
@@ -229,7 +229,7 @@ async def assistant_chat(body: AssistChatIn, user: CurrentUser = Depends(get_cur
         mems = await memory_service.recall(db, uid, body.query, limit=3)
     except Exception:  # noqa: BLE001
         mems = []
-    # 聊天附件(文档/图片/视频/音频)→ 解析进上下文
+    # Chat attachments (document/image/video/audio) -> parse into context
     att_texts: list[str] = []
     for att in (body.attachments or [])[:5]:
         txt = await _parse_attachment(db, att)
@@ -268,7 +268,7 @@ async def assistant_chat(body: AssistChatIn, user: CurrentUser = Depends(get_cur
         answer = ""
         web_sources: list[dict] = []
         streamed = False
-        if use_native:  # 联网搜索:原生流式带来源卡片;配置模型不支持原生(如 qwen3.7-plus)则回退 qwen-plus
+        if use_native:  # Web search: native streaming with source cards; if the configured model doesn't support native (e.g. qwen3.7-plus), fall back to qwen-plus
             candidates = [model, "qwen-plus"] if model != "qwen-plus" else ["qwen-plus"]
             for try_model in candidates:
                 got = False
@@ -286,14 +286,14 @@ async def assistant_chat(body: AssistChatIn, user: CurrentUser = Depends(get_cur
                     got = False
                 if got:
                     break
-        if not streamed:  # 普通对话 或 原生不可用 → compatible-mode(web_search 时仍内置联网,无卡片)
+        if not streamed:  # Plain chat or native unavailable -> compatible-mode (web_search still has built-in browsing, but no cards)
             try:
                 async for delta in chat_stream(base, key, model, messages, enable_search=body.web_search):
                     answer += delta
                     yield _sse("delta", {"text": delta})
             except ModelError as e:
                 yield _sse("error", {"message": str(e)})
-        # 流后持久化助手消息(新 session,请求 session 已关)
+        # After streaming, persist the assistant message (new session, since the request session is already closed)
         try:
             meta: dict = {"sources": src}
             if web_sources:
@@ -305,7 +305,7 @@ async def assistant_chat(body: AssistChatIn, user: CurrentUser = Depends(get_cur
                 await s2.commit()
         except Exception as e:  # noqa: BLE001
             log.warning("assistant_persist_failed", error=str(e))
-        # 自动记忆:后台从本轮对话抽取个人记忆(尊重用户开关,不阻塞响应)
+        # Auto memory: extract personal memories from this turn in the background (respects the user toggle, doesn't block the response)
         if answer.strip():
             asyncio.create_task(memory_service.consolidate_bg(
                 uid, f"用户: {body.query}\n助手: {answer}", "chat"))

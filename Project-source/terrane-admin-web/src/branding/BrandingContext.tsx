@@ -1,6 +1,7 @@
-/** 品牌上下文 —— 启动即拉公开 branding，全局提供产品名 / 主题色 / 登录副标题。
- *  副作用：产品名写入 document.title；主题色覆写 --color-accent 三件套 CSS 变量。
- *  缺省回退出厂值（页面化零配置），失败不阻塞渲染。设置页保存后 invalidate ["branding"] 即刷新。 */
+/** Branding context — fetches public branding on startup and globally provides product name / theme color / login subtitle.
+ *  Side effects: the product name is written to document.title; the theme color overrides the --color-accent CSS variable trio.
+ *  Falls back to factory defaults when absent (page-based zero-config); failures do not block rendering.
+ *  After the settings page saves, invalidating ["branding"] refreshes it. */
 
 import { useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, type ReactNode } from "react";
@@ -23,12 +24,12 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   });
   const branding = data ?? DEFAULT_BRANDING;
 
-  // 产品名 → 标签页标题（保留「管理后台」后缀，随语言切换）。
+  // Product name → tab title (keeps the "management console" suffix, which follows the language switch).
   useEffect(() => {
     document.title = `${branding.product_name} ${t("brand.console")}`;
   }, [branding.product_name, t]);
 
-  // favicon：专用 favicon 优先，缺省回退控制台 Logo，再缺省保留出厂 favicon.svg。
+  // favicon: a dedicated favicon takes priority; otherwise fall back to the console Logo, then to the factory favicon.svg.
   useEffect(() => {
     const icon = branding.favicon ?? branding.logo_data;
     if (!icon) return;
@@ -36,11 +37,11 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
       ?? document.head.appendChild(Object.assign(document.createElement("link"), { rel: "icon" }));
     const prev = link.getAttribute("href");
     link.setAttribute("href", icon);
-    link.removeAttribute("type");  // data URI 自带 MIME，去掉固定 image/svg+xml
+    link.removeAttribute("type");  // A data URI carries its own MIME type, so drop the hardcoded image/svg+xml
     return () => { if (prev) link.setAttribute("href", prev); };
   }, [branding.favicon, branding.logo_data]);
 
-  // 主题色 → 覆写 accent CSS 变量（hex 优先；hover/soft 跟随同色保证一致观感）。
+  // Theme color → override the accent CSS variables (hex takes priority; hover/soft follow the same color for a consistent look).
   useEffect(() => {
     const root = document.documentElement;
     const c = branding.accent_color;

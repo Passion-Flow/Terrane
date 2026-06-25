@@ -1,4 +1,4 @@
-/** 个人 AI 助手（Kimi 式)—— 自动跨全部知识库检索 + 记忆 + 持久化对话历史。左对话列表 + 主聊天区。 */
+/** Personal AI assistant (Kimi-style) — automatic retrieval across all knowledge bases + memory + persisted conversation history. Left conversation list + main chat area. */
 import { Books, ChatCircleText, FileText, GlobeSimple, Paperclip, PaperPlaneRight, Plus, Sparkle, Trash, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -20,7 +20,7 @@ function readFile(f: File): Promise<Attachment> {
   });
 }
 
-/** 图片 data URL → 小缩略图(最长边 96px,jpeg) */
+/** Image data URL → small thumbnail (longest edge 96px, jpeg) */
 function thumbFromDataUrl(dataUrl: string): Promise<string | undefined> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -90,7 +90,7 @@ export function ChatPage() {
     setMsgs((m) => [...m, { role: "user", content: q, attachments: attMeta }, { role: "assistant", content: "", sources: [], webSources: [] }]);
     let convId = activeId;
     try {
-      await streamAssistant(q || "(请基于附件回答)", {
+      await streamAssistant(q || "(Please answer based on the attachments)", {
         conversationId: activeId, attachments: sending, attMeta,
         useKb, kbIds: useKb && kbId !== "all" ? [kbId] : [], webSearch,
       }, {
@@ -112,7 +112,7 @@ export function ChatPage() {
 
   return (
     <div className="flex h-full">
-      {/* 对话列表 */}
+      {/* Conversation list */}
       <div className="flex w-60 shrink-0 flex-col border-e border-border/70 bg-surface/30">
         <div className="p-3">
           <button onClick={newChat} className="flex w-full items-center gap-2 rounded-(--radius-control) border border-border bg-canvas px-3 py-2 text-sm font-medium text-ink transition active:translate-y-px hover:border-accent/50 hover:text-accent">
@@ -132,9 +132,9 @@ export function ChatPage() {
         </div>
       </div>
 
-      {/* 聊天区 */}
+      {/* Chat area */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* 顶栏:模型快切 */}
+        {/* Top bar: quick model switch */}
         <div className="flex h-12 shrink-0 items-center justify-end gap-2 border-b border-border/60 px-4">
           <Sparkle className="size-3.5 text-ink-faint" />
           {chatModels.length > 0 ? (
@@ -158,7 +158,7 @@ export function ChatPage() {
                 {msgs.map((m, i) => (
                   <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
                     <div className={m.role === "user" ? "max-w-[80%] rounded-2xl rounded-ee-sm bg-accent px-4 py-2.5 text-sm text-white" : "max-w-[88%] text-sm text-ink"}>
-                      {/* 用户气泡:附件缩略图 + 文件 chip */}
+                      {/* User bubble: attachment thumbnails + file chips */}
                       {m.role === "user" && m.attachments && m.attachments.length > 0 && (
                         <div className="mb-2 flex flex-wrap gap-1.5">
                           {m.attachments.map((a, j) => a.thumb ? (
@@ -176,7 +176,7 @@ export function ChatPage() {
                         </div>
                       )}
                       <p className="whitespace-pre-wrap leading-relaxed">{m.content}{m.role === "assistant" && busy && i === msgs.length - 1 && <span className="ms-0.5 animate-pulse">▋</span>}</p>
-                      {/* 助手气泡:联网来源卡片 */}
+                      {/* Assistant bubble: web source cards */}
                       {m.role === "assistant" && m.webSources && m.webSources.length > 0 && (
                         <div className="mt-3 space-y-1.5">
                           <p className="text-[11px] font-medium text-ink-faint">{t("assistant.webSources")}</p>
@@ -244,7 +244,7 @@ function Composer({ input, setInput, send, busy, atts, setAtts, useKb, setUseKb,
           <Plus className="size-5" />
         </button>
         <input ref={fileRef} type="file" hidden multiple accept=".txt,.md,.csv,.json,.pdf,.docx,.xlsx,.pptx,image/*,audio/*,video/*" onChange={onPick} />
-        {/* 功能开关:默认全关 */}
+        {/* Feature toggles: all off by default */}
         <button onClick={() => setUseKb(!useKb)} className={pill(useKb)} title={t("assistant.kbHint")}>
           <Books className="size-3.5" /> {t("assistant.kb")}
         </button>

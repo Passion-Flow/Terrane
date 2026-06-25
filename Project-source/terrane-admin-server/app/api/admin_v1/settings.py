@@ -1,10 +1,11 @@
-"""后台设置 API（/admin-api/v1/settings）— 向导完成后随时编辑邮件 / 品牌。
+"""Admin settings API (/admin-api/v1/settings) — edit email / branding at any time after the wizard completes.
 
-写平台库 terrane_main（system_settings + branding），变更落 audit_logs（append-only）。
-复用向导同款服务（platform_settings / email_service / email_presets / 脱敏器），
-与 wizard.py 区别：不触碰向导步骤标记（email_done/branding_done/completed），纯设置面。
-权限：SETTINGS_READ / SETTINGS_WRITE（平台角色映射，super_admin=*）。
-邮件密码仍明文存储 + __enc 标记（KEK 基建落地前），GET 一律脱敏不回传。
+Writes to the platform database terrane_main (system_settings + branding); changes are recorded in
+audit_logs (append-only). Reuses the same services as the wizard (platform_settings / email_service /
+email_presets / redactor). Difference from wizard.py: it does not touch the wizard step flags
+(email_done/branding_done/completed); it is purely the settings surface.
+Permissions: SETTINGS_READ / SETTINGS_WRITE (platform role mapping, super_admin=*).
+Email passwords are still stored as plaintext + an __enc flag (until the KEK infrastructure lands); GET always redacts and never returns them.
 """
 
 from __future__ import annotations
@@ -43,7 +44,7 @@ async def get_settings(
     _=Depends(require_perm(P.SETTINGS_READ)),
     pdb: AsyncSession = Depends(get_platform_db),
 ) -> dict:
-    """设置面快照：邮件（脱敏）+ 品牌 + 邮箱服务商预设（一键填充）。"""
+    """Settings snapshot: email (redacted) + branding + mailbox provider presets (one-click fill)."""
     email_cfg = await get_setting(pdb, EMAIL_KEY) or {}
     branding = await get_branding(pdb)
     return {
@@ -68,9 +69,9 @@ async def update_email(
     user: CurrentUser = Depends(require_perm(P.SETTINGS_WRITE)),
     pdb: AsyncSession = Depends(get_platform_db),
 ) -> dict:
-    """保存邮件（SMTP）配置。密码留空 = 沿用既有（避免脱敏回填覆盖为空）。"""
+    """Save the email (SMTP) configuration. A blank password = keep the existing one (avoids the redacted value overwriting it to empty)."""
     existing = await get_setting(pdb, EMAIL_KEY) or {}
-    # 新密码 → KEK 加密;留空 → 沿用既有(已是密文)
+    # New password -> KEK encryption; blank -> keep the existing one (already ciphertext)
     if body.password:
         password = crypto.encrypt(body.password)
     else:
@@ -87,7 +88,7 @@ async def update_email(
         pdb, action="settings.email.update", actor_id=user.user_id, actor_name=user.name,
         target_type="setting", target_id=EMAIL_KEY,
         after={"host": body.host, "port": body.port, "encryption": body.encryption,
-               "from_address": str(body.from_address), "has_password": bool(password)},  # 脱敏
+               "from_address": str(body.from_address), "has_password": bool(password)},  # redacted
         **audit_ctx(request))
     await pdb.commit()
     return {"data": {"ok": True}}
@@ -99,7 +100,7 @@ async def test_email(
     _: CurrentUser = Depends(require_perm(P.SETTINGS_WRITE)),
     pdb: AsyncSession = Depends(get_platform_db),
 ) -> dict:
-    """用当前已保存的邮件配置发一封测试邮件（须先保存）。"""
+    """Send a test email using the currently saved email configuration (must be saved first)."""
     cfg = await get_setting(pdb, EMAIL_KEY)
     if not cfg or not cfg.get("configured"):
         raise BizError("VALIDATION_FAILED", {"reason": "email_not_configured"})
@@ -112,8 +113,8 @@ class SecurityPolicyIn(BaseModel):
     password_min_length: int = Field(ge=8, le=128)
     password_require_char_classes: int = Field(ge=1, le=4)
     login_lock_threshold: int = Field(ge=3, le=50)
-    login_lock_seconds: int = Field(ge=60, le=86_400)            # 1 分钟 – 24 小时
-    session_absolute_ttl_seconds: int = Field(ge=3_600, le=31_536_000)  # 1 小时 – 365 天
+    login_lock_seconds: int = Field(ge=60, le=86_400)            # 1 minute – 24 hours
+    session_absolute_ttl_seconds: int = Field(ge=3_600, le=31_536_000)  # 1 hour – 365 days
 
 
 @router.get("/security")
@@ -121,7 +122,7 @@ async def get_security(
     _=Depends(require_perm(P.SETTINGS_READ)),
     pdb: AsyncSession = Depends(get_platform_db),
 ) -> dict:
-    """安全策略快照（密码规则，覆盖于出厂默认之上）。"""
+    """Security policy snapshot (password rules, layered on top of the factory defaults)."""
     return await get_security_policy(pdb)
 
 
@@ -131,7 +132,7 @@ async def update_security(
     user: CurrentUser = Depends(require_perm(P.SETTINGS_WRITE)),
     pdb: AsyncSession = Depends(get_platform_db),
 ) -> dict:
-    """保存安全策略（密码最小长度 / 字符类别数）。前后台所有口令校验点立即生效。"""
+    """Save the security policy (minimum password length / number of character classes). Takes effect immediately at every password validation point across the frontend and backend."""
     cfg = {
         "password_min_length": body.password_min_length,
         "password_require_char_classes": body.password_require_char_classes,
@@ -153,7 +154,7 @@ async def update_branding(
     user: CurrentUser = Depends(require_perm(P.SETTINGS_WRITE)),
     pdb: AsyncSession = Depends(get_platform_db),
 ) -> dict:
-    """保存白标（产品名 / 主题色 / 登录副标题 / Logo / 支持链接）。"""
+    """Save white-labeling (product name / accent color / login subtitle / logo / support link)."""
     branding = await get_branding(pdb)
     before = {"product_name": branding.product_name, "accent_color": branding.accent_color}
     branding.product_name = body.product_name
@@ -172,7 +173,7 @@ async def update_branding(
     return {"data": {"ok": True}}
 
 
-# ── SSO（OIDC 企业登录）配置 ──
+# ── SSO (OIDC enterprise login) configuration ──
 SSO_KEY = "sso"
 
 
@@ -181,9 +182,9 @@ class SsoConfigIn(BaseModel):
     enabled: bool = False
     issuer: str = Field(default="", max_length=512)
     client_id: str = Field(default="", max_length=255)
-    client_secret: str = Field(default="", max_length=512)   # 留空 = 沿用既有
+    client_secret: str = Field(default="", max_length=512)   # blank = keep the existing one
     scopes: str = Field(default="openid email profile", max_length=255)
-    label: str = Field(default="企业 SSO", max_length=64)
+    label: str = Field(default="Enterprise SSO", max_length=64)
 
 
 @router.get("/sso")
@@ -192,7 +193,7 @@ async def get_sso(_=Depends(require_perm(P.SETTINGS_READ)),
     cfg = await get_setting(pdb, SSO_KEY) or {}
     return {"data": {"enabled": bool(cfg.get("enabled")), "issuer": cfg.get("issuer", ""),
                      "client_id": cfg.get("client_id", ""), "scopes": cfg.get("scopes", "openid email profile"),
-                     "label": cfg.get("label", "企业 SSO"), "has_secret": bool(cfg.get("client_secret"))}}
+                     "label": cfg.get("label", "Enterprise SSO"), "has_secret": bool(cfg.get("client_secret"))}}
 
 
 @router.patch("/sso")

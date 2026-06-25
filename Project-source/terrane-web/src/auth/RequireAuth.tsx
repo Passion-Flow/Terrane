@@ -1,4 +1,4 @@
-/** 受保护路由守卫 —— 未登录重定向 /<lang>/login；loading 显占位避免闪重定向。 */
+/** Protected route guard — redirects to /<lang>/login when not logged in; shows a placeholder while loading to avoid a redirect flash. */
 
 import { Navigate, Outlet, useParams } from "react-router";
 import { useTranslation } from "react-i18next";

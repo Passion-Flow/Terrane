@@ -1,4 +1,4 @@
-"""本地开发入口：python main.py。"""
+"""Local development entry point: python main.py."""
 
 from __future__ import annotations
 

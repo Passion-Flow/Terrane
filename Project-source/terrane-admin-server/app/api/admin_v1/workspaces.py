@@ -1,6 +1,7 @@
-"""后台工作区列表 API（平台库 terrane_main：workspaces + memberships 计数）。
+"""Admin workspace list API (platform database terrane_main: workspaces + memberships count).
 
-挂 /admin-api/v1/workspaces。权限 WORKSPACE_READ（super_admin + admin）。页码分页 + 名称/slug 搜索。
+Mounted at /admin-api/v1/workspaces. Permission WORKSPACE_READ (super_admin + admin).
+Page-number pagination + name/slug search.
 """
 
 from __future__ import annotations
@@ -102,13 +103,13 @@ async def delete_workspace(
     user: CurrentUser = Depends(require_perm(P.WORKSPACE_WRITE)),
     db: AsyncSession = Depends(get_platform_db),
 ) -> dict:
-    """硬删除工作区（铁律：真删 + FK 级联，连带删除其下用户/成员）。"""
+    """Hard-delete a workspace (rule: real delete + FK cascade, also deleting its users/members)."""
     ws = await _get_ws(db, ws_id)
     await audit_service.record(
         db, action="workspace.delete", actor_id=user.user_id, actor_name=user.name,
         target_type="workspace", target_id=str(ws.id),
         before={"name": ws.name, "kind": ws.kind}, **audit_ctx(request))
-    await db.delete(ws)  # 级联删 users + memberships（ON DELETE CASCADE）
+    await db.delete(ws)  # cascades to users + memberships (ON DELETE CASCADE)
     await db.commit()
     log.info("workspace_deleted", workspace_id=ws_id, actor_id=user.user_id)
     return {"ok": True}
@@ -117,7 +118,7 @@ async def delete_workspace(
 @router.get("/workspaces")
 async def list_workspaces(
     _=Depends(require_perm(P.WORKSPACE_READ)),
-    q: str | None = Query(default=None, description="按名称/slug 模糊搜索"),
+    q: str | None = Query(default=None, description="Fuzzy search by name/slug"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_platform_db),
@@ -134,7 +135,7 @@ async def list_workspaces(
         .order_by(Workspace.created_at.desc())
         .limit(page_size).offset((page - 1) * page_size))).scalars().all()
 
-    # 当前页工作区的成员计数（一次聚合查询）。
+    # Member counts for the workspaces on the current page (single aggregate query).
     ws_ids = [w.id for w in rows]
     counts: dict = {}
     if ws_ids:

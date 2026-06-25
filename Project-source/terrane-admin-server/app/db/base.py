@@ -1,6 +1,6 @@
-"""SQLAlchemy 2.x declarative base + 共享 mixin（照搬 Forge app/db/base.py）。
+"""SQLAlchemy 2.x declarative base + shared mixins (ported from Forge app/db/base.py).
 
-Terrane admin-server 单租户后台地基，不带 workspace_id。
+Terrane admin-server single-tenant backend foundation, without workspace_id.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.core.ids import uuid7
 
-# 可移植 JSON 列：postgres 用 JSONB，其他方言回退 JSON。
+# Portable JSON column: postgres uses JSONB, other dialects fall back to JSON.
 JSONType = JSONB().with_variant(JSON(), "mysql", "oracle")
 
 

@@ -1,8 +1,8 @@
-"""后台 License 区 — 状态卡 + 粘贴激活（licensing.md：锁定态例外路径）。
+"""Admin License section — status card + paste-to-activate (licensing.md: locked-state exception path).
 
-阶段①边界：产品已激活（unlocked）时替换 License 需要超管权限，认证体系在阶段②落地，
-故本阶段对"已激活后再次激活"一律 403 AUTH_REQUIRED（fail-closed，不开放无鉴权替换）。
-审计事件本阶段走结构化日志，阶段②接入 audit_logs 表（同事务）。
+Stage 1 boundary: once the product is activated (unlocked), replacing the License requires super admin permission, but the auth system only lands in stage 2,
+so in this stage any "re-activation after already activated" returns 403 AUTH_REQUIRED (fail-closed; unauthenticated replacement is not opened up).
+Audit events go to structured logs in this stage; stage 2 wires in the audit_logs table (same transaction).
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ class ActivateRequest(BaseModel):
 
 
 class _RateLimiter:
-    """激活接口每 IP 滑动窗口限频（单实例后台足够；防爆破签名/短码）。"""
+    """Per-IP sliding-window rate limit for the activation endpoint (sufficient for a single-instance admin; guards against brute-forcing signatures/short codes)."""
 
     def __init__(self, limit_per_minute: int) -> None:
         self._limit = limit_per_minute
@@ -91,15 +91,15 @@ def _days_left(active_until: str | None) -> int | None:
 
 
 def _issued_from_id(license_id: str | None) -> str | None:
-    """active_from 兜底:license_id 是 uuid7,前 48 位为创建毫秒时间戳 → 反解作生效时间。
+    """active_from fallback: license_id is a uuid7 whose top 48 bits are the creation timestamp in ms -> decode it as the effective time.
 
-    在线租约(edge lease)只带 active_until 不带 active_from,但 license_id 恒在且稳定,
-    其 uuid7 时间戳即该证签发/生效时刻,据此保证「生效时间」绝不为空。
+    An online lease (edge lease) carries only active_until, not active_from, but license_id is always present and stable,
+    and its uuid7 timestamp is exactly the issue/effective moment of that license, which guarantees the "effective time" is never empty.
     """
     if not license_id:
         return None
     try:
-        ms = uuid.UUID(license_id).int >> 80  # uuid7 高 48 位 = unix 毫秒
+        ms = uuid.UUID(license_id).int >> 80  # uuid7 top 48 bits = unix milliseconds
     except (ValueError, AttributeError):
         return None
     if ms <= 0:
@@ -110,10 +110,10 @@ def _issued_from_id(license_id: str | None) -> str | None:
 def _card(state: LicenseState) -> dict:
     verdict, payload = state.verdict, state.verdict.payload or {}
     return {
-        "required": state.required,                # 开源版 false → 前端隐藏激活/徽章、守卫放行
+        "required": state.required,                # open-source build: false -> frontend hides activation/badge, guard passes through
         "status": verdict.status,
         "unlocked": verdict.unlocked,
-        "fingerprint": state.fingerprint,          # 激活页显著展示的部署/集群 ID
+        "fingerprint": state.fingerprint,          # deployment/cluster ID prominently shown on the activation page
         "license_id_masked": _mask(payload.get("license_id")),
         "cluster_id_masked": _mask(payload.get("cluster_id")),
         "customer": payload.get("customer"),
@@ -134,7 +134,7 @@ def _activate(request: Request, method: str, credential: str, *, authorized: boo
     _rate_limit(request)
     state: LicenseState = request.app.state.license
     if state.unlocked and not authorized:
-        # 已激活后的替换需要超管鉴权（locked 态免登激活;已激活态须超管）。
+        # Replacement after activation requires super admin auth (locked state allows login-free activation; activated state requires super admin).
         raise HTTPException(status_code=403, detail={
             "code": "AUTH_REQUIRED",
             "message": "Replacing an active license requires super admin authentication.",
@@ -158,8 +158,8 @@ def _activate(request: Request, method: str, credential: str, *, authorized: boo
 @router.get("")
 async def license_card(request: Request) -> dict:
     state = request.app.state.license
-    # 节流重验：锁定态 ≤4s（激活近即时反映，不每次轮询都打 edge——防限流/死循环）；
-    # active 态 ≤8s（吊销近即时反映）。串行锁已保证不并发重入。
+    # Throttled re-verification: locked state <=4s (activation reflects near-instantly, without hitting edge on every poll -- avoids rate limiting / tight loops);
+    # active state <=8s (revocation reflects near-instantly). The serial lock already prevents concurrent re-entry.
     await asyncio.to_thread(state.verify_if_stale, 4.0 if not state.unlocked else 8.0)
     return {"data": _card(state), "request_id": request.state.request_id}
 
@@ -169,7 +169,7 @@ async def activate(request: Request, body: ActivateRequest) -> dict:
     state: LicenseState = request.app.state.license
     authorized = False
     if state.unlocked:
-        # 已激活态替换 → 须超管会话（locked 态不要求,反死锁）。
+        # Replacement in the activated state -> requires a super admin session (not required in the locked state, to avoid a deadlock).
         try:
             user = await get_current_user(request)
         except BizError:

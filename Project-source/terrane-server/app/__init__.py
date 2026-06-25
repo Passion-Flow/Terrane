@@ -1,7 +1,8 @@
-"""Terrane 前台业务控制面（terrane-api）。
+"""Terrane user-facing business control plane (terrane-api).
 
-vendored 第三方包（Forge Verifier SDK）置于 app/vendor，按原包名 import：
-SDK 内部使用绝对导入（`from forge_verifier import …`），因此把 vendor 目录加入 sys.path。
+Vendored third-party packages (the Forge Verifier SDK) live in app/vendor and are
+imported under their original package names. The SDK uses absolute imports internally
+(`from forge_verifier import …`), so the vendor directory is added to sys.path.
 """
 
 from __future__ import annotations

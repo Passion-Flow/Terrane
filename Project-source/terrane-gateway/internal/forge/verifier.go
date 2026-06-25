@@ -56,7 +56,7 @@ const (
 	StatusLocked           = "locked"
 )
 
-var lockMessage = map[string]string{"zh-CN": "需要激活许可证.", "en": "License activation required."}
+var lockMessage = map[string]string{"zh-CN": "License activation required.", "en": "License activation required."}
 
 // Verdict is the embeddable license check result. fail-closed: any anomaly => locked.
 type Verdict struct {

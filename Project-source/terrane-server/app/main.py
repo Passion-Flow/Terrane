@@ -1,6 +1,7 @@
-"""terrane-api 应用工厂 — 阶段①：License gating（development-discipline 阶段顺序）。
+"""terrane-api application factory — Phase 1: License gating (development-discipline phasing).
 
-阶段①边界：仅 License 锁定态 + 前台状态只读 + 探针。认证/业务模块在后续阶段接入。
+Phase 1 scope: License lock state + read-only frontend status + probes only.
+Authentication and business modules are wired in during later phases.
 """
 
 from __future__ import annotations
@@ -56,15 +57,15 @@ def create_app() -> FastAPI:
 
     app.include_router(probes.router)
     app.include_router(license_api.router)
-    app.include_router(branding_api.router)  # 公开品牌（免登录/锁定态可取，前台 Logo/标题/登录页用）
-    app.include_router(auth_api.router)  # 阶段②：前台用户认证（register/login/verify/reset）
-    app.include_router(kb_api.router)  # 阶段④：知识库 CRUD（平台库 terrane_main）
-    app.include_router(mcp_api.router)  # MCP Server：知识库暴露为 MCP 工具（Bearer 鉴权）
-    app.include_router(external_api.router)  # External Knowledge API：Dify/Coze/n8n 等外部应用接入（Bearer 鉴权）
-    app.include_router(memories_api.router)  # 记忆系统：per-user 记忆（抽取/唤回）
-    app.include_router(models_api.router)  # 可用模型：前台「模型设置」下拉选（同步后台渠道）
-    app.include_router(assistant_api.router)  # 个人 AI 助手：跨库检索+记忆+持久化对话
-    app.include_router(sso_api.router)  # SSO：OIDC 企业登录（授权码流）
+    app.include_router(branding_api.router)  # Public branding (no login / available while locked; used for frontend logo/title/login page)
+    app.include_router(auth_api.router)  # Phase 2: frontend user authentication (register/login/verify/reset)
+    app.include_router(kb_api.router)  # Phase 4: knowledge base CRUD (platform database terrane_main)
+    app.include_router(mcp_api.router)  # MCP Server: knowledge bases exposed as MCP tools (Bearer auth)
+    app.include_router(external_api.router)  # External Knowledge API: integration for external apps such as Dify/Coze/n8n (Bearer auth)
+    app.include_router(memories_api.router)  # Memory system: per-user memory (extraction/recall)
+    app.include_router(models_api.router)  # Available models: frontend "Model Settings" dropdown (synced with backend channels)
+    app.include_router(assistant_api.router)  # Personal AI assistant: cross-database retrieval + memory + persisted conversations
+    app.include_router(sso_api.router)  # SSO: OIDC enterprise login (authorization code flow)
 
     @app.exception_handler(BizError)
     async def biz_error_handler(request: Request, exc: BizError) -> JSONResponse:
@@ -84,7 +85,7 @@ def create_app() -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request,
                                            exc: RequestValidationError) -> JSONResponse:
-        # 统一错误信封（error-codes.md）—— 不暴露 FastAPI 默认 {"detail": [...]} 结构。
+        # Unified error envelope (error-codes.md) — does not expose FastAPI's default {"detail": [...]} structure.
         request_id = getattr(request.state, "request_id", "")
         fields = [{"field": ".".join(str(p) for p in err.get("loc", [])[1:]),
                    "type": err.get("type", "")} for err in exc.errors()]

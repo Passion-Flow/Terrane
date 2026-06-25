@@ -1,4 +1,4 @@
-"""terrane-admin-api 应用工厂 — 阶段①：License gating（后台 = 激活写入方）。"""
+"""terrane-admin-api application factory — Stage 1: License gating (admin = the party that writes activation)."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ async def _lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.terrane_log_level)
-    assert_registry_consistent()  # 启动自检：角色引用的权限必须已注册
+    assert_registry_consistent()  # startup self-check: permissions referenced by roles must already be registered
     app = FastAPI(title="Terrane Admin API", version="1.0.0",
                   lifespan=_lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.license = LicenseState(settings)
@@ -50,16 +50,16 @@ def create_app() -> FastAPI:
 
     app.include_router(probes.router)
     app.include_router(license_api.router)
-    app.include_router(branding_api.router)  # 公开品牌（免登录/锁定态可取，登录页/侧边栏用）
-    app.include_router(auth_api.router)  # 阶段②：后台认证（login/logout/me）
-    app.include_router(wizard_api.router)  # 阶段②：初始化向导（平台库 terrane_main）
-    app.include_router(audit_logs_api.router)  # 阶段②：审计日志查询（平台库 terrane_main）
-    app.include_router(workspaces_api.router)  # 阶段②：工作区列表（平台库 terrane_main）
-    app.include_router(members_api.router)  # 阶段②：成员/前台用户列表（平台库 terrane_main）
-    app.include_router(operators_api.router)  # 阶段②：后台操作员管理（管理库 terrane_admin）
-    app.include_router(settings_api.router)  # 阶段②：后台设置（邮件/品牌，平台库 terrane_main）
-    app.include_router(channels_api.router)  # 阶段③：模型渠道（管理库 terrane_admin）
-    app.include_router(kb_overview_api.router)  # 阶段④：后台库总览（平台俯视,只读元数据）
+    app.include_router(branding_api.router)  # public branding (available without login / in locked state, used by login page/sidebar)
+    app.include_router(auth_api.router)  # Stage 2: admin authentication (login/logout/me)
+    app.include_router(wizard_api.router)  # Stage 2: setup wizard (platform DB terrane_main)
+    app.include_router(audit_logs_api.router)  # Stage 2: audit log query (platform DB terrane_main)
+    app.include_router(workspaces_api.router)  # Stage 2: workspace list (platform DB terrane_main)
+    app.include_router(members_api.router)  # Stage 2: member / frontend-user list (platform DB terrane_main)
+    app.include_router(operators_api.router)  # Stage 2: admin operator management (admin DB terrane_admin)
+    app.include_router(settings_api.router)  # Stage 2: admin settings (email/branding, platform DB terrane_main)
+    app.include_router(channels_api.router)  # Stage 3: model channels (admin DB terrane_admin)
+    app.include_router(kb_overview_api.router)  # Stage 4: admin knowledge-base overview (platform overview, read-only metadata)
 
     @app.exception_handler(BizError)
     async def biz_error_handler(request: Request, exc: BizError) -> JSONResponse:

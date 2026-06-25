@@ -1,10 +1,11 @@
-"""memories（平台库 terrane_main：per-user 记忆,语义唤回）
+"""memories (platform DB terrane_main: per-user memory, semantic recall)
 
 Revision ID: 000008
 Revises: 000007
 Create Date: 2026-06-20
 
-记忆严格 per-user(user_id),永不跨用户共享。embedding(halfvec 1024)做语义唤回。硬删除随 user 级联。
+Memory is strictly per-user (user_id), never shared across users. embedding (halfvec 1024) drives semantic
+recall. Hard delete cascades from user.
 """
 from __future__ import annotations
 

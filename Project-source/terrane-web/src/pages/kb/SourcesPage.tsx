@@ -1,5 +1,5 @@
-/** 数据源子页 —— 源列表(分档上传 fast/standard/high、解析状态轮询、重解析、type-to-confirm 删除)。
- *  默认进入页内容的核心。 */
+/** Sources subpage — source list (tiered upload fast/standard/high, parse-status polling, reparse, type-to-confirm delete).
+ *  The core content of the default landing page. */
 
 import {
   ArrowsClockwise, CircleNotch, Eye, FileText, FunnelSimple, MagnifyingGlass, Plus, Trash,
@@ -52,7 +52,7 @@ export function SourcesPage() {
   const [delFor, setDelFor] = useState<KbSource | null>(null);
   const [delInput, setDelInput] = useState("");
 
-  // 轮询:有 pending/parsing 的源时每 ~2.5s 刷新源列表
+  // Polling: while any source is pending/parsing, refresh the source list every ~2.5s
   const hasParsing = useMemo(() => sources.some((s) => PARSING.has(s.status)), [sources]);
   useEffect(() => {
     if (!hasParsing) return;
@@ -211,7 +211,7 @@ export function SourcesPage() {
 
       <input ref={fileRef} type="file" hidden accept=".txt,.md,.markdown,.csv,.json,.log,.pdf,.docx,.xlsx,.pptx,.mp4,.mov,.avi,.webm,.mkv,text/*,video/*" onChange={onFile} />
 
-      {/* 上传 — 选解析档位 */}
+      {/* Upload — choose parse tier */}
       <Modal open={uploadOpen} onClose={() => !uploading && setUploadOpen(false)} title={t("kb.uploadTitle")} desc={t("kb.uploadAccept")}>
         <div className="space-y-3">
           <p className="text-sm font-medium text-ink">{t("kb.uploadTierLabel")}</p>
@@ -232,7 +232,7 @@ export function SourcesPage() {
         </div>
       </Modal>
 
-      {/* 重新解析 */}
+      {/* Reparse */}
       <Modal open={!!reparseFor} onClose={() => !reparsing && setReparseFor(null)}
         title={reparseFor ? t("kb.reparseTitle", { name: reparseFor.title }) : ""} desc={t("kb.reparseDesc")}
         footer={
@@ -250,7 +250,7 @@ export function SourcesPage() {
         </div>
       </Modal>
 
-      {/* 删除源 — type-to-confirm */}
+      {/* Delete source — type-to-confirm */}
       <Modal open={!!delFor} onClose={() => { setDelFor(null); setDelInput(""); }} title={t("kb.deleteSource")}
         desc={delFor ? t("kb.confirmDeleteSource", { name: delFor.title }) : ""}
         footer={
@@ -264,7 +264,7 @@ export function SourcesPage() {
           <input value={delInput} onChange={(e) => setDelInput(e.target.value)} autoFocus className={`mt-1.5 ${field}`} /></label>
       </Modal>
 
-      {/* 添加文本 */}
+      {/* Add text */}
       <Modal open={open} onClose={() => setOpen(false)} title={t("kb.addTextTitle")} size="lg"
         footer={
           <>

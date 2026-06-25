@@ -1,4 +1,4 @@
-/** 个人 AI 助手 API —— 跨库检索+记忆+持久化对话。SSE 流式。 */
+/** Personal AI assistant API — cross-KB retrieval + memory + persistent conversations. SSE streaming. */
 
 import { request } from "@/lib/api";
 import { apiBase } from "@/lib/config";

@@ -1,4 +1,4 @@
-"""火山引擎 TOS 经其 S3 兼容端点（tos-s3-<region>.volces.com）。"""
+"""Volcengine TOS via its S3-compatible endpoint (tos-s3-<region>.volces.com)."""
 
 from __future__ import annotations
 

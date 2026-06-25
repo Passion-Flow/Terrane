@@ -1,4 +1,4 @@
-/** 知识库 API（前台 /api/v1/knowledge-bases）。cookie 鉴权 → credentials:include。 */
+/** Knowledge base API (frontend /api/v1/knowledge-bases). Cookie auth → credentials:include. */
 
 import { request } from "@/lib/api";
 import { apiBase } from "@/lib/config";
@@ -109,7 +109,7 @@ export async function uploadSourceFile(
   return resp.json();
 }
 
-/** 重新解析失败/想换档的源(form: tier),返回 {id, status}。 */
+/** Re-parse a source that failed or whose tier should change (form: tier); returns {id, status}. */
 export async function reparseSource(
   kbId: string, sourceId: string, tier: ParseTier = "standard",
 ): Promise<{ id?: string; status?: string }> {
@@ -125,19 +125,19 @@ export async function reparseSource(
 export const getSource = (kbId: string, sourceId: string) =>
   request<KbSourceDetail>(`/api/v1/knowledge-bases/${kbId}/sources/${sourceId}`, { credentials: "include" });
 
-/** 逐页版面图清单(每页 WebP 的页码 + 像素宽高)。 */
+/** Per-page layout image manifest (page number + pixel width/height of each page's WebP). */
 export const getSourcePages = (kbId: string, sourceId: string) =>
   request<SourcePages>(`/api/v1/knowledge-bases/${kbId}/sources/${sourceId}/pages`, { credentials: "include" });
 
-/** 单页 WebP 版面图 URL(同源带 cookie,可直接当 <img src>)。 */
+/** Single-page WebP layout image URL (same-origin with cookie, usable directly as <img src>). */
 export const sourcePageUrl = (kbId: string, sourceId: string, n: number) =>
   `${apiBase()}/api/v1/knowledge-bases/${kbId}/sources/${sourceId}/page/${n}`;
 
-/** 原文件 URL(可直接当 <img src> 或 <a href> 下载)。 */
+/** Original file URL (usable directly as <img src> or as an <a href> download). */
 export const sourceOriginalUrl = (kbId: string, sourceId: string) =>
   `${apiBase()}/api/v1/knowledge-bases/${kbId}/sources/${sourceId}/original`;
 
-/** 取原始文件并生成本地 blob URL(供左侧原文渲染:PDF iframe / 图片 img)。用完记得 revoke。 */
+/** Fetch the original file and create a local blob URL (for rendering the source on the left: PDF iframe / image img). Remember to revoke when done. */
 export async function fetchSourceOriginal(kbId: string, sourceId: string): Promise<string> {
   const resp = await fetch(`${apiBase()}/api/v1/knowledge-bases/${kbId}/sources/${sourceId}/original`, { credentials: "include" });
   if (!resp.ok) throw new Error("no original");
@@ -210,7 +210,7 @@ export interface KbStats {
 export interface KbLintIssue { level: "info" | "warn" | "error"; code: string; msg: string }
 export interface KbLint { score: number; stats: KbStats; issues: KbLintIssue[] }
 
-/** 库体检 / 统计(源/切片/嵌入/图谱节点 + 问题清单 + 评分)。 */
+/** KB health check / statistics (sources / chunks / embeddings / graph nodes + issue list + score). */
 export const lintKb = (kbId: string) =>
   request<KbLint>(`/api/v1/knowledge-bases/${kbId}/lint`, { credentials: "include" });
 
@@ -223,8 +223,8 @@ export interface ChatHandlers {
   onDone?: () => void;
 }
 
-/** RAG 流式问答:消费 SSE(event: sources / delta / error / done)。
- *  传 sourceId → 仅基于该文档检索问答(文档级问答)。 */
+/** RAG streaming Q&A: consumes SSE (event: sources / delta / error / done).
+ *  Pass sourceId → retrieve and answer based only on that document (document-level Q&A). */
 export async function streamChat(kbId: string, query: string, h: ChatHandlers, signal?: AbortSignal, sourceId?: string): Promise<void> {
   const resp = await fetch(`${apiBase()}/api/v1/knowledge-bases/${kbId}/chat`, {
     method: "POST", credentials: "include",

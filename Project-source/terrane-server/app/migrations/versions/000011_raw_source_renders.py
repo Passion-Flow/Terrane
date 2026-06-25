@@ -1,12 +1,13 @@
-"""raw_source_renders（平台库 terrane_main：原文逐页 WebP 版面图渲染状态）+ 原文 data 可空
+"""raw_source_renders (platform DB terrane_main: render status of per-page WebP layout images of the original) + make original data nullable
 
 Revision ID: 000011
 Revises: 000010
 Create Date: 2026-06-24
 
-页面图字节存对象存储（pages/{rid}/{n}.webp），本表只存页数 + 每页尺寸，前端按视口懒加载单页。
-同时把 raw_source_originals.data 改可空：原文字节优先入对象存储（originals/{rid}），data 仅旧数据/降级用。
-随 raw_source 硬删级联。
+Page-image bytes are stored in object storage (pages/{rid}/{n}.webp); this table only stores page count +
+per-page dimensions, and the front end lazy-loads single pages by viewport.
+Also makes raw_source_originals.data nullable: original bytes go to object storage first (originals/{rid}),
+and data is only used for legacy data / fallback. Hard-deleted by cascade from raw_source.
 """
 from __future__ import annotations
 

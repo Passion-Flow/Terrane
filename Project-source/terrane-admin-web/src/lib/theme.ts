@@ -1,4 +1,4 @@
-/** 主题（浅色/暗色/跟随系统）— localStorage 持久化 + html.dark class 驱动。 */
+/** Theme (light / dark / follow system) — persisted to localStorage and driven by the html.dark class. */
 
 export type Theme = "light" | "dark" | "system";
 export const THEMES: readonly Theme[] = ["light", "dark", "system"];

@@ -1,7 +1,8 @@
-"""FrontUser（平台库 terrane_main：users，前台知识库用户）— ORM 映射拷贝（admin 只读管理）。
+"""FrontUser (platform DB terrane_main: users, frontend knowledge-base users) — ORM mapping copy (admin manages read-only).
 
-类名用 FrontUser 区分 admin 操作员 User，__tablename__ 仍是 'users'。
-schema 权威在 terrane-server/app/models/user.py + 迁移 000001。密码哈希等敏感列不对外暴露。
+The class is named FrontUser to distinguish it from the admin operator User; __tablename__ is still 'users'.
+The authoritative schema lives in terrane-server/app/models/user.py + migration 000001. Sensitive columns
+such as the password hash are not exposed externally.
 """
 
 from __future__ import annotations

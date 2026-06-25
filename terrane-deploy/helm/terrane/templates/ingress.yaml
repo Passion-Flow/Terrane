@@ -18,7 +18,7 @@ spec:
       secretName: {{ .Values.ingress.tls.adminSecretName }}
   {{- end }}
   rules:
-    - host: {{ .Values.global.domain | quote }}            # 前台
+    - host: {{ .Values.global.domain | quote }}            # front app
       http:
         paths:
           - path: /
@@ -27,7 +27,7 @@ spec:
               service:
                 name: {{ include "terrane.fullname" . }}-web
                 port: { number: 80 }
-    - host: {{ .Values.global.adminDomain | quote }}       # 后台
+    - host: {{ .Values.global.adminDomain | quote }}       # admin console
       http:
         paths:
           - path: /

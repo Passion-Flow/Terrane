@@ -1,5 +1,5 @@
-/** 前台路由 —— URL 路径式 i18n。License 守卫（锁定态 LockedPage）；
- *  公开认证页（login/register/forgot/reset/verify）；受保护工作台首页（RequireAuth）。 */
+/** Frontend routing — URL path-based i18n. License guard (LockedPage when locked);
+ *  public auth pages (login/register/forgot/reset/verify); protected workbench home (RequireAuth). */
 
 import { useEffect, type ReactNode } from "react";
 import { Navigate, Outlet, createBrowserRouter, useParams } from "react-router";
@@ -46,7 +46,7 @@ function LangLayout() {
   return <Outlet />;
 }
 
-/** 已登录访问登录/注册 → 跳工作台。 */
+/** When already logged in and visiting login/register → redirect to the workbench. */
 function GuestOnly({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const { lang } = useParams();
@@ -55,8 +55,10 @@ function GuestOnly({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-/** 无语言前缀的邮件链接（/verify-email、/reset-password）→ 补上浏览器语言前缀并保留 query。
- *  邮件里的链接做成语言无关，前端在此解析语言（否则 /verify-email 会被当作 :lang 而丢掉 token）。 */
+/** Email links without a language prefix (/verify-email, /reset-password) → prepend the browser
+ *  language prefix and preserve the query.
+ *  Links in emails are kept language-agnostic, with the frontend resolving the language here
+ *  (otherwise /verify-email would be treated as :lang and drop the token). */
 function LangRedirect({ to }: { to: string }) {
   const seg = detectLang(navigator.languages);
   return <Navigate to={`/${seg}/${to}${window.location.search}`} replace />;
@@ -64,14 +66,14 @@ function LangRedirect({ to }: { to: string }) {
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to={`/${detectLang(navigator.languages)}/`} replace /> },
-  // 邮件链接（无语言前缀）补前缀 + 保留 ?token=，避免被 /:lang 吞掉。
+  // Email links (no language prefix): add the prefix and preserve ?token= so they aren't swallowed by /:lang.
   { path: "/verify-email", element: <LangRedirect to="verify-email" /> },
   { path: "/reset-password", element: <LangRedirect to="reset-password" /> },
   {
     path: "/:lang",
     element: <LangLayout />,
     children: [
-      // License 守卫：锁定态全程落 LockedPage。
+      // License guard: when locked, everything lands on LockedPage.
       {
         element: <RequireLicense />,
         children: [
@@ -80,7 +82,7 @@ export const router = createBrowserRouter([
           { path: "forgot-password", element: <ForgotPasswordPage /> },
           { path: "reset-password", element: <ResetPasswordPage /> },
           { path: "verify-email", element: <VerifyEmailPage /> },
-          // 受保护工作台。
+          // Protected workbench.
           {
             element: <RequireAuth />,
             children: [
@@ -98,7 +100,7 @@ export const router = createBrowserRouter([
                   { path: "account", element: <Navigate to="../settings/security" replace /> },
                 ],
               },
-              // 知识库外壳（Dify 式 IA）：进入某个库 → 左侧变库功能导航，子页独立。
+              // Knowledge base shell (Dify-style IA): entering a KB → the left side switches to the KB's feature nav, with sub-pages as standalone routes.
               {
                 path: "kb/:kbId",
                 element: <KbLayout />,
@@ -114,7 +116,7 @@ export const router = createBrowserRouter([
                   { path: "settings", element: <KbSettingsPage /> },
                 ],
               },
-              // 源整页预览（不带库侧栏，自带返回）。
+              // Full-page source preview (without the KB sidebar, with its own back button).
               { path: "kb/:kbId/source/:sourceId", element: <SourcePreviewPage /> },
             ],
           },

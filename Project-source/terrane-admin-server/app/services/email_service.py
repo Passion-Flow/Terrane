@@ -1,20 +1,23 @@
-"""邮件服务（通用 SMTP）— 覆盖一切支持 SMTP 的邮箱/ESP。
+"""Email service (generic SMTP) — covers any SMTP-capable mailbox/ESP.
 
-一份健壮的 SMTP 发信实现即可覆盖：raw SMTP + 163/126/QQ/腾讯企业/阿里/Gmail/Outlook…
-+ SES/SendGrid/Aliyun DM/Tencent SES/Mailgun/Postmark/Resend/Brevo/Mailjet 等 ESP 的 SMTP 中继
-（9/10 ESP 都提供 SMTP relay，故无需逐个 API 适配器；API 仅在需要模板/事件/批量时才上）。
+A single robust SMTP sending implementation covers: raw SMTP + 163/126/QQ/Tencent Enterprise/Aliyun/Gmail/Outlook...
+plus the SMTP relays of ESPs such as SES/SendGrid/Aliyun DM/Tencent SES/Mailgun/Postmark/Resend/Brevo/Mailjet
+(9 out of 10 ESPs offer an SMTP relay, so per-provider API adapters are unnecessary; APIs are only
+brought in when templates/events/batching are needed).
 
-连接模式（encryption）：
-  ssl       隐式 TLS（连上即加密；465/994，国内邮箱默认）→ SMTP_SSL
-  starttls  明文连接后 STARTTLS 升级（587）→ SMTP + starttls + 二次 EHLO（RFC 3207 强制）
-  none      明文（25）；若服务端通告 STARTTLS 则机会性升级
-  auto      按端口推断：465/994→ssl，587→starttls，其它→none
+Connection modes (encryption):
+  ssl       Implicit TLS (encrypted on connect; 465/994, the default for domestic mailboxes) -> SMTP_SSL
+  starttls  Plaintext connect then STARTTLS upgrade (587) -> SMTP + starttls + a second EHLO (mandated by RFC 3207)
+  none      Plaintext (25); opportunistic upgrade if the server advertises STARTTLS
+  auto      Inferred from the port: 465/994 -> ssl, 587 -> starttls, otherwise -> none
 
-发件人：From 头支持显示名（"Terrane <addr>"），信封 MAIL FROM 强制=发件地址
-（163/QQ 等要求 From=认证账号，否则 553/554 DT:SUM 拒发）。
+Sender: the From header supports a display name ("Terrane <addr>"); the envelope MAIL FROM is forced
+to the sender address (163/QQ and others require From = the authenticated account, otherwise they
+reject with 553/554 DT:SUM).
 
-错误归一：把 SMTP 535/553/554/530/421/450 等映射成可操作的 hint（前端据此给精准提示）。
-跑线程池（asyncio.to_thread）避免阻塞事件循环；stdlib smtplib，零三方依赖。
+Error normalization: maps SMTP 535/553/554/530/421/450 and so on into actionable hints (the frontend
+uses them to give precise guidance).
+Runs in a thread pool (asyncio.to_thread) to avoid blocking the event loop; stdlib smtplib, zero third-party dependencies.
 """
 
 from __future__ import annotations
@@ -32,11 +35,11 @@ _IMPLICIT_SSL_PORTS = frozenset({465, 994, 2465})
 
 
 def resolve_encryption(encryption: str | None, port: int) -> str:
-    """归一连接模式；auto 按端口推断。"""
+    """Normalize the connection mode; auto is inferred from the port."""
     enc = (encryption or "auto").strip().lower()
     if enc in ("ssl", "starttls", "none"):
         return enc
-    # auto / 未知 → 按端口
+    # auto / unknown -> by port
     if port in _IMPLICIT_SSL_PORTS:
         return "ssl"
     if port == 587:
@@ -47,7 +50,7 @@ def resolve_encryption(encryption: str | None, port: int) -> str:
 def _context(allow_insecure: bool) -> ssl.SSLContext:
     ctx = ssl.create_default_context()
     if allow_insecure:
-        # 内网自签证书场景：顺序要先关 hostname 再降级 verify（启用 hostname 校验时不可降级）。
+        # Self-signed certificate on an internal network: disable hostname checking first, then downgrade verify (verify cannot be downgraded while hostname checking is enabled).
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
     return ctx
@@ -57,7 +60,7 @@ def _build_message(cfg: dict[str, Any], to: str, subject: str, body: str) -> tup
     from_addr = (cfg.get("from_address") or cfg.get("username") or "no-reply@terrane.local").strip()
     from_name = (cfg.get("from_name") or "Terrane").strip()
     msg = EmailMessage()
-    msg["From"] = formataddr((from_name, from_addr))  # 非 ASCII 显示名自动 RFC2047 编码
+    msg["From"] = formataddr((from_name, from_addr))  # Non-ASCII display names are automatically RFC2047-encoded
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(body)
@@ -70,7 +73,7 @@ def _send_sync(cfg: dict[str, Any], to: str, subject: str, body: str) -> None:
     enc = resolve_encryption(cfg.get("encryption"), port)
     username = cfg.get("username") or ""
     from app.services import crypto
-    password = crypto.decrypt(cfg.get("password"))   # KEK 解密(兼容历史明文)
+    password = crypto.decrypt(cfg.get("password"))   # KEK decryption (compatible with legacy plaintext)
     allow_insecure = bool(cfg.get("allow_insecure"))
     timeout = float(cfg.get("timeout") or 20)
     ctx = _context(allow_insecure)
@@ -82,39 +85,39 @@ def _send_sync(cfg: dict[str, Any], to: str, subject: str, body: str) -> None:
         smtp = smtplib.SMTP(host, port, timeout=timeout)
     try:
         smtp.ehlo()
-        # starttls：显式要求 → 升级；none 且服务端通告 STARTTLS → 机会性升级。
+        # starttls: explicitly requested -> upgrade; none and the server advertises STARTTLS -> opportunistic upgrade.
         if enc == "starttls" or (enc == "none" and smtp.has_extn("STARTTLS")):
             smtp.starttls(context=ctx)
-            smtp.ehlo()  # RFC 3207：TLS 后必须重发 EHLO 以重读 AUTH 等能力
+            smtp.ehlo()  # RFC 3207: EHLO must be re-sent after TLS to re-read capabilities such as AUTH
         if username:
             smtp.login(username, password)
-        # 信封 MAIL FROM = 发件地址（与 From 头对齐，满足 163/QQ 的同源校验）。
+        # Envelope MAIL FROM = sender address (aligned with the From header to satisfy the same-origin check of 163/QQ).
         smtp.send_message(msg, from_addr=from_addr, to_addrs=[to])
     finally:
         try:
             smtp.quit()
-        except Exception:  # noqa: BLE001 — 关闭异常忽略
+        except Exception:  # noqa: BLE001 — ignore errors on close
             pass
 
 
 def _classify(code: int | None, text: Any) -> str:
-    """SMTP 失败 → 可操作 hint（前端据此给精准提示）。"""
+    """SMTP failure -> actionable hint (the frontend uses it to give precise guidance)."""
     t = (text.decode(errors="ignore") if isinstance(text, bytes) else str(text or "")).upper()
     if code == 535 or "AUTH" in t and code in (530, 535):
-        return "auth_failed"            # 凭据错/该用授权码/应用专用密码
+        return "auth_failed"            # Wrong credentials / should use an authorization code / app-specific password
     if code == 530:
-        return "auth_or_tls_required"   # 需先认证或先 STARTTLS
+        return "auth_or_tls_required"   # Must authenticate first, or run STARTTLS first
     if code == 553 or "DT:SUM" in t or "MUST EQUAL" in t or "AUTHORIZED USER" in t:
-        return "from_not_allowed"       # 发件人须=认证账号（163/QQ）
+        return "from_not_allowed"       # Sender must = the authenticated account (163/QQ)
     if code in (421, 450) or "DT:STC" in t or "MI:STC" in t:
-        return "temporary"              # 限速/暂时不可用，稍后重试
+        return "temporary"              # Rate-limited / temporarily unavailable, retry later
     if code in (550, 554) or "DT:SPM" in t or "SPAM" in t:
-        return "rejected"               # 内容/策略/反垃圾拒收
+        return "rejected"               # Rejected by content / policy / anti-spam
     return "smtp_error"
 
 
 async def send(cfg: dict[str, Any], *, to: str, subject: str, body: str) -> None:
-    """发送一封邮件；失败抛 SYSTEM_UNAVAILABLE（details 带 hint + 脱敏原因）。"""
+    """Send one email; on failure raise SYSTEM_UNAVAILABLE (details carry a hint + a redacted reason)."""
     try:
         await asyncio.to_thread(_send_sync, cfg, to, subject, body)
     except smtplib.SMTPResponseException as exc:
@@ -123,17 +126,17 @@ async def send(cfg: dict[str, Any], *, to: str, subject: str, body: str) -> None
             "smtp_code": exc.smtp_code,
             "reason": (exc.smtp_error.decode(errors="ignore")
                        if isinstance(exc.smtp_error, bytes) else str(exc.smtp_error))[:200]})
-    except smtplib.SMTPAuthenticationError as exc:  # 一般已被上面捕获，兜底
+    except smtplib.SMTPAuthenticationError as exc:  # Usually already caught above; this is a fallback
         raise BizError("SYSTEM_UNAVAILABLE", {"service": "email", "hint": "auth_failed",
                                               "reason": str(exc)[:200]})
     except (smtplib.SMTPException, ssl.SSLError, OSError) as exc:
-        # 连接/TLS/握手类失败（主机端口错、网络不通、证书不符）。
+        # Connection/TLS/handshake failures (wrong host or port, unreachable network, mismatched certificate).
         hint = "tls_failed" if isinstance(exc, ssl.SSLError) else "connect_failed"
         raise BizError("SYSTEM_UNAVAILABLE", {"service": "email", "hint": hint,
                                               "reason": str(exc)[:200]})
 
 
 async def test_smtp(cfg: dict[str, Any], *, to: str) -> None:
-    """测连：发送一封测试邮件，验证配置可达。失败抛 SYSTEM_UNAVAILABLE（含 hint）。"""
-    await send(cfg, to=to, subject="Terrane SMTP 测试",
-               body="这是一封来自 Terrane 初始化向导的 SMTP 测试邮件。收到即代表邮件配置可用。")
+    """Connectivity test: send one test email to verify the configuration is reachable. On failure raise SYSTEM_UNAVAILABLE (with a hint)."""
+    await send(cfg, to=to, subject="Terrane SMTP Test",
+               body="This is an SMTP test email from the Terrane setup wizard. Receiving it means your email configuration is working.")

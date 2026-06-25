@@ -1,25 +1,27 @@
-/** 支持语言集（.agent.md [i18n]：locale 无关架构，支持增量加任意语言含 RTL）。
- * 首发 zh-CN + en（PRD §13.10：是否扩 23 语种为后续细化项；架构已就绪）。 */
+/** Supported language set (.agent.md [i18n]: locale-agnostic architecture, supports
+ * incrementally adding any language including RTL).
+ * Launches with zh-CN + en (PRD §13.10: expanding to 23 languages is a follow-up item;
+ * the architecture is already in place). */
 
 export const SUPPORTED_LANGS = ["zh-CN", "en"] as const;
 export type Lang = (typeof SUPPORTED_LANGS)[number];
 
 export const FALLBACK_LANG: Lang = "zh-CN";
 
-/** 下拉组件展示用：母语名 (母语地区)（i18n.md §4.6：必须下拉组件）。 */
+/** For display in the dropdown component: native name (native region) (i18n.md §4.6: must be a dropdown component). */
 export const LANG_LABELS: Record<Lang, string> = {
   "zh-CN": "简体中文",
   en: "English (United States)",
 };
 
-/** RTL 语言集（首发无，预留）。 */
+/** RTL language set (none at launch, reserved for future use). */
 export const RTL_LANGS: ReadonlySet<string> = new Set(["ar", "fa"]);
 
 export function isSupported(lang: string): lang is Lang {
   return (SUPPORTED_LANGS as readonly string[]).includes(lang);
 }
 
-/** 根路径语言探测：浏览器语言 → 支持集匹配（精确 → 主语言段）→ fallback。 */
+/** Root-path language detection: browser language → match against supported set (exact → primary subtag) → fallback. */
 export function detectLang(candidates: readonly string[]): Lang {
   for (const candidate of candidates) {
     if (isSupported(candidate)) return candidate;

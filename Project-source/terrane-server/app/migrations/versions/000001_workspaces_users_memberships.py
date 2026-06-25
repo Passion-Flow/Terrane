@@ -1,7 +1,7 @@
-"""workspaces / users / memberships create（平台库 terrane_main b2b 基线）
+"""workspaces / users / memberships create (platform DB terrane_main, B2B baseline)
 
-02-database 实体 #1/#2/#3。硬删除铁律：无 deleted_at；FK ON DELETE CASCADE。
-users WS 隔离：(workspace_id,email) 部分唯一不需要（无软删）→ 直接 UNIQUE。
+02-database entities #1/#2/#3. Hard-delete rule: no deleted_at; FK ON DELETE CASCADE.
+users WS isolation: a partial unique on (workspace_id, email) is unnecessary (no soft delete) → plain UNIQUE.
 
 Revision ID: 000001
 Revises:

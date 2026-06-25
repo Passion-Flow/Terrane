@@ -1,4 +1,4 @@
-"""Alembic async env（平台库 terrane_main）— engine 由字段化配置拼装。"""
+"""Alembic async env (platform DB terrane_main) — the engine is assembled from structured config fields."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.db.base import Base
 from app.db.session import dsn_string, get_engine
 
-# 导入所有模型，让 autogenerate / metadata 能看到。
+# Import all models so autogenerate / metadata can see them.
 from app.models import (  # noqa: F401
     audit_log,
     branding,

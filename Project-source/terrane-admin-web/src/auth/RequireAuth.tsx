@@ -1,6 +1,6 @@
-/** 受保护路由守卫 —— 适配数据路由（包装组件 + Outlet）。
- *  loading：显加载占位（避免首屏 /me 未回前闪重定向）；
- *  未登录：重定向到 /<lang>/login；已登录：渲染子树（Outlet）。 */
+/** Protected route guard — adapted for data routers (wrapper component + Outlet).
+ *  loading: show a loading placeholder (avoids a redirect flash before the initial /me returns);
+ *  not logged in: redirect to /<lang>/login; logged in: render the subtree (Outlet). */
 
 import { Navigate, Outlet, useParams } from "react-router";
 import { useTranslation } from "react-i18next";

@@ -1,12 +1,14 @@
-"""对象存储适配器接口 —— 业务代码不直接依赖任何 SDK；每个 provider 实现此接口
-（全 provider 规则：8 个 provider 都必须提供适配器）。
+"""Object storage adapter interface -- business code does not depend on any SDK
+directly; each provider implements this interface (all-provider rule: all 8
+providers must ship an adapter).
 
-统一表面：upload / download / delete / head / list / presigned_upload_url /
-presigned_download_url。Provider 在启动时由 object_storage_type 选定。
+Unified surface: upload / download / delete / head / list / presigned_upload_url /
+presigned_download_url. The provider is selected at startup by object_storage_type.
 
-多数 provider（AWS S3、本地 SeaweedFS、阿里云 OSS、腾讯 COS、火山 TOS、华为 OBS）
-都暴露 S3 兼容 API，因此共用 `S3CompatibleStorage`（boto3），仅 endpoint/region 不同。
-Azure Blob 与 Google Cloud Storage 使用各自原生 SDK。
+Most providers (AWS S3, local SeaweedFS, Aliyun OSS, Tencent COS, Volcengine TOS,
+Huawei OBS) expose an S3-compatible API, so they share `S3CompatibleStorage`
+(boto3) and differ only in endpoint/region. Azure Blob and Google Cloud Storage
+use their own native SDKs.
 """
 
 from __future__ import annotations
@@ -63,7 +65,8 @@ class ObjectStorageAdapter(ABC):
                                      expires: int | None = None) -> str: ...
 
     async def ensure_bucket(self, bucket: str | None = None) -> None:
-        """幂等确保 bucket 存在。默认空操作（filesystem 等无 bucket 概念的 provider）。"""
+        """Idempotently ensure the bucket exists. No-op by default (for providers
+        without a bucket concept, e.g. filesystem)."""
         return None
 
     async def health_check(self) -> bool:
@@ -75,13 +78,15 @@ class ObjectStorageAdapter(ABC):
 
 
 class S3CompatibleStorage(ObjectStorageAdapter):
-    """boto3 实现的适配器，适用于任何 S3 兼容端点（AWS S3、SeaweedFS、OSS、COS、TOS、OBS）。
+    """boto3-based adapter for any S3-compatible endpoint (AWS S3, SeaweedFS, OSS,
+    COS, TOS, OBS).
 
-    子类覆写 `endpoint_url()` / `region()` 注入 provider 默认值；所有阻塞的 boto3 调用
-    用 asyncio.to_thread 卸载到线程，以保持异步契约。
+    Subclasses override `endpoint_url()` / `region()` to inject provider defaults;
+    all blocking boto3 calls are offloaded to a thread via asyncio.to_thread to
+    honor the async contract.
     """
 
-    # 部分 S3 兼容厂商要求非 AWS 寻址风格；子类按需调整。
+    # Some S3-compatible vendors require a non-AWS addressing style; subclasses adjust as needed.
     addressing_style = "auto"
 
     def endpoint_url(self) -> str | None:
@@ -91,7 +96,7 @@ class S3CompatibleStorage(ObjectStorageAdapter):
         return self.settings.object_storage_region or None
 
     def _client(self):
-        # 惰性 import：仅在选用 S3 兼容 provider 时才需要 boto3。
+        # Lazy import: boto3 is only needed when an S3-compatible provider is selected.
         import boto3
         from botocore.config import Config
 
@@ -121,7 +126,7 @@ class S3CompatibleStorage(ObjectStorageAdapter):
             try:
                 c.create_bucket(Bucket=b)
             except ClientError:
-                pass  # 已存在 / 并发创建 / 无权限(云上桶通常预建) → 忽略
+                pass  # already exists / concurrent creation / no permission (cloud buckets are usually pre-provisioned) -> ignore
         await asyncio.to_thread(_do)
 
     async def upload(self, key, data, *, bucket=None, content_type=None, public=False):

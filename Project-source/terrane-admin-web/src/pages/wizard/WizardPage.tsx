@@ -1,6 +1,7 @@
-/** 初始化向导（PRD 4.12.1：License→超管→邮件→Branding→完成）。
- *  超管首登改密后强制进入（RequireSetup 接 wizard 状态）。License/超管步已 done（只读展示）；
- *  邮件/Branding 可填可跳；完成 → 标记 completed 并进 /admin。仅超管可达（后端 PERM_DENIED 兜底）。 */
+/** Setup wizard (PRD 4.12.1: License -> super admin -> email -> branding -> done).
+ *  Forced after the super admin's first-login password change (RequireSetup hooks the wizard state).
+ *  The license/super-admin steps are already done (read-only display); email/branding can be filled in or skipped;
+ *  finishing marks it completed and navigates to /admin. Reachable by super admin only (backend PERM_DENIED as a fallback). */
 
 import { CheckCircle, Circle, PaperPlaneTilt, XCircle } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -67,14 +68,14 @@ export function WizardPage() {
   const seg = lang && isSupported(lang) ? lang : FALLBACK_LANG;
 
   const { data: wiz } = useQuery({ queryKey: ["wizard"], queryFn: getWizard });
-  // 开源版（门控关闭）跳过 License 步：步骤轨不展示 license 项，直接走超管/邮件/Branding。
+  // Open-source edition (gating off) skips the License step: the step rail hides the license item and goes straight to super-admin/email/branding.
   const { data: licenseCard } = useQuery({ queryKey: ["license"], queryFn: getLicenseCard });
   const rail = licenseCard?.required === false ? RAIL.filter((s) => s.key !== "license") : RAIL;
   const [stepIdx, setStepIdx] = useState(0); // 0=email, 1=branding
   const [toast, setToast] = useState<ToastMsg | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // 邮件表单
+  // Email form
   const [presetId, setPresetId] = useState("");
   const [host, setHost] = useState("");
   const [port, setPort] = useState(465);
@@ -84,12 +85,12 @@ export function WizardPage() {
   const [fromAddr, setFromAddr] = useState("");
   const [fromName, setFromName] = useState("Terrane");
   const [allowInsecure, setAllowInsecure] = useState(false);
-  // Branding 表单
+  // Branding form
   const [productName, setProductName] = useState("Terrane");
   const [accent, setAccent] = useState("#0f9b8e");
   const [subtitle, setSubtitle] = useState("");
 
-  // 后端状态回填一次
+  // Hydrate from backend state once
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     if (!wiz || hydrated) return;
@@ -112,7 +113,7 @@ export function WizardPage() {
 
   function err(e: unknown): string {
     if (e instanceof ApiError) {
-      // 邮件类失败带精准 hint（授权码/发件人不符/限速…）→ 优先用 hint 文案。
+      // Email failures carry a precise hint (app password / sender mismatch / rate limit, etc.) -> prefer the hint message.
       const hint = (e.details as { hint?: string } | undefined)?.hint;
       if (hint) return t(`wizard.emailHint.${hint}`, { defaultValue: t(`errors.${e.code}`) });
       return t(`errors.${e.code}`);
@@ -132,7 +133,7 @@ export function WizardPage() {
     if (p.host) setHost(p.host);
     setPort(p.port);
     setEncryption(p.encryption as Encryption);
-    // 锁定发件人=用户名的服务商：发件地址默认跟随用户名（用户改用户名时也跟随）。
+    // For providers that lock the sender to the username: the from address follows the username by default (and updates when the username changes).
   }
 
   async function onSaveEmail(skip: boolean) {
@@ -153,7 +154,7 @@ export function WizardPage() {
   async function onTestEmail() {
     setBusy(true);
     try {
-      await saveEmail(emailPayload());  // 先保存当前邮件配置再测连
+      await saveEmail(emailPayload());  // Save the current email config before testing the connection
       await testEmail(fromAddr || smtpUser);
       setToast({ kind: "success", text: t("wizard.testSent") });
     } catch (e) {
@@ -202,7 +203,7 @@ export function WizardPage() {
       </header>
 
       <main className="mx-auto grid w-full max-w-3xl flex-1 grid-cols-[180px_1fr] gap-10 px-6 py-6">
-        {/* 步骤轨 */}
+        {/* Step rail */}
         <nav className="space-y-3 pt-2">
           {rail.map((s) => {
             const st = statusOf(s.key);
@@ -222,7 +223,7 @@ export function WizardPage() {
           })}
         </nav>
 
-        {/* 当前步骤内容 */}
+        {/* Current step content */}
         <section>
           <h1 className="text-2xl font-bold tracking-tight text-ink">{t("wizard.title")}</h1>
           <p className="mt-1.5 text-sm text-ink-secondary">
@@ -234,7 +235,7 @@ export function WizardPage() {
               <h2 className="text-base font-semibold text-ink">{t("wizard.step.email")}</h2>
               <p className="text-sm text-ink-secondary">{t("wizard.emailDesc")}</p>
 
-              {/* 服务商一键预设 */}
+              {/* One-click provider presets */}
               <label className="block text-sm font-medium text-ink">
                 {t("wizard.provider")}
                 <Select className="mt-1.5" value={presetId} onChange={applyPreset}

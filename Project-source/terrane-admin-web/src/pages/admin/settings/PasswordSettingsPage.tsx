@@ -1,5 +1,5 @@
-/** 设置 → 密码策略。最小长度 / 字符类别数——前后台所有口令校验点统一生效。
- *  与 登录设置 共用 system_settings['security']（GET/PATCH /settings/security 全量），本页只编辑密码子集。 */
+/** Settings → Password policy. Minimum length / number of character classes — applied uniformly at every password validation point across the admin and front-end.
+ *  Shares system_settings['security'] with Login Settings (GET/PATCH /settings/security operates on the full object); this page only edits the password subset. */
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -37,7 +37,7 @@ export function PasswordSettingsPage() {
     if (!query.data) return;
     setBusy(true);
     try {
-      // 全量提交：保留登录/会话子集不变，只改密码子集。
+      // Submit the full object: keep the login/session subset unchanged, edit only the password subset.
       await updateSecurity({
         ...query.data,
         password_min_length: minLength,

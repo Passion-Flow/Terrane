@@ -1,4 +1,4 @@
-"""AWS S3（也服务于任意通过 object_storage_endpoint 指定的通用 S3 兼容端点）。"""
+"""AWS S3 (also serves any generic S3-compatible endpoint specified via object_storage_endpoint)."""
 
 from __future__ import annotations
 

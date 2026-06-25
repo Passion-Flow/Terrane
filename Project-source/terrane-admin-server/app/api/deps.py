@@ -1,4 +1,4 @@
-"""FastAPI 依赖 — DB session、当前用户（从服务端 session cookie 解）。照搬 Forge。"""
+"""FastAPI dependencies — DB session, current user (resolved from the server-side session cookie). Ported from Forge."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ class CurrentUser:
 
 
 async def get_current_user(request: Request) -> CurrentUser:
-    """从服务端 session（HttpOnly cookie）解析已认证操作员。"""
+    """Resolve the authenticated operator from the server-side session (HttpOnly cookie)."""
     sid = request.cookies.get(get_settings().session_cookie_name)
     if not sid:
         raise BizError("AUTH_REQUIRED")
@@ -40,7 +40,7 @@ async def get_current_user(request: Request) -> CurrentUser:
 
 
 def audit_ctx(request: Request) -> dict:
-    """审计公共字段（ip / user-agent / request_id）。"""
+    """Common audit fields (ip / user-agent / request_id)."""
     return {
         "ip": request.client.host if request.client else None,
         "user_agent": request.headers.get("user-agent", "")[:512],

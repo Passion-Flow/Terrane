@@ -1,4 +1,4 @@
-"""认证 API schema — Pydantic v2 strict（照搬 Forge app/schemas/auth.py）。"""
+"""Auth API schema — Pydantic v2 strict (ported from Forge app/schemas/auth.py)."""
 
 from __future__ import annotations
 

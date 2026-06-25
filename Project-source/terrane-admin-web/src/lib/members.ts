@@ -1,4 +1,4 @@
-/** 成员（前台用户）列表 API（/admin-api/v1/members）—— 只读、页码分页、搜索 + 状态过滤。 */
+/** Members (frontend users) list API (/admin-api/v1/members) — read-only, page-number pagination, search + status filter. */
 
 import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query";
 

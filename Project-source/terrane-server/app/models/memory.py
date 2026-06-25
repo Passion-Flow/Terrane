@@ -1,4 +1,4 @@
-"""Memory（平台库 terrane_main）—— per-user 记忆。embedding(halfvec) 走原始 SQL,不入 ORM。"""
+"""Memory (platform DB terrane_main) — per-user memory. embedding (halfvec) goes through raw SQL, not the ORM."""
 
 from __future__ import annotations
 

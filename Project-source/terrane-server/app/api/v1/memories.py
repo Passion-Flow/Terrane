@@ -1,4 +1,4 @@
-"""记忆 API（前台 /api/v1/memories）。严格 per-user —— 一切按当前登录用户隔离,永不跨用户。"""
+"""Memory API (frontend /api/v1/memories). Strictly per-user -- everything is isolated by the currently logged-in user, never across users."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ async def list_memories(user: CurrentUser = Depends(get_current_user),
 @router.get("/settings")
 async def get_memory_settings(user: CurrentUser = Depends(get_current_user),
                               db: AsyncSession = Depends(get_db_session)) -> dict:
-    """读自动记忆开关(默认开)。"""
+    """Read the auto-memory toggle (on by default)."""
     return {"auto": await memory_service.auto_enabled(db, uuid.UUID(user.user_id))}
 
 
@@ -56,7 +56,7 @@ class MemorySettingsIn(BaseModel):
 async def update_memory_settings(body: MemorySettingsIn,
                                  user: CurrentUser = Depends(get_current_user),
                                  db: AsyncSession = Depends(get_db_session)) -> dict:
-    """开/关自动记忆(从聊天与上传文档自动抽取)。"""
+    """Turn auto-memory on/off (auto-extracted from chats and uploaded documents)."""
     await memory_service.set_auto(db, uuid.UUID(user.user_id), body.auto)
     return {"auto": body.auto}
 
@@ -94,7 +94,7 @@ async def delete_memory(memory_id: str = Path(...), user: CurrentUser = Depends(
     except ValueError:
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "memory"})
     m = await db.get(Memory, mid)
-    if m is None or str(m.user_id) != user.user_id:   # 越权即视为不存在
+    if m is None or str(m.user_id) != user.user_id:   # Treat cross-user access as not found
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "memory"})
     await db.delete(m)
     await db.commit()

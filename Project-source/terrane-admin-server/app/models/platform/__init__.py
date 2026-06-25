@@ -1,9 +1,11 @@
-"""平台库（terrane_main）ORM 拷贝 — 双库决策。
+"""Platform DB (terrane_main) ORM copies — dual-database decision.
 
-这些表由 terrane-server 建表/迁移；admin-server 仅读写映射，**绝不**进 admin 的 Base.metadata
-（否则 admin 的 alembic 会误建/误删平台表）。故用独立 PlatformBase。
+These tables are created/migrated by terrane-server; admin-server only maps them for read/write
+and must **never** enter admin's Base.metadata (otherwise admin's alembic would mistakenly
+create/drop platform tables). Hence a separate PlatformBase.
 
-列定义须与 terrane-server 的迁移逐字对齐（schema 漂移 = 运行期 KeyError/类型错）。
+Column definitions must align word-for-word with terrane-server's migrations (schema drift =
+runtime KeyError / type error).
 """
 
 from __future__ import annotations
@@ -13,17 +15,17 @@ import datetime
 from sqlalchemy import DateTime, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.db.base import JSONType  # 可移植 JSON 列（与 admin 共用定义，无副作用）
+from app.db.base import JSONType  # portable JSON column (shared definition with admin, no side effects)
 
 __all__ = ["PlatformBase", "PlatformTimestampMixin", "JSONType"]
 
 
 class PlatformBase(DeclarativeBase):
-    """平台库独立 declarative base（与 admin 的 Base 隔离）。"""
+    """Standalone declarative base for the platform DB (isolated from admin's Base)."""
 
 
 class PlatformTimestampMixin:
-    """硬删除铁律下的时间戳（无 deleted_at）。"""
+    """Timestamps under the hard-delete rule (no deleted_at)."""
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

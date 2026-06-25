@@ -62,7 +62,7 @@ browser drops the cookie over HTTPS). For a private-CA intranet, set `TERRANE_CA
 - Backup / migrate: see `../migration/README-EN.md`
 - Keep the `license` volume; back up `TERRANE_KEK` with the data.
 
-## 6. Offline / domestic (信创)
+## 6. Offline / Xinchuang (domestic)
 
 - Offline: `docker save` the 6 images on a connected host → `docker load` on the intranet → up. Use an
   offline `.forge` license (leave the edge URL empty).

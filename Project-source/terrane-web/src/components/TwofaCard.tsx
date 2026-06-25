@@ -1,4 +1,4 @@
-/** 账号页 2FA(TOTP)卡片 —— 开启(secret+验证码→备份码)/ 关闭。 */
+/** Account page 2FA (TOTP) card — enable (secret + code → backup codes) / disable. */
 
 import { CheckCircle, ShieldCheck } from "@phosphor-icons/react";
 import { useState } from "react";

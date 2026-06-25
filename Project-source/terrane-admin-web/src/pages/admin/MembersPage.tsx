@@ -1,5 +1,5 @@
-/** 成员管理 —— 列表 + 创建 + 行操作（编辑/重置密码/删除）。紧凑精致。
- *  支持 ?workspace=<id> 仅看某工作区成员、?create=1 自动打开创建（含预选工作区）。 */
+/** Member management —— list + create + row actions (edit / reset password / delete). Compact and refined.
+ *  Supports ?workspace=<id> to view only one workspace's members, and ?create=1 to auto-open the create dialog (with the workspace preselected). */
 
 import { Key, MagnifyingGlass, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -50,7 +50,7 @@ export function MembersPage() {
   const canWrite = has("platform.user.write");
   const canDelete = has("platform.user.delete");
 
-  // 创建
+  // Create
   const [createOpen, setCreateOpen] = useState(false);
   const [cEmail, setCEmail] = useState("");
   const [cUser, setCUser] = useState("");
@@ -58,19 +58,19 @@ export function MembersPage() {
   const [cWs, setCWs] = useState("");
   const [cRole, setCRole] = useState("Owner");
   const [created, setCreated] = useState<{ email: string; password: string | null } | null>(null);
-  // 编辑
+  // Edit
   const [editing, setEditing] = useState<MemberItem | null>(null);
   const [eUser, setEUser] = useState("");
   const [eStatus, setEStatus] = useState("active");
-  // 重置密码
+  // Reset password
   const [resetT, setResetT] = useState<MemberItem | null>(null);
   const [resetPw, setResetPw] = useState<string | null>(null);
-  // 删除
+  // Delete
   const [delT, setDelT] = useState<MemberItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  // ?create=1 → 打开创建（预选工作区）。
+  // ?create=1 -> open the create dialog (with the workspace preselected).
   useEffect(() => {
     if (params.get("create") === "1") {
       setCEmail(""); setCUser(""); setCPass(""); setCRole("Owner"); setCreated(null); setErr("");
@@ -226,7 +226,7 @@ export function MembersPage() {
 
       <Pagination page={page} total={total} pageSize={MEMBER_PAGE_SIZE} onPage={setPage} />
 
-      {/* 创建 */}
+      {/* Create */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={created ? t("members.createdTitle") : t("members.createTitle")}
         footer={created ? (
           <button type="button" onClick={() => setCreateOpen(false)} className="rounded-(--radius-control) bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-accent-hover">{t("common.done")}</button>
@@ -260,7 +260,7 @@ export function MembersPage() {
         )}
       </Modal>
 
-      {/* 编辑 */}
+      {/* Edit */}
       <Modal open={!!editing} onClose={() => setEditing(null)} title={t("members.editTitle")}
         footer={<>
           <button type="button" onClick={() => setEditing(null)} className="rounded-(--radius-control) px-3.5 py-1.5 text-[13px] text-ink-secondary hover:bg-canvas">{t("common.cancel")}</button>
@@ -277,7 +277,7 @@ export function MembersPage() {
         </div>
       </Modal>
 
-      {/* 重置密码 */}
+      {/* Reset password */}
       <Modal open={!!resetT} onClose={() => setResetT(null)} title={t("members.resetTitle")}
         footer={resetPw ? (
           <button type="button" onClick={() => setResetT(null)} className="rounded-(--radius-control) bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-accent-hover">{t("common.done")}</button>
@@ -295,7 +295,7 @@ export function MembersPage() {
         {err && <p className="mt-3 text-[13px] text-danger">{err}</p>}
       </Modal>
 
-      {/* 删除（输入邮箱确认） */}
+      {/* Delete (type-to-confirm email) */}
       <ConfirmDeleteModal open={!!delT} onClose={() => setDelT(null)} title={t("members.deleteTitle")}
         target={delT?.email ?? ""} desc={t("members.deleteDesc", { email: delT?.email ?? "" })}
         onConfirm={onDelete} busy={busy} error={err} />

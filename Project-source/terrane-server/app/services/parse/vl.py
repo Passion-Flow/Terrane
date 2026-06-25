@@ -1,10 +1,10 @@
-"""解析增强 —— 用 VL 视觉模型补全纯词法解析的盲区：
+"""Parse enhancement -- use a VL vision model to fill in the blind spots of pure lexical parsing:
 
-1. 扫描页 / 图片型 PDF 页（词法抽不出文本）→ 整页渲染成图 → VL OCR 转写为 Markdown；
-2. 文本页里的嵌入图片（图表/示意图/照片）→ VL 描述一句，便于检索。
+1. Scanned / image-type PDF pages (no text extractable lexically) -> render the whole page to an image -> VL OCR transcribes it to Markdown;
+2. Embedded images in text pages (charts / diagrams / photos) -> a one-sentence VL description, to aid retrieval.
 
-无 vl 渠道 → 原样返回（纯词法解析仍可用，「不配模型也能解析」）。bounded + 并发，失败不阻断摄入。
-产出追加到 parsed_text，使这些内容进入切片/嵌入/图谱，可被检索与问答引用。
+No vl channel -> returns unchanged (pure lexical parsing still works, "parses even without a model configured"). Bounded + concurrent; failures do not block ingestion.
+The output is appended to parsed_text so this content enters chunking / embedding / the graph and can be retrieved and cited in Q&A.
 """
 
 from __future__ import annotations
@@ -20,18 +20,18 @@ from app.services.model_channels import get_channel
 
 log = structlog.get_logger("terrane.parse.vl")
 
-_MAX_CALLS = 24        # 单文档 VL 调用上限（控制大文档延迟/成本）
+_MAX_CALLS = 24        # Max VL calls per document (caps latency/cost on large documents)
 _CONCURRENCY = 5
-_SCANNED_TEXT_MIN = 24  # 页内词法文本少于此 → 视为扫描/图片页，整页 OCR
-_MIN_IMG_BYTES = 6000   # 跳过装饰性小图标
-_MAX_VL_PAGES = 80      # 高精档整页 VL 的页数上限（成本/延迟护栏）
+_SCANNED_TEXT_MIN = 24  # If a page's lexical text is below this -> treat it as a scanned/image page and OCR the whole page
+_MIN_IMG_BYTES = 6000   # Skip small decorative icons
+_MAX_VL_PAGES = 80      # Page-count cap for full-page VL in high-precision mode (cost/latency guardrail)
 
 _OCR_PROMPT = (
     "把这一页文档完整、忠实地转写为 Markdown。保留标题层级、列表、表格（用 Markdown 表格语法）、"
     "段落顺序；行内公式用 $...$、独立公式用 $$...$$；不要臆造或翻译，无法辨认处略过。只输出内容本身。"
 )
 _IMG_PROMPT = "用一句中文客观描述这张图片的主要内容（图表/示意图/流程图/照片/截图等及其关键信息），便于检索。"
-# 高精档「版面解析」prompt：整页转高保真 Markdown，表格/公式/图全要（对标 Docling/MinerU/QwenVL-HTML）。
+# High-precision "layout parsing" prompt: convert a whole page into high-fidelity Markdown, keeping tables/formulas/figures (comparable to Docling/MinerU/QwenVL-HTML).
 _LAYOUT_PROMPT = (
     "你是文档版面解析器。把这一页**完整、忠实**地转写为结构化 Markdown：\n"
     "1) 保留标题层级(#/##/###)与正确阅读顺序(多栏按先左后右、先上后下)；\n"
@@ -44,8 +44,8 @@ _LAYOUT_PROMPT = (
 
 
 async def parse_pdf_fullvl(db: AsyncSession, pdf_bytes: bytes) -> str | None:
-    """高精档：整页过 VL「版面解析」→ 高保真 Markdown（标题/阅读序/表格/公式/图描述）。
-    无 vl 渠道 → None（上层回退词法）。bounded(_MAX_VL_PAGES) + 并发，失败的页跳过。"""
+    """High-precision mode: run each whole page through VL "layout parsing" -> high-fidelity Markdown (headings / reading order / tables / formulas / figure descriptions).
+    No vl channel -> None (the caller falls back to lexical parsing). Bounded (_MAX_VL_PAGES) + concurrent; failed pages are skipped."""
     if await get_channel(db, "vl") is None:
         return None
     import fitz
@@ -75,7 +75,7 @@ async def parse_pdf_fullvl(db: AsyncSession, pdf_bytes: bytes) -> str | None:
                 return page_no, None
 
     results = await asyncio.gather(*[_run(p, b) for p, b in specs])
-    parts = [f"\n\n<!-- 第 {p} 页 -->\n{md.strip()}" for p, md in sorted(results) if md and md.strip()]
+    parts = [f"\n\n<!-- Page {p} -->\n{md.strip()}" for p, md in sorted(results) if md and md.strip()]
     out = "".join(parts).strip()
     if out:
         log.info("vl_fullparse_done", pages=len(parts))
@@ -83,7 +83,7 @@ async def parse_pdf_fullvl(db: AsyncSession, pdf_bytes: bytes) -> str | None:
 
 
 async def enhance_pdf(db: AsyncSession, pdf_bytes: bytes, base_text: str) -> str:
-    """对 PDF 做 VL 增强（扫描页 OCR + 图片描述），返回增强后的 Markdown。无 vl 渠道则原样返回。"""
+    """VL-enhance a PDF (scanned-page OCR + image descriptions) and return the enhanced Markdown. Returns unchanged if there is no vl channel."""
     if await get_channel(db, "vl") is None:
         return base_text
     import fitz  # PyMuPDF
@@ -136,12 +136,12 @@ async def enhance_pdf(db: AsyncSession, pdf_bytes: bytes, base_text: str) -> str
         return spec
 
     done = await asyncio.gather(*[_run(s) for s in specs])
-    ocr = [f"\n### 第 {s['page']} 页\n{s['text'].strip()}" for s in done if s["kind"] == "ocr" and s.get("text")]
-    img = [f"- 第 {s['page']} 页图像：{s['text'].strip()}" for s in done if s["kind"] == "img" and s.get("text")]
+    ocr = [f"\n### Page {s['page']}\n{s['text'].strip()}" for s in done if s["kind"] == "ocr" and s.get("text")]
+    img = [f"- Page {s['page']} image: {s['text'].strip()}" for s in done if s["kind"] == "img" and s.get("text")]
     out = base_text
     if ocr:
-        out += "\n\n## 扫描页内容（模型识别）" + "".join(ocr)
+        out += "\n\n## Scanned Page Content (model-recognized)" + "".join(ocr)
     if img:
-        out += "\n\n## 图像说明（模型识别）\n" + "\n".join(img)
+        out += "\n\n## Image Descriptions (model-recognized)\n" + "\n".join(img)
     log.info("vl_enhance_done", ocr=len(ocr), img=len(img))
     return out

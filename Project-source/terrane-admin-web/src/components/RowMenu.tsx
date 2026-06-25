@@ -1,4 +1,4 @@
-/** 行操作菜单 —— 「⋯」按钮 + 下拉项列表。点击外部关闭，靠下时向上展开，右对齐。 */
+/** Row action menu —— a "⋯" button + dropdown list of items. Click-outside to close, expands upward when near the bottom, right-aligned. */
 
 import { DotsThree, type Icon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";

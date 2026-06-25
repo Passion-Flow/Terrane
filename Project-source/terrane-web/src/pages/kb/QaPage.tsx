@@ -1,4 +1,4 @@
-/** 问答子页 —— 复用 KbChat（库范围 RAG 问答）。整页 flex 填满,仅消息区内部滚动,自适应分辨率。 */
+/** Q&A subpage — reuses KbChat (KB-scoped RAG Q&A). Full-height flex layout; only the message area scrolls internally; responsive across resolutions. */
 
 import { useTranslation } from "react-i18next";
 

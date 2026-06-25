@@ -1,4 +1,4 @@
-"""Google Cloud Storage（原生 google-cloud-storage SDK）。Bucket == bucket。"""
+"""Google Cloud Storage (native google-cloud-storage SDK). Bucket == bucket."""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ from app.adapters.object_storage.base import ObjectStat, ObjectStorageAdapter
 
 class GoogleCloudStorage(ObjectStorageAdapter):
     def _client(self):
-        from google.cloud import storage  # 惰性 import
+        from google.cloud import storage  # lazy import
 
         project = self.settings.object_storage_gcs_project or None
-        # 自定义端点 = GCS 模拟器（fake-gcs-server）或私有 Google API 端点。
+        # A custom endpoint = GCS emulator (fake-gcs-server) or a private Google API endpoint.
         if self.settings.object_storage_endpoint:
             from google.auth.credentials import AnonymousCredentials
             return storage.Client(

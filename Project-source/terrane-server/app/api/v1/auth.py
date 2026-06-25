@@ -1,7 +1,8 @@
-"""前台认证 API — register / login / logout / me / verify-email / reset / change-password。
+"""Frontend auth API — register / login / logout / me / verify-email / reset / change-password.
 
-挂 /api/v1/auth。Cookie 会话（HttpOnly terrane_session）。防枚举：登录与重置请求对外不区分
-用户是否存在。注册自动建个人工作区 + Owner 成员，发邮箱验证邮件（出厂强制邮验）。
+Mounted at /api/v1/auth. Cookie sessions (HttpOnly terrane_session). Anti-enumeration: login and reset
+requests do not reveal whether a user exists. Registration automatically creates a personal workspace +
+Owner membership and sends an email-verification message (email verification is enforced by default).
 """
 
 from __future__ import annotations
@@ -41,8 +42,9 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
 def _public_base_url(request: Request) -> str | None:
-    """邮件里链接用的前台地址。显式配置了非 localhost 的 FRONTEND_BASE_URL 就用它（生产固定域名 +
-    防 Host 注入）；否则跟随本次请求的 Host —— 部署在什么 IP/域名访问，邮件链接就用什么，无需配置。"""
+    """The frontend address used in email links. If FRONTEND_BASE_URL is explicitly set to a non-localhost value,
+    use it (fixed production domain + Host-injection protection); otherwise follow this request's Host —— whatever
+    IP/domain the deployment is accessed at, the email link uses that, no configuration needed."""
     cfg = (get_settings().frontend_base_url or "").rstrip("/")
     if cfg and "localhost" not in cfg and "127.0.0.1" not in cfg:
         return cfg
@@ -102,7 +104,7 @@ async def login(body: LoginRequest, request: Request, response: Response,
                             window=60, code="RATE_LIMIT_LOGIN_BLOCKED")
     user = await auth.authenticate(body.email, body.password, body.code)
     role = await _role_in(db, user.workspace_id, user.id)
-    pol = await get_security_policy(db)  # 平台安全策略（后台「设置→安全」可改）
+    pol = await get_security_policy(db)  # Platform security policy (editable under admin "Settings → Security")
     sid = await SessionService().create(user_id=str(user.id), workspace_id=str(user.workspace_id),
                                         role=role, ip=ip or "", ua=ua,
                                         twofa_verified=user.twofa_enabled,
@@ -158,7 +160,7 @@ async def twofa_disable(body: _TwofaCode, user: CurrentUser = Depends(get_curren
 class ProfileIn(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     username: str | None = Field(default=None, max_length=64)
-    avatar: str | None = Field(default=None, max_length=3_000_000)  # base64 data URL,留空字符串=清除
+    avatar: str | None = Field(default=None, max_length=3_000_000)  # base64 data URL; empty string = clear
 
 
 @router.patch("/profile")
@@ -188,7 +190,7 @@ async def request_reset(body: RequestResetRequest, request: Request,
     ip = request.client.host if request.client else None
     await RateLimiter().hit(f"reset_ip:{ip}", limit=get_settings().login_max_per_ip_per_min,
                             window=60, code="RATE_LIMIT_EXCEEDED")
-    await AuthService(db).request_reset(body.email,  # 防枚举：恒静默成功
+    await AuthService(db).request_reset(body.email,  # Anti-enumeration: always silently succeeds
                                         base_url=_public_base_url(request))
     return {"data": {"ok": True}}
 
@@ -197,7 +199,7 @@ async def request_reset(body: RequestResetRequest, request: Request,
 async def reset_password(body: ResetPasswordRequest,
                          db: AsyncSession = Depends(get_db_session)) -> dict:
     user = await AuthService(db).reset_password(body.token, body.new_password)
-    await SessionService().destroy_all_for_user(str(user.id))  # 重置后踢全部会话
+    await SessionService().destroy_all_for_user(str(user.id))  # Kick all sessions after reset
     return {"data": {"ok": True}}
 
 
@@ -210,7 +212,7 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
         raise BizError("AUTH_REQUIRED")
     auth = AuthService(db)
     await auth.change_password(db_user, body.current_password, body.new_password)
-    # 会话轮换（防固定）：踢全部旧会话 + 换发新 cookie。
+    # Session rotation (anti-fixation): kick all old sessions + issue a new cookie.
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent", "")
     role = await _role_in(db, db_user.workspace_id, db_user.id)

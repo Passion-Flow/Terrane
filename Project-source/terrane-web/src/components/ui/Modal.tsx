@@ -1,4 +1,4 @@
-/** 居中弹窗组件 —— 全前台统一。backdrop/Esc 关闭,header/body/footer。 */
+/** Centered modal component —— shared across the entire frontend. Closes on backdrop click / Esc; header / body / footer. */
 
 import { X } from "@phosphor-icons/react";
 import { useEffect, type ReactNode } from "react";

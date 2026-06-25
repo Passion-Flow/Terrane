@@ -1,4 +1,4 @@
-/** 主题切换 —— 浅色/深色/跟随系统三态（图标下拉，选中对勾）。 */
+/** Theme toggle —— three states: light / dark / follow system (icon dropdown, checkmark on selection). */
 
 import { Check, Desktop, Moon, Sun } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";

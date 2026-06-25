@@ -1,4 +1,4 @@
-/** 头像组件 —— 图片(base64/url)或姓名首字母回退。petrol-teal 调色。 */
+/** Avatar component — image (base64/url) with a name-initials fallback. petrol-teal palette. */
 
 interface Props {
   src?: string | null;
@@ -11,7 +11,7 @@ interface Props {
 function initials(name?: string | null, email?: string | null): string {
   const s = (name || email || "?").trim();
   if (!s) return "?";
-  // 中文取首字;英文取首字母(最多 2)
+  // For Chinese, use the first character; for English, use the first letters (up to 2)
   if (/[一-龥]/.test(s[0])) return s[0];
   const parts = s.split(/[\s@._-]+/).filter(Boolean);
   return (parts.slice(0, 2).map((p) => p[0]).join("") || s[0]).toUpperCase();

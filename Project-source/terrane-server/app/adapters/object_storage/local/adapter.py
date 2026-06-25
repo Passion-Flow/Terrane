@@ -1,6 +1,6 @@
-"""本地对象存储 —— 双模：
-- filesystem：在 object_storage_local_path/<bucket>/<key> 下的纯磁盘存储（开发默认）；
-- s3：委托给 S3 兼容客户端，指向本地 SeaweedFS 端点（自托管默认）。
+"""Local object storage -- dual mode:
+- filesystem: plain on-disk storage under object_storage_local_path/<bucket>/<key> (development default);
+- s3: delegates to the S3-compatible client pointed at a local SeaweedFS endpoint (self-hosted default).
 """
 
 from __future__ import annotations
@@ -18,13 +18,13 @@ class LocalStorage(ObjectStorageAdapter):
         super().__init__(settings)
         self._remote: S3CompatibleStorage | None = None
         if settings.object_storage_local_mode != "filesystem":
-            # 非 filesystem 模式 = 委托给 SeaweedFS（S3 兼容，端点取 object_storage_endpoint）。
+            # Non-filesystem mode = delegate to SeaweedFS (S3-compatible, endpoint from object_storage_endpoint).
             self._remote = S3CompatibleStorage(settings)
 
     async def ensure_bucket(self, bucket=None):
         if self._remote:
             return await self._remote.ensure_bucket(bucket)
-        return None  # filesystem 模式无 bucket 概念，upload 时按需 mkdir
+        return None  # filesystem mode has no bucket concept; mkdir on demand at upload time
 
     def _root(self, bucket: str | None) -> Path:
         return Path(self.settings.object_storage_local_path) / self._bucket(bucket)
@@ -92,7 +92,7 @@ class LocalStorage(ObjectStorageAdapter):
     async def presigned_upload_url(self, key, *, bucket=None, expires=None, content_type=None):
         if self._remote:
             return await self._remote.presigned_upload_url(key, bucket=bucket, expires=expires, content_type=content_type)
-        # 文件系统模式无预签名；这些路径由应用内部提供服务。
+        # No presigning in filesystem mode; these paths are served internally by the app.
         return f"/internal/storage/{self._bucket(bucket)}/{key}"
 
     async def presigned_download_url(self, key, *, bucket=None, expires=None):

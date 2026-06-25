@@ -1,4 +1,4 @@
-"""激活信封持久化 — 后台是唯一写入方；server/gateway 只读同一共享卷。"""
+"""Activation envelope persistence — the admin backend is the sole writer; server/gateway only read the same shared volume."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 def write_envelope(path: Path, method: str, credential: str) -> None:
-    """原子写入激活信封（写临时文件 + rename，避免读端读到半截）。"""
+    """Atomically write the activation envelope (write a temp file + rename, so readers never read a partial file)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps({"method": method, "credential": credential}, ensure_ascii=False)
     tmp = path.with_suffix(path.suffix + ".tmp")

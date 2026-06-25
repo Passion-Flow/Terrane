@@ -1,4 +1,4 @@
-// terrane-gateway — Go 数据面（阶段①：License gating + 探针）。
+// terrane-gateway — the Go data plane (stage 1: License gating + probes).
 package main
 
 import (

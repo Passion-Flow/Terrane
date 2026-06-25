@@ -1,10 +1,10 @@
-# Terrane API（前台）—— Python 3.13 + uv。纯 CPU(含 Terrane Parse:PyMuPDF/Office,无 GPU)。
+# Terrane API (frontend) -- Python 3.13 + uv. CPU-only (incl. Terrane Parse: PyMuPDF/Office, no GPU).
 FROM python:3.13-slim AS base
 
-# 运行期系统依赖:
-#  - ca/curl + ffmpeg(视频解析抽帧/抽音轨;PyMuPDF wheel 自带其余)
-#  - libreoffice(无界面) + 中日韩字体:Office(docx/xlsx/pptx)→PDF→逐页 WebP 版面预览
-# 构建期换阿里云 Debian 源(直连可靠/更快;仅影响 build 阶段,成品镜像不含 apt 源差异)。
+# Runtime system dependencies:
+#  - ca/curl + ffmpeg (video parsing: frame/audio-track extraction; the PyMuPDF wheel bundles the rest)
+#  - libreoffice (headless) + CJK fonts: Office (docx/xlsx/pptx) -> PDF -> per-page WebP layout preview
+# At build time, switch to the Aliyun Debian mirror (reliable direct connection / faster; affects the build stage only, the final image carries no apt-source difference).
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' \
         /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; \
     apt-get -o Acquire::Retries=8 update && \
@@ -17,11 +17,11 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
-# UV_DEFAULT_INDEX:构建期走阿里云 PyPI 镜像(直连可靠/更快;仅影响 build,成品镜像不含 pip 源)。
+# UV_DEFAULT_INDEX: at build time use the Aliyun PyPI mirror (reliable direct connection / faster; affects the build only, the final image carries no pip source).
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PYTHONUNBUFFERED=1 \
     UV_DEFAULT_INDEX=https://mirrors.aliyun.com/pypi/simple/
 
-# 先装依赖(利用层缓存)
+# Install dependencies first (leverage layer caching)
 COPY pyproject.toml ./
 RUN uv pip install --system -r pyproject.toml
 

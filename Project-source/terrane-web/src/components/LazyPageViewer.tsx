@@ -1,21 +1,21 @@
-/** 视口懒加载的逐页 WebP 版面图查看器(类 PDF 阅读器),支持「渐进消费」+ 大文档窗口化。
- *  - 每页占位 div 按容器宽度 ×(h/w) 预先撑开高度防 CLS;
- *  - IntersectionObserver(rootMargin 提前 ~1.5 屏)进入视口附近才挂 <img>,离开很远卸载省内存;
- *  - 渐进:pageCount 已知但 pages 里还没该页时,显示「渲染中」骨架占位;
- *  - 大文档(slot 数 > WINDOW_THRESHOLD)按滚动位置窗口化,只挂窗口内 slot 的 DOM,避免几百节点。 */
+/** Viewport-lazy, page-by-page WebP layout-image viewer (PDF-reader-like), supporting progressive consumption + windowing for large documents.
+ *  - Each page's placeholder div is pre-expanded to a height of container width ×(h/w) to prevent CLS;
+ *  - IntersectionObserver (rootMargin pre-loads ~1.5 screens ahead) mounts the <img> only near the viewport and unmounts once far away to save memory;
+ *  - Progressive: when pageCount is known but the page isn't in `pages` yet, show a "rendering" skeleton placeholder;
+ *  - Large documents (slot count > WINDOW_THRESHOLD) are windowed by scroll position, mounting only the DOM for in-window slots to avoid hundreds of nodes. */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { sourcePageUrl, type SourcePage } from "@/lib/kb";
 
 export interface LazyPageViewerHandle {
-  /** 滚动到指定页码(1-based),平滑居中。 */
+  /** Scroll to the given page number (1-based), smoothly centered. */
   scrollToPage: (n: number) => void;
 }
 
-const WINDOW_THRESHOLD = 80;   // slot 数超过此值才启用窗口化
-const WINDOW_OVERSCAN = 6;     // 窗口上下各多渲染的 slot 数
-const DEFAULT_RATIO = 1.414;   // A4 纵向默认高宽比(占位用)
+const WINDOW_THRESHOLD = 80;   // windowing kicks in only when slot count exceeds this
+const WINDOW_OVERSCAN = 6;     // extra slots rendered above and below the window
+const DEFAULT_RATIO = 1.414;   // default height/width ratio for portrait A4 (for placeholders)
 
 function LazyPage({
   kbId, sourceId, page, slotHeight, root, label,
@@ -74,7 +74,7 @@ export const LazyPageViewer = forwardRef<LazyPageViewerHandle, {
   kbId: string;
   sourceId: string;
   pages: SourcePage[];
-  /** 文档总页数(渐进:可能 > pages.length)。缺省时按 pages.length 计。 */
+  /** Total page count of the document (progressive: may exceed pages.length). Defaults to pages.length when omitted. */
   pageCount?: number;
 }>(function LazyPageViewer({ kbId, sourceId, pages, pageCount }, ref) {
   const { t } = useTranslation();
@@ -84,7 +84,7 @@ export const LazyPageViewer = forwardRef<LazyPageViewerHandle, {
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportH, setViewportH] = useState(0);
 
-  // 已到达页 → 按页码索引,方便对 slot 取真实页。
+  // Loaded pages → indexed by page number, so each slot can grab its real page.
   const byNum = useMemo(() => {
     const m = new Map<number, SourcePage>();
     for (const p of pages) m.set(p.n, p);
@@ -106,10 +106,10 @@ export const LazyPageViewer = forwardRef<LazyPageViewerHandle, {
     return () => ro.disconnect();
   }, []);
 
-  // 占位估宽:max-w-3xl(48rem≈768px),减去左右内边距。
+  // Estimated placeholder width: max-w-3xl (48rem ≈ 768px), minus horizontal padding.
   const innerWidth = Math.min(width - 32, 768);
 
-  // 每个 slot 的预估高度(真实页用其比例,未到达页用默认 A4 比例)。
+  // Estimated height per slot (real pages use their own ratio, not-yet-loaded pages use the default A4 ratio).
   const slotHeights = useMemo(() => {
     const arr: number[] = [];
     for (let i = 1; i <= total; i++) {
@@ -121,7 +121,7 @@ export const LazyPageViewer = forwardRef<LazyPageViewerHandle, {
   }, [total, byNum, innerWidth]);
 
   const GAP = 16; // space-y-4
-  // slot 的累计 top 偏移(含 padding-top 16)。
+  // Cumulative top offset per slot (including padding-top 16).
   const offsets = useMemo(() => {
     const arr: number[] = [];
     let acc = 16;
@@ -135,7 +135,7 @@ export const LazyPageViewer = forwardRef<LazyPageViewerHandle, {
 
   const windowed = total > WINDOW_THRESHOLD;
 
-  // 窗口范围(仅窗口化时计算):二分找首个底部 >= scrollTop 的 slot。
+  // Window range (computed only when windowing): find the first slot whose bottom >= scrollTop.
   const [first, last] = useMemo(() => {
     if (!windowed || total === 0) return [0, total - 1];
     const vh = viewportH || 800;

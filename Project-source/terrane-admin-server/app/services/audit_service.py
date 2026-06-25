@@ -1,7 +1,9 @@
-"""审计写入（平台库 terrane_main：audit_logs，append-only）。
+"""Audit writes (platform database terrane_main: audit_logs, append-only).
 
-后台所有变更类操作落审计（02-database：append-only ≥1 年，仅元数据不含内容）。
-before/after 必须脱敏（绝不含明文密钥/密码）。写入由调用方 commit（与业务同事务）。
+All mutating admin operations are recorded to the audit log (02-database: append-only,
+retained ≥1 year, metadata only with no content). before/after must be redacted (must never
+contain plaintext keys/passwords). The caller is responsible for the commit (in the same
+transaction as the business operation).
 """
 
 from __future__ import annotations

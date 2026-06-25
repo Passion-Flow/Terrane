@@ -1,4 +1,4 @@
-/** 工作台顶栏 —— Logo + 语言/主题 + 用户 + 退出。KB 列表与详情共用。 */
+/** Workspace top bar — logo + language/theme + user + sign out. Shared by the KB list and detail views. */
 
 import { SignOut, User } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";

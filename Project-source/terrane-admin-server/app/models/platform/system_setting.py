@@ -1,6 +1,7 @@
-"""SystemSetting（平台库 terrane_main：system_settings）— ORM 映射拷贝。
+"""SystemSetting (platform DB terrane_main: system_settings) — ORM mapping copy.
 
-schema 权威在 terrane-server/app/models/system_setting.py + 迁移 000002。admin 仅读写。
+The authoritative schema lives in terrane-server/app/models/system_setting.py + migration 000002.
+admin only reads/writes.
 """
 
 from __future__ import annotations

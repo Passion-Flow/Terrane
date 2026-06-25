@@ -1,8 +1,10 @@
-"""平台库设置仓（terrane_main：system_settings + branding 单行）。
+"""Platform settings repository (terrane_main: system_settings + branding single row).
 
-system_settings：通用键值（向导状态/邮件/登录/密码策略…），scope='global'。
-branding：部署级白标单行（SINGLETON_ID），缺失时返回出厂默认（页面化零配置铁律）。
-所有写入由调用方 commit（与 audit 同事务编排）。
+system_settings: generic key-value pairs (wizard state / email / login / password policy ...),
+scope='global'.
+branding: deployment-level white-label single row (SINGLETON_ID); returns factory defaults when
+missing (page-based zero-config rule).
+All writes are committed by the caller (orchestrated in the same transaction as audit).
 """
 
 from __future__ import annotations
@@ -22,9 +24,12 @@ SECURITY_KEY = "security"
 
 
 async def get_security_policy(db: AsyncSession) -> dict[str, int]:
-    """安全策略（密码规则等）—— system_settings['security'] 覆盖于出厂 config 默认之上。
+    """Security policy (password rules, etc.) — system_settings['security'] overrides the
+    factory config defaults.
 
-    前后台所有口令校验点统一读此，部署方在后台「设置→安全」改一处全平台生效（页面化零配置）。
+    All password validation points in both the frontend and admin read this uniformly; the
+    deployer changes it in one place under the admin "Settings → Security" and it takes effect
+    platform-wide (page-based zero-config).
     """
     cfg = get_settings()
     stored = await get_setting(db, SECURITY_KEY) or {}
@@ -50,7 +55,7 @@ async def get_setting(db: AsyncSession, key: str, *, scope: str = "global",
 
 async def set_setting(db: AsyncSession, key: str, value: dict[str, Any], *,
                       scope: str = "global", scope_id: str = "") -> None:
-    """upsert（按 uq(key,scope,scope_id) 覆盖）。"""
+    """upsert (overwrites on uq(key,scope,scope_id))."""
     stmt = select(SystemSetting).where(
         SystemSetting.key == key, SystemSetting.scope == scope,
         SystemSetting.scope_id == scope_id)
@@ -62,7 +67,7 @@ async def set_setting(db: AsyncSession, key: str, value: dict[str, Any], *,
 
 
 async def get_branding(db: AsyncSession) -> Branding:
-    """读白标单行；缺失时创建出厂默认行并返回。"""
+    """Read the white-label single row; create and return a factory-default row when missing."""
     row = await db.get(Branding, SINGLETON_ID)
     if row is None:
         row = Branding(id=SINGLETON_ID)

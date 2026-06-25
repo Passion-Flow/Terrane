@@ -1,18 +1,18 @@
-"""权限注册表 — 中央 P.* 常量（阶段②认证地基所需最小集，阶段③业务模块扩充）。
+"""Permission registry — central P.* constants (minimal set required by the Stage 2 auth foundation, expanded by Stage 3 business modules).
 
-命名：<domain>.<resource>.<action>，小写、点分、单数资源。
-业务代码只引用 P.* 常量，禁裸权限字符串。
+Naming: <domain>.<resource>.<action>, lowercase, dot-separated, singular resource.
+Business code references only P.* constants, no bare permission strings.
 """
 
 from __future__ import annotations
 
 
 class P:
-    # platform.license.*（后台 License 区）
+    # platform.license.* (admin License area)
     LICENSE_READ = "platform.license.read"
     LICENSE_UPDATE = "platform.license.update"
 
-    # platform.user.*（后台操作员管理）
+    # platform.user.* (admin operator management)
     USER_READ = "platform.user.read"
     USER_WRITE = "platform.user.write"
     USER_DELETE = "platform.user.delete"
@@ -21,39 +21,39 @@ class P:
     AUDIT_READ = "platform.audit.read"
     AUDIT_EXPORT = "platform.audit.export"
 
-    # system.*（设置 / 初始化向导）
+    # system.* (settings / setup wizard)
     SETTINGS_READ = "system.settings.read"
     SETTINGS_WRITE = "system.settings.write"
 
-    # platform.workspace.*（租户工作区管理）
+    # platform.workspace.* (tenant workspace management)
     WORKSPACE_READ = "platform.workspace.read"
     WORKSPACE_WRITE = "platform.workspace.write"
 
-    # platform.seat.*（席位/成员管理）
+    # platform.seat.* (seat/member management)
     SEAT_READ = "platform.seat.read"
     SEAT_WRITE = "platform.seat.write"
 
-    # platform.channel.*（模型渠道：六路收口 + web-search）
+    # platform.channel.* (model channels: six-way consolidation + web-search)
     CHANNEL_READ = "platform.channel.read"
     CHANNEL_WRITE = "platform.channel.write"
 
-    # platform.connector.*（连接器凭据 vault）
+    # platform.connector.* (connector credential vault)
     CONNECTOR_READ = "platform.connector.read"
     CONNECTOR_WRITE = "platform.connector.write"
 
-    # platform.quota.*（配额三类型）/ platform.budget.*（token 月预算闸门）
+    # platform.quota.* (three quota types) / platform.budget.* (monthly token budget gate)
     QUOTA_READ = "platform.quota.read"
     QUOTA_WRITE = "platform.quota.write"
     BUDGET_READ = "platform.budget.read"
     BUDGET_WRITE = "platform.budget.write"
 
-    # platform.ingest.*（全局摄入队列监控）
+    # platform.ingest.* (global ingest queue monitoring)
     INGEST_MONITOR = "platform.ingest.monitor"
 
-    # platform.backup.*（备份状态可视）
+    # platform.backup.* (backup status visibility)
     BACKUP_READ = "platform.backup.read"
 
-    # platform.integration.*（Webhooks / Data Push / OTel）
+    # platform.integration.* (Webhooks / Data Push / OTel)
     INTEGRATION_READ = "platform.integration.read"
     INTEGRATION_WRITE = "platform.integration.write"
 

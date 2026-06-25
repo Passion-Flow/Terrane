@@ -1,6 +1,6 @@
-"""腾讯 COS 经其 S3 兼容端点（cos.<region>.myqcloud.com）。
+"""Tencent COS via its S3-compatible endpoint (cos.<region>.myqcloud.com).
 
-注意：COS 桶名为 "<name>-<appid>" —— 把该完整值设为 bucket。
+Note: COS bucket names are "<name>-<appid>" -- set that full value as the bucket.
 """
 
 from __future__ import annotations

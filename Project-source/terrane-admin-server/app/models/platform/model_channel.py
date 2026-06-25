@@ -1,6 +1,7 @@
-"""ModelChannel（平台库 terrane_main：模型渠道）— ORM 映射拷贝（admin 经此读写）。
+"""ModelChannel (platform DB terrane_main: model channels) — ORM mapping copy (admin reads/writes through this).
 
-schema 权威在 terrane-server/app/models/model_channel.py + 迁移 000006。前台直读同表消费模型。
+The authoritative schema lives in terrane-server/app/models/model_channel.py + migration 000006.
+The frontend reads the same table directly to consume models.
 """
 
 from __future__ import annotations

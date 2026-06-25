@@ -1,5 +1,5 @@
-/** 品牌外观（一级页）—— 对齐 Dify 细分:应用标题 / 控制台Logo / 登录页Logo / Favicon / 主题色 / 登录副标题 / 支持链接。
- *  保存后即时刷新全站品牌(Logo/标题/favicon/主题色)。图片走 data URI，≤700KB(后端 1MB 限制内)。 */
+/** Branding & appearance (top-level page) — aligned with Dify's breakdown: app title / console logo / login-page logo / favicon / accent color / login subtitle / support link.
+ *  After saving, the site-wide branding (logo / title / favicon / accent color) refreshes immediately. Images are stored as data URIs, ≤700KB (within the backend's 1MB limit). */
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
@@ -20,7 +20,7 @@ function Card({ title, usage, children }: { title: string; usage: string; childr
   );
 }
 
-/** 图片上传字段:预览(自定义或占位) + 上传 + 移除。 */
+/** Image upload field: preview (custom or placeholder) + upload + remove. */
 function LogoField({ value, placeholder, canWrite, busy, onPick, onRemove }: {
   value: string | null; placeholder: ReactNode; canWrite: boolean; busy: boolean;
   onPick: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemove: () => void;
@@ -61,9 +61,9 @@ export function BrandingSettingsPage() {
   const [accent, setAccent] = useState("#0f9b8e");
   const [subtitle, setSubtitle] = useState("");
   const [supportUrl, setSupportUrl] = useState("");
-  const [logoData, setLogoData] = useState<string | null>(null);     // 控制台 Logo
-  const [loginLogo, setLoginLogo] = useState<string | null>(null);   // 登录页 Logo
-  const [favicon, setFavicon] = useState<string | null>(null);       // 站点 favicon
+  const [logoData, setLogoData] = useState<string | null>(null);     // Console logo
+  const [loginLogo, setLoginLogo] = useState<string | null>(null);   // Login-page logo
+  const [favicon, setFavicon] = useState<string | null>(null);       // Site favicon
 
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
@@ -79,7 +79,7 @@ export function BrandingSettingsPage() {
     setHydrated(true);
   }, [query.data, hydrated]);
 
-  // 读图为 data URI；base64 膨胀 1.33×，后端上限 1MB → 原图须 ≤ 700KB。
+  // Read the image as a data URI; base64 inflates size by 1.33×, and the backend cap is 1MB → the source image must be ≤ 700KB.
   function reader(set: (v: string | null) => void) {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -101,7 +101,7 @@ export function BrandingSettingsPage() {
         logo_data: logoData, login_logo: loginLogo, favicon,
       });
       await qc.invalidateQueries({ queryKey: ["settings"] });
-      await qc.invalidateQueries({ queryKey: ["branding"] });  // 即时刷新 Logo/标题/favicon/主题色
+      await qc.invalidateQueries({ queryKey: ["branding"] });  // Immediately refresh logo/title/favicon/accent color
       setToast({ kind: "success", text: t("settings.savedBranding") });
     } catch (e) { setToast({ kind: "error", text: toErrText(e, t) }); }
     finally { setBusy(false); }

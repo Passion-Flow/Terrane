@@ -1,6 +1,6 @@
-"""ApiKey（平台库 terrane_main）—— MCP / 程序化访问令牌,scope 到单库。
+"""ApiKey (platform DB terrane_main) — MCP / programmatic access token, scoped to a single KB.
 
-token 明文仅创建时返回一次;库内存 sha256(token_hash)。硬删除。
+The plaintext token is returned only once, at creation time; the DB stores sha256(token_hash). Hard delete.
 """
 
 from __future__ import annotations

@@ -1,7 +1,8 @@
-"""对象存储使用层 —— 原文件 + 逐页 WebP 页面图的 key 约定 + 适配器单例。
+"""Object storage usage layer -- key conventions for the original file plus per-page WebP page images, and the adapter singleton.
 
-provider 由 object_storage_type 选定（8 选 1，见 app/adapters/object_storage）。出厂自托管默认
-SeaweedFS（local 双模 s3）。本模块只暴露应用语义（原文/页面图 key），不感知具体 provider。
+The provider is chosen by object_storage_type (1 of 8, see app/adapters/object_storage). The self-hosted
+factory default is SeaweedFS (local dual-mode s3). This module exposes only application semantics
+(original / page-image keys) and is agnostic to the concrete provider.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ _bucket_ready = False
 
 
 def get_adapter() -> ObjectStorageAdapter:
-    """进程内单例适配器（按 object_storage_type 实例化一次）。"""
+    """In-process singleton adapter (instantiated once per object_storage_type)."""
     global _adapter
     if _adapter is None:
         _adapter = get_object_storage_adapter(get_settings())
@@ -26,7 +27,7 @@ def get_adapter() -> ObjectStorageAdapter:
 
 
 async def ensure_bucket() -> None:
-    """首次写入前幂等确保默认 bucket 存在（SeaweedFS/自托管首启）。进程内只跑一次。"""
+    """Idempotently ensure the default bucket exists before the first write (SeaweedFS / self-hosted first start). Runs only once per process."""
     global _bucket_ready
     if _bucket_ready:
         return
@@ -38,17 +39,17 @@ async def ensure_bucket() -> None:
 
 
 def original_key(raw_source_id: uuid.UUID | str) -> str:
-    """原始上传文件对象 key。"""
+    """Object key for the originally uploaded file."""
     return f"originals/{raw_source_id}"
 
 
 def page_key(raw_source_id: uuid.UUID | str, page_no: int) -> str:
-    """第 page_no 页（1-based）的 WebP 版面图 key。"""
+    """Object key for the WebP layout image of page page_no (1-based)."""
     return f"pages/{raw_source_id}/{page_no}.webp"
 
 
 async def delete_source_objects(raw_source_id: uuid.UUID | str) -> None:
-    """删除某源在对象存储里的全部对象（原文 + 所有页面图）。best-effort，不抛。"""
+    """Delete all objects for a source in object storage (original + all page images). Best-effort, never raises."""
     a = get_adapter()
     try:
         await a.delete(original_key(raw_source_id))

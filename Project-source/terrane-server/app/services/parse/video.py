@@ -1,7 +1,7 @@
-"""视频 AI 解析（自研流水线,纯 DashScope,无需公网上传):
+"""Video AI parsing (in-house pipeline, pure DashScope, no public-internet upload required):
 
-ffmpeg 抽关键帧 + 抽音轨 → 帧 base64 发 qwen-vl-plus 得画面描述、音轨 base64 发 qwen3-asr-flash 得转录
-→ 合并成结构化 Markdown(转录 + 带时间戳的画面描述)→ 并入既有切片/嵌入/RAG/图谱。
+ffmpeg extracts keyframes + the audio track -> frames are base64-sent to qwen-vl-plus for visual descriptions, the audio track is base64-sent to qwen3-asr-flash for transcription
+-> merged into structured Markdown (transcript + timestamped visual descriptions) -> fed into the existing chunking / embedding / RAG / graph pipeline.
 """
 
 from __future__ import annotations
@@ -22,8 +22,8 @@ log = structlog.get_logger("terrane.parse.video")
 
 VIDEO_MIMES = {"video/mp4", "video/quicktime", "video/x-msvideo", "video/webm", "video/x-matroska"}
 _MAX_FRAMES = 12
-_SCENE_THRESHOLD = 0.30          # 场景突变阈值(越小越敏感)
-_AUDIO_LIMIT_BYTES = 9_000_000   # ASR 单次上限保护(超长音轨截断,长视频分段为后续增强)
+_SCENE_THRESHOLD = 0.30          # Scene-change threshold (smaller = more sensitive)
+_AUDIO_LIMIT_BYTES = 9_000_000   # Per-call ASR size guard (over-long audio tracks are truncated; segmenting long videos is a future enhancement)
 _PTS = re.compile(rb"pts_time:([0-9.]+)")
 
 
@@ -35,7 +35,7 @@ async def _run(*args: str) -> tuple[int, bytes, bytes]:
 
 
 async def _scene_keyframes(path: str, work: str, cap: int) -> list[tuple[float, str]]:
-    """ffmpeg 场景切分抽关键帧(取画面突变点)+ 从 showinfo 解析每帧时间戳。返回 [(秒, 文件)] 时间序。"""
+    """Use ffmpeg scene detection to extract keyframes (at visual-change points) + parse each frame's timestamp from showinfo. Returns [(seconds, file)] in time order."""
     _code, _out, err = await _run(
         "ffmpeg", "-y", "-i", path,
         "-vf", f"select='gt(scene,{_SCENE_THRESHOLD})',showinfo", "-vsync", "vfr",
@@ -60,20 +60,20 @@ def _ts(sec: float) -> str:
 
 
 async def parse_video(db: AsyncSession, path: str) -> str:
-    """解析视频 → Markdown(语音转录 + 场景关键帧描述,带真实时间戳)。无模型渠道则返回空串。
+    """Parse a video -> Markdown (speech transcript + scene keyframe descriptions, with real timestamps). Returns an empty string if no model channel is available.
 
-    场景化(对标 SceneRAG/VideoRAG):按画面突变点取关键帧而非固定间隔,更贴合内容章节;
-    无场景突变(静态视频)则回退固定间隔。"""
+    Scene-based (comparable to SceneRAG / VideoRAG): keyframes are taken at visual-change points rather than at fixed intervals, aligning better with content sections;
+    if there are no scene changes (a static video), it falls back to fixed intervals."""
     dur = await _duration(path)
     work = tempfile.mkdtemp(prefix="trn_vid_")
     audio = os.path.join(work, "a.wav")
     try:
-        # 场景关键帧 + 抽音轨(并行)
+        # Scene keyframes + audio-track extraction (in parallel)
         scene, _audio_res = await asyncio.gather(
             _scene_keyframes(path, work, _MAX_FRAMES),
             _run("ffmpeg", "-y", "-i", path, "-vn", "-ac", "1", "-ar", "16000", audio),
         )
-        # 回退:无场景突变 → 固定间隔抽帧
+        # Fallback: no scene changes -> extract frames at fixed intervals
         if not scene:
             n = min(_MAX_FRAMES, max(2, int(dur // 10) or 2))
             interval = max(1.0, dur / n) if dur else 5.0
@@ -82,7 +82,7 @@ async def parse_video(db: AsyncSession, path: str) -> str:
             files = sorted(f for f in os.listdir(work) if f.startswith("f") and f.endswith(".jpg"))
             scene = [(i * interval, os.path.join(work, f)) for i, f in enumerate(files)]
 
-        # 转录
+        # Transcription
         transcript = ""
         if os.path.exists(audio) and 0 < os.path.getsize(audio) <= _AUDIO_LIMIT_BYTES:
             try:
@@ -91,7 +91,7 @@ async def parse_video(db: AsyncSession, path: str) -> str:
             except ModelError as e:
                 log.warning("video_asr_failed", error=str(e))
 
-        # 关键帧描述(带真实时间戳)
+        # Keyframe descriptions (with real timestamps)
         captions: list[str] = []
         for ts, fp in scene:
             try:
@@ -105,9 +105,9 @@ async def parse_video(db: AsyncSession, path: str) -> str:
 
         parts = []
         if transcript.strip():
-            parts.append("## 视频语音转录\n" + transcript.strip())
+            parts.append("## Video Speech Transcript\n" + transcript.strip())
         if captions:
-            parts.append("## 场景关键帧（按画面突变点）\n" + "\n".join(captions))
+            parts.append("## Scene Keyframes (by visual-change points)\n" + "\n".join(captions))
         return "\n\n".join(parts).strip()
     finally:
         for fn in os.listdir(work):

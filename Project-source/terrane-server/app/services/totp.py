@@ -1,6 +1,6 @@
-"""TOTP（RFC 6238,SHA1/30s/6 位)—— 零依赖自实现。2FA 用。
+"""TOTP (RFC 6238, SHA1 / 30s / 6 digits) -- zero-dependency in-house implementation. Used for 2FA.
 
-secret 以 base32 存储(库内再经 KEK 加密)。verify 默认 ±1 时间窗容时钟漂移。
+The secret is stored as base32 (and further encrypted with the KEK in the database). verify defaults to a +/-1 time window to tolerate clock drift.
 """
 
 from __future__ import annotations

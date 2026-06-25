@@ -1,6 +1,0 @@
-apiVersion: v2
-name: terrane
-description: Terrane —— 私有化部署 AI 知识库(集群版)。与 docker-compose 同镜像,双规格。
-type: application
-version: 1.0.0
-appVersion: "1.0.0"

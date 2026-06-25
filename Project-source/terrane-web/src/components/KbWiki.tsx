@@ -1,5 +1,5 @@
-/** 知识 Wiki(知识复利投影)。owner/editor 可「编译 Wiki」(后端异步 + 进度条 + 轮询 + 刷新续接);
- *  用项目 Markdown 组件渲染(表格/代码/公式)。 */
+/** Knowledge Wiki (a compounding projection of the knowledge base). Owner/editor can "compile the Wiki"
+ *  (async backend + progress bar + polling + resume-on-refresh); rendered with the project's Markdown component (tables/code/formulas). */
 
 import { BookOpen, Sparkle } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -38,7 +38,7 @@ export function KbWiki({ kbId, canEdit }: { kbId: string; canEdit: boolean }) {
     }, 2000);
   }, [kbId, load, stopPoll]);
 
-  // 挂载:先拉一次状态——running 则续接进度+轮询(刷新也能续看),否则拉结果页
+  // On mount: fetch status once — if running, resume progress + polling (so a refresh keeps following), otherwise fetch the result page
   useEffect(() => {
     let alive = true;
     wikiStatus(kbId)

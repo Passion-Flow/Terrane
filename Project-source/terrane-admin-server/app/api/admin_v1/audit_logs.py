@@ -1,8 +1,8 @@
-"""后台审计日志查询 API — 读 audit_logs（平台库 terrane_main），页码分页。挂 /admin-api/v1。
+"""Admin audit log query API — reads audit_logs (platform DB terrane_main), page-based pagination. Mounted at /admin-api/v1.
 
-平台角色：require_perm(P.AUDIT_READ)（super_admin + auditor）。审计表 append-only，本端点只读。
-过滤：actor（actor_id）/ action（前缀或精确）/ target_type / from / to（created_at 区间）。
-分页：page（1 起）+ page_size；返回 items + total（供页码分页 UI 显示「X–Y / 共 Z 条」）。
+Platform role: require_perm(P.AUDIT_READ) (super_admin + auditor). The audit table is append-only; this endpoint is read-only.
+Filters: actor (actor_id) / action (prefix or exact) / target_type / from / to (created_at range).
+Pagination: page (1-based) + page_size; returns items + total (for the paginated UI to show "X-Y / Z total").
 """
 
 from __future__ import annotations
@@ -35,9 +35,9 @@ def _parse_dt(value: str | None) -> datetime.datetime | None:
 
 
 def _target_name(r: AuditLog) -> str | None:
-    """目标的可读名（审计 append-only：取写入时快照，兼容硬删除后的对象）。
+    """Human-readable name of the target (audit is append-only: use the write-time snapshot, so it survives hard-deleted objects).
 
-    user → 邮箱；workspace → 名称。快照存于 after（创建/改）或 before（删除）。
+    user -> email; workspace -> name. The snapshot lives in after (create/update) or before (delete).
     """
     snap = r.after or r.before or {}
     if r.target_type == "user":
@@ -86,7 +86,7 @@ async def list_audit_logs(
         except ValueError:
             return {"items": [], "total": 0, "page": page, "page_size": page_size}
     if action:
-        # 末尾点 → 前缀匹配（如 'wizard.' 命中 wizard.email.configure/wizard.complete）。
+        # Trailing dot -> prefix match (e.g. 'wizard.' matches wizard.email.configure/wizard.complete).
         conds.append(AuditLog.action.like(f"{action}%") if action.endswith(".")
                      else AuditLog.action == action)
     if target_type:

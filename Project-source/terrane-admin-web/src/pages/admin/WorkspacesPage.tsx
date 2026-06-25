@@ -1,4 +1,4 @@
-/** 工作区管理 —— 列表 + 创建 + 行操作（查看成员/添加成员/编辑/删除）。紧凑精致。 */
+/** Workspace management -- list + create + row actions (view members / add member / edit / delete). Compact and polished. */
 
 import { MagnifyingGlass, PencilSimple, Plus, Trash, UserPlus, UsersThree } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -44,15 +44,15 @@ export function WorkspacesPage() {
   const canWrite = has("platform.workspace.write");
   const canAddMember = has("platform.user.write");
 
-  // 创建
+  // Create
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [kind, setKind] = useState("team");
-  // 编辑
+  // Edit
   const [editing, setEditing] = useState<WorkspaceItem | null>(null);
   const [eName, setEName] = useState("");
   const [eStatus, setEStatus] = useState("active");
-  // 删除
+  // Delete
   const [delT, setDelT] = useState<WorkspaceItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -156,7 +156,7 @@ export function WorkspacesPage() {
 
       <Pagination page={page} total={total} pageSize={WS_PAGE_SIZE} onPage={setPage} />
 
-      {/* 创建 */}
+      {/* Create */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t("ws.createTitle")}
         footer={<>
           <button type="button" onClick={() => setCreateOpen(false)} className="rounded-(--radius-control) px-3.5 py-1.5 text-[13px] text-ink-secondary hover:bg-canvas">{t("common.cancel")}</button>
@@ -172,7 +172,7 @@ export function WorkspacesPage() {
         </div>
       </Modal>
 
-      {/* 编辑 */}
+      {/* Edit */}
       <Modal open={!!editing} onClose={() => setEditing(null)} title={t("ws.editTitle")}
         footer={<>
           <button type="button" onClick={() => setEditing(null)} className="rounded-(--radius-control) px-3.5 py-1.5 text-[13px] text-ink-secondary hover:bg-canvas">{t("common.cancel")}</button>
@@ -188,7 +188,7 @@ export function WorkspacesPage() {
         </div>
       </Modal>
 
-      {/* 删除（输入名称确认） */}
+      {/* Delete (type-to-confirm by name) */}
       <ConfirmDeleteModal open={!!delT} onClose={() => setDelT(null)} title={t("ws.deleteTitle")}
         target={delT?.name ?? ""} desc={t("ws.deleteDesc", { name: delT?.name ?? "" })}
         onConfirm={onDelete} busy={busy} error={err} />

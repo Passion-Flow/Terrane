@@ -1,4 +1,4 @@
-/** 注册页 —— 邮箱 + 密码 + 用户名。成功后提示去邮箱验证（出厂强制邮验）。 */
+/** Register page — email + password + username. On success, prompts the user to verify their email (email verification is enforced out of the box). */
 
 import { Eye, EyeSlash } from "@phosphor-icons/react";
 import { useState, type FormEvent } from "react";

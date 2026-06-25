@@ -1,11 +1,13 @@
-"""model_channels（平台库 terrane_main：模型渠道，admin 管理 / 前台消费）
+"""model_channels (platform DB terrane_main: model channels, managed by admin / consumed by the front end)
 
 Revision ID: 000006
 Revises: 000005
 Create Date: 2026-06-20
 
-挪到 terrane_main(原在 terrane_admin):admin 经 PlatformBase mirror 管理,前台(摄入/检索/RAG/图谱)直读同库。
-六路收口渠道侧:chat/embed/rerank/web_search。api_key=L5(暂明文+__enc 占位,KEK 落地字段级加密)。硬删除。
+Moved into terrane_main (was in terrane_admin): the admin manages via the PlatformBase mirror, and the front
+end (ingestion/retrieval/RAG/graph) reads the same DB directly.
+Channel side of the six pathways: chat/embed/rerank/web_search. api_key = L5 (plaintext + __enc placeholder
+for now; field-level encryption once KEK lands). Hard delete.
 """
 from __future__ import annotations
 

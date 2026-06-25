@@ -1,7 +1,8 @@
-"""SQLAlchemy 2.x declarative base + 共享 mixin（terrane-server 平台库 terrane_main）。
+"""SQLAlchemy 2.x declarative base + shared mixins (terrane-server platform DB terrane_main).
 
-平台业务表遵硬删除铁律（02-database：无 deleted_at，删除=真删+FK 级联）→ 用 HardTimestampMixin。
-保留 TimestampMixin（含 deleted_at）仅为兼容拷贝层，平台表不应使用。
+Platform business tables follow the hard-delete rule (02-database: no deleted_at,
+delete = real delete + FK cascade) -> use HardTimestampMixin. TimestampMixin (with
+deleted_at) is kept only for the compatibility port layer; platform tables should not use it.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.core.ids import uuid7
 
-# 可移植 JSON 列：postgres 用 JSONB，其他方言回退 JSON。
+# Portable JSON column: JSONB on postgres, falls back to JSON on other dialects.
 JSONType = JSONB().with_variant(JSON(), "mysql", "oracle")
 
 
@@ -40,7 +41,7 @@ class TimestampMixin:
 
 
 class HardTimestampMixin:
-    """硬删除铁律下的时间戳（无 deleted_at）——平台业务表标配。"""
+    """Timestamps under the hard-delete rule (no deleted_at) -- standard for platform business tables."""
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

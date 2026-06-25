@@ -1,7 +1,7 @@
-"""SSO（OIDC 授权码流)—— 前台企业登录。挂 /api/v1/auth/sso。
+"""SSO (OIDC authorization code flow) — enterprise login for the frontend. Mounted at /api/v1/auth/sso.
 
-配置存 system_settings['sso']（admin 后台配,client_secret 经 KEK 加密)。
-login → discovery → authorize 重定向;callback → 换 token → JWKS 验 id_token → 配置用户 → 建会话。
+Configuration is stored in system_settings['sso'] (set in the admin console; client_secret is KEK-encrypted).
+login → discovery → authorize redirect; callback → exchange token → verify id_token via JWKS → provision user → create session.
 """
 
 from __future__ import annotations
@@ -41,16 +41,16 @@ async def _discover(issuer: str) -> dict:
 
 def _redirect_uri() -> str:
     base = (get_settings().frontend_base_url or "").rstrip("/")
-    # 回调走后端;前台与后端同源(网关/nginx 反代 /api)→ 用前台 origin
+    # The callback hits the backend; frontend and backend share an origin (gateway/nginx reverse-proxies /api) → use the frontend origin
     return f"{base}/api/v1/auth/sso/callback"
 
 
 @router.get("/status")
 async def sso_status(db: AsyncSession = Depends(get_db_session)) -> dict:
-    """公开:前台登录页据此决定是否显示「企业 SSO 登录」。"""
+    """Public: the frontend login page uses this to decide whether to show the "Enterprise SSO login" option."""
     cfg = await get_setting(db, SSO_KEY) or {}
     return {"data": {"enabled": bool(cfg.get("enabled") and cfg.get("issuer") and cfg.get("client_id")),
-                     "label": cfg.get("label") or "企业 SSO"}}
+                     "label": cfg.get("label") or "Enterprise SSO"}}
 
 
 @router.get("/login")

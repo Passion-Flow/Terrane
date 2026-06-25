@@ -1,5 +1,5 @@
-/** 初始化向导 API（/admin-api/v1/wizard）— 仅超管可操作。
- *  步骤：License→超管→邮件→Branding→完成。配置写平台库 terrane_main。 */
+/** Setup wizard API (/admin-api/v1/wizard) — super-admin only.
+ *  Steps: License → super admin → email → Branding → complete. Configuration is written to the platform database terrane_main. */
 
 import { request } from "@/lib/api";
 

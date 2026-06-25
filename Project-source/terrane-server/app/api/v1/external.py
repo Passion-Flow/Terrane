@@ -1,13 +1,13 @@
-"""Terrane External Knowledge API —— 把知识库暴露给任意外部应用作「外部知识库 / 检索工具」。
+"""Terrane External Knowledge API — exposes a knowledge base to any external app as an "external knowledge base / retrieval tool".
 
-三个面向,共用一套 Bearer 鉴权(复用 api_keys 的 trn_ 令牌,scope 到密钥绑定的单个 KB):
-  • Dify 兼容:   POST /api/v1/external/retrieval   (知识库基址填 {host}/api/v1/external)
-  • 通用检索:     POST /api/v1/external/search       ({query, top_k, score_threshold})
-  • 自描述工具:   GET  /api/v1/external/openapi.json  (供 Coze 插件 / GPTs Actions / n8n / FastGPT 导入)
+Three entry points sharing one Bearer auth scheme (reuses the trn_ token from api_keys, scoped to the single KB bound to the key):
+  • Dify-compatible:   POST /api/v1/external/retrieval   (set the knowledge base endpoint to {host}/api/v1/external)
+  • Generic search:    POST /api/v1/external/search       ({query, top_k, score_threshold})
+  • Self-describing tool: GET /api/v1/external/openapi.json (for import into Coze plugins / GPTs Actions / n8n / FastGPT)
 
-Dify 规范:Authorization: Bearer <key>;请求 {knowledge_id, query, retrieval_setting:{top_k, score_threshold},
-metadata_condition?};成功 200 {records:[{content, score, title, metadata:{}}]};
-失败非 200 {error_code, error_msg}(1001 头格式错 / 1002 鉴权失败 / 2001 库不存在)。
+Dify spec: Authorization: Bearer <key>; request {knowledge_id, query, retrieval_setting:{top_k, score_threshold},
+metadata_condition?}; success 200 {records:[{content, score, title, metadata:{}}]};
+failure non-200 {error_code, error_msg} (1001 bad header format / 1002 auth failure / 2001 KB not found).
 """
 
 from __future__ import annotations
@@ -34,12 +34,12 @@ _MAX_TOP_K = 50
 
 
 def _err(code: int, msg: str, status: int) -> JSONResponse:
-    """Dify 规范的错误体。"""
+    """Error body in the Dify spec format."""
     return JSONResponse({"error_code": code, "error_msg": msg}, status_code=status)
 
 
 async def _auth_key(request: Request, db: AsyncSession) -> ApiKey | JSONResponse:
-    """Bearer 鉴权;失败时直接返回 Dify 规范错误响应(调用方需判类型)。"""
+    """Bearer auth; on failure, returns a Dify-spec error response directly (caller must check the type)."""
     h = request.headers.get("authorization", "")
     if not h.lower().startswith("bearer "):
         return _err(1001, "Invalid Authorization header format. Expected 'Bearer <api-key>'.", 403)
@@ -56,7 +56,7 @@ async def _auth_key(request: Request, db: AsyncSession) -> ApiKey | JSONResponse
 
 
 def _to_records(hits: list[dict]) -> list[dict]:
-    """搬成 Dify records 形状。score 夹到 [0,1];metadata 必须是对象(不能 null)。"""
+    """Reshape into Dify records format. score is clamped to [0,1]; metadata must be an object (never null)."""
     out = []
     for h in hits:
         try:
@@ -79,9 +79,11 @@ async def _retrieve(db: AsyncSession, kb_id, query: str, top_k: int, threshold: 
     limit = max(1, min(int(top_k or 5), _MAX_TOP_K))
     hits = await ingest_service.search_chunks(db, kb_id=kb_id, query=query, limit=limit)
     records = _to_records(hits)
-    # 不按 score_threshold 硬过滤:Terrane 的「向量+词法混合(可选重排)」分不一定落在调用方的
-    # 0-1 标尺上(常 <0.5),硬过滤会让 Dify 等默认阈值 0.5 的应用「什么都搜不到」。
-    # 检索本身已排序,直接返回 top_k 最相关项;阈值仅在调用方明确传且能命中时做软收紧。
+    # Don't hard-filter by score_threshold: Terrane's "vector + lexical hybrid (optional rerank)" scores
+    # don't necessarily fall on the caller's 0-1 scale (often <0.5), so hard filtering would make apps
+    # like Dify (default threshold 0.5) "find nothing at all".
+    # The search results are already ranked, so just return the top_k most relevant items; the threshold
+    # is only applied as a soft tightening when the caller explicitly passes it and it still matches something.
     if threshold and threshold > 0:
         kept = [r for r in records if r["score"] >= threshold]
         if kept:
@@ -91,7 +93,7 @@ async def _retrieve(db: AsyncSession, kb_id, query: str, top_k: int, threshold: 
 
 @router.post("/retrieval")
 async def dify_retrieval(request: Request, db: AsyncSession = Depends(get_db_session)):
-    """Dify「外部知识库」回调端点。"""
+    """Dify "external knowledge base" callback endpoint."""
     key = await _auth_key(request, db)
     if isinstance(key, JSONResponse):
         return key
@@ -101,7 +103,7 @@ async def dify_retrieval(request: Request, db: AsyncSession = Depends(get_db_ses
         return _err(400, "Request body must be valid JSON.", 400)
 
     knowledge_id = str(body.get("knowledge_id") or "").strip()
-    # knowledge_id 必须等于密钥绑定的库 id(留空则放行,容错)
+    # knowledge_id must equal the KB id bound to the key (allowed through if empty, for tolerance)
     if knowledge_id and knowledge_id != str(key.kb_id):
         return _err(2001, "Knowledge base not found or not accessible with this API key.", 404)
 
@@ -113,7 +115,7 @@ async def dify_retrieval(request: Request, db: AsyncSession = Depends(get_db_ses
 
 @router.post("/search")
 async def generic_search(request: Request, db: AsyncSession = Depends(get_db_session)):
-    """通用检索端点(n8n / 自研 / HTTP 节点直连)。入参更随意,出参同 Dify records。"""
+    """Generic search endpoint (n8n / custom builds / direct HTTP-node connection). Inputs are more lenient; output matches Dify records."""
     key = await _auth_key(request, db)
     if isinstance(key, JSONResponse):
         return key
@@ -130,37 +132,37 @@ async def generic_search(request: Request, db: AsyncSession = Depends(get_db_ses
 
 @router.get("/openapi.json")
 async def openapi_schema(request: Request):
-    """自描述 OpenAPI 3.0,server 按实际部署地址自动填充。可直接导入 Coze 插件 / GPTs Actions / n8n。"""
+    """Self-describing OpenAPI 3.0; the server field is auto-populated from the actual deployment address. Directly importable into Coze plugins / GPTs Actions / n8n."""
     base = (_public_base_url(request) or str(request.base_url).rstrip("/")).rstrip("/")
     server = base + "/api/v1/external"
     record_schema = {
         "type": "object",
         "properties": {
-            "content": {"type": "string", "description": "命中片段正文"},
-            "score": {"type": "number", "description": "相关度 0~1"},
-            "title": {"type": "string", "description": "来源文档标题"},
-            "metadata": {"type": "object", "description": "来源元数据"},
+            "content": {"type": "string", "description": "The matched chunk text"},
+            "score": {"type": "number", "description": "Relevance score, 0-1"},
+            "title": {"type": "string", "description": "Source document title"},
+            "metadata": {"type": "object", "description": "Source metadata"},
         },
     }
     return JSONResponse({
         "openapi": "3.0.1",
         "info": {"title": "Terrane Knowledge Retrieval", "version": "1.0.0",
-                 "description": "在 Terrane 知识库中做语义+关键词混合检索,返回相关片段。Bearer 鉴权。"},
+                 "description": "Hybrid semantic + keyword retrieval over a Terrane knowledge base; returns relevant chunks. Bearer auth."},
         "servers": [{"url": server}],
         "security": [{"bearerAuth": []}],
         "paths": {
             "/search": {
                 "post": {
                     "operationId": "searchKnowledge",
-                    "summary": "检索知识库",
-                    "description": "传入自然语言 query,返回最相关的资料片段(带来源与相关度)。",
+                    "summary": "Search the knowledge base",
+                    "description": "Pass a natural-language query; returns the most relevant chunks (with source and relevance).",
                     "requestBody": {"required": True, "content": {"application/json": {"schema": {
                         "type": "object", "required": ["query"], "properties": {
-                            "query": {"type": "string", "description": "检索问题或关键词"},
-                            "top_k": {"type": "integer", "default": 5, "description": "返回片段数(1-50)"},
-                            "score_threshold": {"type": "number", "default": 0, "description": "相关度阈值 0~1"},
+                            "query": {"type": "string", "description": "Search question or keywords"},
+                            "top_k": {"type": "integer", "default": 5, "description": "Number of chunks to return (1-50)"},
+                            "score_threshold": {"type": "number", "default": 0, "description": "Relevance threshold, 0-1"},
                         }}}}},
-                    "responses": {"200": {"description": "检索结果", "content": {"application/json": {"schema": {
+                    "responses": {"200": {"description": "Retrieval results", "content": {"application/json": {"schema": {
                         "type": "object", "properties": {
                             "records": {"type": "array", "items": record_schema},
                             "count": {"type": "integer"},
@@ -170,8 +172,8 @@ async def openapi_schema(request: Request):
             "/retrieval": {
                 "post": {
                     "operationId": "difyRetrieval",
-                    "summary": "Dify 外部知识库回调",
-                    "description": "Dify「连接外部知识库」专用。基址填 " + server + " ,Dify 会自动调用 /retrieval。",
+                    "summary": "Dify external-knowledge callback",
+                    "description": "For Dify's \"Connect to an external knowledge base\". Set the base URL to " + server + " ; Dify calls /retrieval automatically.",
                     "requestBody": {"required": True, "content": {"application/json": {"schema": {
                         "type": "object", "required": ["query", "retrieval_setting"], "properties": {
                             "knowledge_id": {"type": "string"},
@@ -179,11 +181,11 @@ async def openapi_schema(request: Request):
                             "retrieval_setting": {"type": "object", "properties": {
                                 "top_k": {"type": "integer"}, "score_threshold": {"type": "number"}}},
                         }}}}},
-                    "responses": {"200": {"description": "检索结果", "content": {"application/json": {"schema": {
+                    "responses": {"200": {"description": "Retrieval results", "content": {"application/json": {"schema": {
                         "type": "object", "properties": {"records": {"type": "array", "items": record_schema}}}}}}},
                 },
             },
         },
         "components": {"securitySchemes": {"bearerAuth": {
-            "type": "http", "scheme": "bearer", "description": "知识库接入密钥(trn_ 令牌)"}}},
+            "type": "http", "scheme": "bearer", "description": "Knowledge base access key (trn_ token)"}}},
     })

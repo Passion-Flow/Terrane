@@ -1,4 +1,4 @@
-/** 运行时注入配置（public/app-config.js）——入口零硬编码 endpoint。 */
+/** Runtime-injected configuration (public/app-config.js) — no hardcoded endpoint at the entry point. */
 declare global {
   interface Window {
     __APP_CONFIG__?: { apiBase?: string };

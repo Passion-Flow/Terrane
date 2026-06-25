@@ -1,6 +1,7 @@
-/** Terrane 品牌标识 —— 堆叠卡片 / 文件夹造型 + 黑色 T 字（digital-tech-app 风），深色圆角磗承载。
- *  T 字完整居中在白卡内、四周留白（不触黑底）；标记黑底白形 app-icon，浅暗主题一致辨识。
- *  文字/图标走品牌上下文（部署方可在后台「设置→品牌外观」改产品名 + 上传 Logo）。 */
+/** Terrane brand mark — stacked cards / folder shape + a black "T" (digital-tech-app style), set on a dark rounded tile.
+ *  The "T" is fully centered inside the white card with padding all around (never touching the black background); the mark is a
+ *  black-on-white app icon that reads consistently in both light and dark themes.
+ *  Text/icon come from the branding context (deployers can change the product name + upload a logo under "Settings → Brand Appearance" in the admin console). */
 
 import { useBranding } from "@/branding/BrandingContext";
 
@@ -15,14 +16,14 @@ export function LogoMark({ size = 30 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" role="img" aria-label={product_name} className="shrink-0">
       <rect width="64" height="64" rx="15" fill="#0b1012" />
-      {/* 后卡：描边圆角矩形，轻微旋转，露在后方（堆叠感） */}
+      {/* Back card: outlined rounded rectangle, slightly rotated, peeking out behind (stacked feel) */}
       <g transform="rotate(-6 32 32)">
         <rect x="15" y="17" width="34" height="27" rx="6" fill="none" stroke="#ffffff" strokeWidth="1.7" />
       </g>
-      {/* 前卡：实白 主体 + 左上文件夹凸标 */}
+      {/* Front card: solid white body + folder tab in the top-left */}
       <rect x="14" y="24" width="36" height="25" rx="6" fill="#ffffff" />
       <path d="M16 26 a3 3 0 0 1 3 -3 h7 a2.5 2.5 0 0 1 2.2 1.4 l1.2 2.2 h2 v3 h-17.6 z" fill="#ffffff" />
-      {/* T 字：完整居中白卡内，四周留白 */}
+      {/* "T": fully centered inside the white card with padding all around */}
       <text x="32" y="42.3" textAnchor="middle" fontFamily="Geist, system-ui, sans-serif" fontSize="19" fontWeight="800" fill="#0a0a0a">T</text>
     </svg>
   );

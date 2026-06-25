@@ -1,5 +1,5 @@
-/** 模型渠道 API（/admin-api/v1/channels，管理库 terrane_admin）——平台级 LLM/嵌入/重排/web-search 后端。
- *  变体范式:getProviders() 给「新建渠道」下拉的类型;每类型居中模态配置。api_key GET 脱敏(只 has_key)。 */
+/** Model channels API (/admin-api/v1/channels, admin database terrane_admin) — platform-level LLM/embedding/rerank/web-search backends.
+ *  Variant pattern: getProviders() supplies the types for the "New channel" dropdown; each type is configured in a centered modal. The api_key GET is redacted (only has_key). */
 
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 

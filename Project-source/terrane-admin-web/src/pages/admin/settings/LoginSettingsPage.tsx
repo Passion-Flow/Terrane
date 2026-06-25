@@ -1,6 +1,6 @@
-/** 设置 → 登录设置。登录保护(失败锁定) + 会话时长——真接到 ratelimit / session 执行点。
- *  与 密码策略 共用 system_settings['security']（GET/PATCH /settings/security 全量），本页只编辑登录/会话子集。
- *  后续可在此加：登录方式开关(邮密/验证码)、SSO 启用等(对齐 Dify Login Settings)。 */
+/** Settings → Login settings. Login protection (lock on failed attempts) + session duration — wired into the actual ratelimit / session enforcement points.
+ *  Shares system_settings['security'] with Password Policy (GET/PATCH /settings/security operates on the full object); this page only edits the login/session subset.
+ *  Future additions here: login-method toggles (email+password / OTP), SSO enablement, etc. (aligned with Dify's Login Settings). */
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -49,7 +49,7 @@ export function LoginSettingsPage() {
     if (!query.data) return;
     setBusy(true);
     try {
-      // 全量提交：保留密码子集不变，只改登录/会话子集。
+      // Submit the full object: keep the password subset unchanged, edit only the login/session subset.
       await updateSecurity({
         ...query.data,
         login_lock_threshold: lockThreshold,

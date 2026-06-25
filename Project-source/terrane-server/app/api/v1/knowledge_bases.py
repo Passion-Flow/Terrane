@@ -1,8 +1,10 @@
-"""知识库 API（前台 /api/v1/knowledge-bases，平台库 terrane_main）。
+"""Knowledge base API (frontend /api/v1/knowledge-bases, platform database terrane_main).
 
-库 = 知识复利的容器(Raw 源 → 编译 → Wiki + 图)。本端点先做库本体 CRUD + 可见性/库角色 ACL;
-摄入/检索/图在后续端点。可见性:private(owner+显式成员)/ shared(显式成员)/ workspace(本工作区可见)。
-ACL:owner 全权;kb editor 可改;owner 才可删;有 access 才可读。License 锁定态被中间件拦。
+A KB = a container for compounding knowledge (raw sources -> compile -> Wiki + graph). These
+endpoints first cover the KB entity itself: CRUD + visibility/KB-role ACL; ingestion/retrieval/graph
+come in later endpoints. Visibility: private (owner + explicit members) / shared (explicit members) /
+workspace (visible to this workspace). ACL: owner has full control; KB editor can edit; only the owner
+can delete; any access grants read. The License-locked state is intercepted by middleware.
 """
 
 from __future__ import annotations
@@ -61,7 +63,7 @@ def _kid(kb_id: str) -> uuid.UUID:
 
 
 async def _my_role(db: AsyncSession, kb: KnowledgeBase, user: CurrentUser) -> str | None:
-    """返回 user 对 kb 的有效角色:owner / editor / viewer / None(无访问)。"""
+    """Return the user's effective role on the KB: owner / editor / viewer / None (no access)."""
     if str(kb.owner_id) == user.user_id:
         return "owner"
     m = (await db.execute(select(KbMember).where(
@@ -94,7 +96,7 @@ class CreateKbIn(BaseModel):
 @router.get("")
 async def list_kbs(user: CurrentUser = Depends(get_current_user),
                    db: AsyncSession = Depends(get_db_session)) -> dict:
-    """当前用户可见的库:自己拥有的 + 本工作区 workspace 可见的 + 被显式共享(kb_member)的。"""
+    """KBs visible to the current user: owned + workspace-visible in this workspace + explicitly shared (kb_member)."""
     uid = uuid.UUID(user.user_id)
     member_kb_ids = select(KbMember.kb_id).where(KbMember.user_id == uid)
     stmt = (select(KnowledgeBase).where(or_(
@@ -170,21 +172,21 @@ async def delete_kb(kb_id: str = Path(...), user: CurrentUser = Depends(get_curr
     if role != "owner":
         raise BizError("PERM_DENIED", {"need": "owner"})
     try:
-        await graph_service.drop_graph(db, kb.id)   # AGE 图独立于关系表,删库时一并清
+        await graph_service.drop_graph(db, kb.id)   # The AGE graph is independent of relational tables; drop it together with the KB
         await db.commit()
     except Exception as e:  # noqa: BLE001
         log.warning("graph_drop_failed", kb_id=kb_id, error=str(e))
-    # 清对象存储:库内所有源的原文 + 页面图(DB 行随级联硬删,但对象存储需显式清)
+    # Clear object storage: originals + page images of every source in the KB (DB rows are hard-deleted by cascade, but object storage must be cleared explicitly)
     sids = (await db.execute(select(RawSource.id).where(RawSource.kb_id == kb.id))).scalars().all()
     for s in sids:
         await storage.delete_source_objects(s)
-    await db.delete(kb)   # 硬删 + 级联(kb_members/raw_sources/chunks/wiki/jobs)
+    await db.delete(kb)   # Hard delete + cascade (kb_members/raw_sources/chunks/wiki/jobs)
     await db.commit()
     log.info("kb_deleted", kb_id=kb_id, user_id=user.user_id)
     return {"ok": True}
 
 
-# ---- 库共享（kb_members：owner 邀请同工作区用户为 viewer/editor）----
+# ---- KB sharing (kb_members: owner invites users from the same workspace as viewer/editor) ----
 
 @router.get("/{kb_id}/members")
 async def list_members(kb_id: str = Path(...), user: CurrentUser = Depends(get_current_user),
@@ -254,7 +256,7 @@ async def remove_member(kb_id: str = Path(...), member_user_id: str = Path(...),
     return {"ok": True}
 
 
-# ---- 源摄入 + 检索（知识复利第一段:文本入库 → 切片 → 词法检索）----
+# ---- Source ingestion + retrieval (first stage of compounding knowledge: text in -> chunk -> lexical search) ----
 
 class AddSourceIn(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
@@ -291,8 +293,8 @@ async def upload_source(kb_id: str = Path(...), file: UploadFile = File(...),
                         tier: str = Form("standard"),
                         user: CurrentUser = Depends(get_current_user),
                         db: AsyncSession = Depends(get_db_session)) -> dict:
-    """上传文件 → Terrane Parse 解析 → 切片/嵌入摄入。
-    tier 解析档位:fast=纯词法;standard=词法+VL(图片/扫描);high=整页 VL 版面解析(高保真表格/公式/版面)。"""
+    """Upload a file -> parse with Terrane Parse -> ingest as chunks/embeddings.
+    tier parse level: fast = lexical only; standard = lexical + VL (images/scans); high = full-page VL layout parsing (high-fidelity tables/formulas/layout)."""
     if tier not in ("fast", "standard", "high"):
         tier = "standard"
     kb, role = await _load(db, kb_id, user)
@@ -302,7 +304,7 @@ async def upload_source(kb_id: str = Path(...), file: UploadFile = File(...),
     fname = file.filename or "upload"
     ext = os.path.splitext(fname)[1].lower()
     mime = _EXT_MIME.get(ext, file.content_type or "")
-    cap = 300_000_000 if mime in video_parser.VIDEO_MIMES else 30_000_000  # 视频放宽
+    cap = 300_000_000 if mime in video_parser.VIDEO_MIMES else 30_000_000  # Higher cap for video
     if len(data) > cap:
         raise BizError("VALIDATION_FAILED", {"reason": "file_too_large"})
 
@@ -313,7 +315,7 @@ async def upload_source(kb_id: str = Path(...), file: UploadFile = File(...),
         except UnicodeDecodeError:
             raise BizError("VALIDATION_FAILED", {"reason": "unsupported_file_type"})
 
-    # 先建「解析中」源并落原文/渲染,立即返回;解析+摄入异步进行(高精档 VL 慢,上传不阻塞)。
+    # First create a "parsing" source, persist the original/render, and return immediately; parsing + ingestion run asynchronously (high-fidelity VL is slow, so the upload should not block).
     raw = await ingest_service.create_pending_source(
         db, kb_id=kb.id, workspace_id=kb.workspace_id, title=fname, mime=mime, size=len(data))
     if mime not in video_parser.VIDEO_MIMES:
@@ -323,7 +325,7 @@ async def upload_source(kb_id: str = Path(...), file: UploadFile = File(...),
             await storage.get_adapter().upload(storage.original_key(raw.id), data,
                                                content_type=mime or "application/octet-stream")
             in_obj = True
-        except Exception as e:  # noqa: BLE001 —— 对象存储不可用 → 降级 DB
+        except Exception as e:  # noqa: BLE001 -- object storage unavailable -> fall back to DB
             log.warning("original_object_store_failed", file=fname, error=str(e))
         if in_obj or len(data) <= 50_000_000:
             db.add(RawSourceOriginal(raw_source_id=raw.id, mime=mime or "application/octet-stream",
@@ -339,7 +341,7 @@ async def upload_source(kb_id: str = Path(...), file: UploadFile = File(...),
 
 
 async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tier: str) -> str | None:
-    """按档位解析文件 → Markdown 文本。None/空串 = 失败。"""
+    """Parse a file by tier -> Markdown text. None/empty string = failure."""
     if mime in video_parser.VIDEO_MIMES:
         with tempfile.NamedTemporaryFile(suffix=ext or ".mp4", delete=False) as tf:
             tf.write(data)
@@ -353,12 +355,12 @@ async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tie
             os.unlink(tmp)
     if mime in parse_engine.SUPPORTED:
         text = None
-        if mime == "application/pdf" and tier == "high":  # 高精:整页 VL 版面解析
+        if mime == "application/pdf" and tier == "high":  # High fidelity: full-page VL layout parsing
             try:
                 text = await parse_vl.parse_pdf_fullvl(db, data)
             except Exception as e:  # noqa: BLE001
                 log.warning("vl_fullparse_failed", error=str(e))
-        if not text:  # fast/standard 或高精回退 → 词法
+        if not text:  # fast/standard, or high-fidelity fallback -> lexical
             with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
                 tf.write(data)
                 tmp = tf.name
@@ -369,7 +371,7 @@ async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tie
                 text = None
             finally:
                 os.unlink(tmp)
-            if text and mime == "application/pdf" and tier != "fast":  # 标准:+ VL 图片/扫描增强
+            if text and mime == "application/pdf" and tier != "fast":  # Standard: + VL image/scan enhancement
                 try:
                     text = await parse_vl.enhance_pdf(db, data, text)
                 except Exception as e:  # noqa: BLE001
@@ -382,7 +384,7 @@ async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tie
 
 
 async def _ingest_bg(rid: uuid.UUID, user_id: uuid.UUID, data: bytes, mime: str, ext: str, tier: str) -> None:
-    """后台:按 tier 解析 → 写入源 + 切片/嵌入;失败置 status=failed。自带 session。"""
+    """Background: parse by tier -> write source + chunks/embeddings; on failure set status=failed. Manages its own session."""
     from app.db.session import get_sessionmaker
     sm = get_sessionmaker()
     try:
@@ -413,7 +415,7 @@ async def _ingest_bg(rid: uuid.UUID, user_id: uuid.UUID, data: bytes, mime: str,
 async def reparse_source(kb_id: str = Path(...), source_id: str = Path(...), tier: str = Form("standard"),
                          user: CurrentUser = Depends(get_current_user),
                          db: AsyncSession = Depends(get_db_session)) -> dict:
-    """重新解析(换档 / 失败重试):取原文 → 后台按 tier 重解析 + 重摄入。需 editor/owner。"""
+    """Re-parse (change tier / retry after failure): fetch the original -> re-parse + re-ingest by tier in the background. Requires editor/owner."""
     if tier not in ("fast", "standard", "high"):
         tier = "standard"
     kb, role = await _load(db, kb_id, user)
@@ -428,7 +430,7 @@ async def reparse_source(kb_id: str = Path(...), source_id: str = Path(...), tie
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
     o = await db.get(RawSourceOriginal, sid)
     if o is None:
-        raise BizError("VALIDATION_FAILED", {"reason": "no_original"})  # 无原文(如粘贴文本)不可重解析
+        raise BizError("VALIDATION_FAILED", {"reason": "no_original"})  # No original (e.g. pasted text) cannot be re-parsed
     data = o.data
     if data is None:
         try:
@@ -462,7 +464,7 @@ async def list_sources(kb_id: str = Path(...), user: CurrentUser = Depends(get_c
 async def get_source(kb_id: str = Path(...), source_id: str = Path(...),
                      user: CurrentUser = Depends(get_current_user),
                      db: AsyncSession = Depends(get_db_session)) -> dict:
-    """取单个源的解析内容(预览)。返回 Terrane Parse 解析后的文本 + 元信息 + 切片数。"""
+    """Get a single source's parsed content (preview). Returns the Terrane Parse output text + metadata + chunk count."""
     kb, _ = await _load(db, kb_id, user)
     try:
         sid = uuid.UUID(source_id)
@@ -473,7 +475,7 @@ async def get_source(kb_id: str = Path(...), source_id: str = Path(...),
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
     n = int((await db.execute(select(func.count()).select_from(Chunk)
                               .where(Chunk.raw_source_id == r.id))).scalar_one())
-    # 原文件的真实 mime(RawSource.mime 摄入时统一写 text/plain,左侧渲染要用原文件真 mime)
+    # The original file's true mime (RawSource.mime is uniformly set to text/plain at ingestion; the left-pane render needs the original file's real mime)
     orig_mime = (await db.execute(select(RawSourceOriginal.mime)
                                   .where(RawSourceOriginal.raw_source_id == r.id))).scalar_one_or_none()
     rnd = await db.get(RawSourceRender, r.id)
@@ -488,7 +490,7 @@ async def get_source(kb_id: str = Path(...), source_id: str = Path(...),
 async def get_source_pages(kb_id: str = Path(...), source_id: str = Path(...),
                            user: CurrentUser = Depends(get_current_user),
                            db: AsyncSession = Depends(get_db_session)) -> dict:
-    """取原文逐页 WebP 版面图的元信息(页数 + 每页尺寸)。前端据此占位 + 按视口懒加载单页。"""
+    """Get metadata for the per-page WebP layout images of the original (page count + per-page size). The frontend uses this to lay out placeholders and lazy-load individual pages by viewport."""
     kb, _ = await _load(db, kb_id, user)
     try:
         sid = uuid.UUID(source_id)
@@ -507,7 +509,7 @@ async def get_source_pages(kb_id: str = Path(...), source_id: str = Path(...),
 async def get_source_page(kb_id: str = Path(...), source_id: str = Path(...), page_no: int = Path(..., ge=1),
                           user: CurrentUser = Depends(get_current_user),
                           db: AsyncSession = Depends(get_db_session)) -> StreamingResponse:
-    """取单页 WebP 版面图(对象存储)。强缓存:页面图内容不可变。"""
+    """Get a single-page WebP layout image (from object storage). Strong caching: page image content is immutable."""
     import io
 
     kb, _ = await _load(db, kb_id, user)
@@ -520,7 +522,7 @@ async def get_source_page(kb_id: str = Path(...), source_id: str = Path(...), pa
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
     try:
         data = await storage.get_adapter().download(storage.page_key(sid, page_no))
-    except Exception:  # noqa: BLE001 —— 该页尚未渲染 → 大文档按需即时渲染(仅 PDF)
+    except Exception:  # noqa: BLE001 -- page not rendered yet -> on-demand instant render for large documents (PDF only)
         data = await _ondemand_page(db, sid, page_no)
         if data is None:
             raise BizError("RESOURCE_NOT_FOUND", {"resource": "page"})
@@ -529,8 +531,8 @@ async def get_source_page(kb_id: str = Path(...), source_id: str = Path(...), pa
 
 
 async def _ondemand_page(db: AsyncSession, sid: uuid.UUID, page_no: int) -> bytes | None:
-    """按需渲染单页(滚到尚未渐进渲染到的页):取原文 PDF → 渲该页 → 存回 → 返回字节。
-    仅 PDF（Office 依赖后台渐进渲染，单页再转换代价高）。"""
+    """On-demand single-page render (when scrolling to a page not yet progressively rendered): fetch the original PDF -> render that page -> store it back -> return the bytes.
+    PDF only (Office files rely on background progressive rendering; converting a single page again is too costly)."""
     o = await db.get(RawSourceOriginal, sid)
     if o is None or (o.mime or "") != "application/pdf":
         return None
@@ -555,7 +557,7 @@ async def _ondemand_page(db: AsyncSession, sid: uuid.UUID, page_no: int) -> byte
 async def get_source_original(kb_id: str = Path(...), source_id: str = Path(...),
                               user: CurrentUser = Depends(get_current_user),
                               db: AsyncSession = Depends(get_db_session)) -> StreamingResponse:
-    """取上传文件的原始字节(用于下载/直接渲染)。优先对象存储,降级 DB bytea。inline 展示。"""
+    """Get the raw bytes of the uploaded file (for download/direct rendering). Prefer object storage, fall back to DB bytea. Displayed inline."""
     import io
 
     kb, _ = await _load(db, kb_id, user)
@@ -570,7 +572,7 @@ async def get_source_original(kb_id: str = Path(...), source_id: str = Path(...)
     if o is None:
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "original"})
     data = o.data
-    if data is None:  # 字节在对象存储
+    if data is None:  # Bytes live in object storage
         try:
             data = await storage.get_adapter().download(storage.original_key(sid))
         except Exception:  # noqa: BLE001
@@ -593,10 +595,10 @@ async def delete_source(kb_id: str = Path(...), source_id: str = Path(...),
     raw = await db.get(RawSource, sid)
     if raw is None or raw.kb_id != kb.id:
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
-    await storage.delete_source_objects(sid)   # 清对象存储(原文 + 页面图);DB 行随级联硬删
-    await db.delete(raw)   # 硬删 + 级联(chunks ON DELETE CASCADE)
+    await storage.delete_source_objects(sid)   # Clear object storage (original + page images); DB rows are hard-deleted by cascade
+    await db.delete(raw)   # Hard delete + cascade (chunks ON DELETE CASCADE)
     await db.commit()
-    # 库内已无源 → 清空知识图谱(否则图谱残留旧实体)
+    # No sources left in the KB -> clear the knowledge graph (otherwise stale entities linger)
     remaining = int((await db.execute(select(func.count()).select_from(RawSource)
                                       .where(RawSource.kb_id == kb.id))).scalar_one())
     if remaining == 0:
@@ -626,15 +628,15 @@ async def search_kb(kb_id: str = Path(...), q: str = "", limit: int = 10,
 
 
 async def _graph_build_bg(kb_id: uuid.UUID, job_id: uuid.UUID, sources: list[tuple[str, str]]) -> None:
-    """后台构建图谱:重建前清旧 → 逐源抽取 → 实时回写进度。自带 session。"""
+    """Build the graph in the background: drop the old graph before rebuild -> extract source by source -> write progress back in real time. Manages its own session."""
     from app.db.session import get_sessionmaker
     try:
         async with get_sessionmaker()() as db:
-            await graph_service.drop_graph(db, kb_id)  # 重建前清旧,使图反映当前源
+            await graph_service.drop_graph(db, kb_id)  # Drop the old graph before rebuild so it reflects the current sources
             await db.commit()
             n = max(1, len(sources))
             for i, (_t, txt) in enumerate(sources):
-                # 处理第 i 个源前先推进度(至少 8%,单源也有可见进度);源内 LLM 抽取为原子,无法再细分
+                # Advance progress before processing source i (at least 8%, so even a single source shows visible progress); LLM extraction within a source is atomic and cannot be subdivided further
                 await db.execute(text("UPDATE ingest_jobs SET progress=:p WHERE id=:id"),
                                  {"p": max(8, int(i / n * 95)), "id": str(job_id)})
                 await db.commit()
@@ -656,7 +658,7 @@ async def _graph_build_bg(kb_id: uuid.UUID, job_id: uuid.UUID, sources: list[tup
 @router.post("/{kb_id}/graph/build")
 async def build_graph(kb_id: str = Path(...), user: CurrentUser = Depends(get_current_user),
                       db: AsyncSession = Depends(get_db_session)) -> dict:
-    """启动图谱构建(后台 + 进度);需 editor/owner。返回 job 信息,前端轮询 /graph/status。"""
+    """Start graph construction (background + progress); requires editor/owner. Returns job info; the frontend polls /graph/status."""
     kb, role = await _load(db, kb_id, user)
     if role not in ("owner", "editor"):
         raise BizError("PERM_DENIED", {"need": "editor"})
@@ -664,7 +666,7 @@ async def build_graph(kb_id: str = Path(...), user: CurrentUser = Depends(get_cu
                              .where(RawSource.kb_id == kb.id, RawSource.parsed_text.is_not(None)))).all()
     sources = [(t, x) for t, x in rows]
     if not sources:
-        await graph_service.drop_graph(db, kb.id)  # 没源 → 清图
+        await graph_service.drop_graph(db, kb.id)  # No sources -> clear the graph
         await db.commit()
         return {"job_id": None, "status": "done", "total": 0}
     job = IngestJob(kb_id=kb.id, kind="graph", status="running", progress=0)
@@ -679,7 +681,7 @@ async def build_graph(kb_id: str = Path(...), user: CurrentUser = Depends(get_cu
 @router.get("/{kb_id}/graph/status")
 async def graph_status(kb_id: str = Path(...), user: CurrentUser = Depends(get_current_user),
                        db: AsyncSession = Depends(get_db_session)) -> dict:
-    """最近一次图谱构建任务的状态/进度(供前端轮询 + 刷新续接进度)。"""
+    """Status/progress of the most recent graph build job (for frontend polling + resuming progress after refresh)."""
     kb, _ = await _load(db, kb_id, user)
     j = (await db.execute(select(IngestJob).where(IngestJob.kb_id == kb.id, IngestJob.kind == "graph")
                           .order_by(IngestJob.created_at.desc()).limit(1))).scalar_one_or_none()
@@ -692,7 +694,7 @@ async def graph_status(kb_id: str = Path(...), user: CurrentUser = Depends(get_c
 async def get_graph(kb_id: str = Path(...), user: CurrentUser = Depends(get_current_user),
                     db: AsyncSession = Depends(get_db_session)) -> dict:
     kb, _ = await _load(db, kb_id, user)
-    # 库内无任何源 → 图谱必为空(顺手清掉历史遗留的孤儿图,保证「删完源图就空」)
+    # No sources in the KB -> the graph must be empty (also clear any leftover orphan graph, so "deleting all sources empties the graph")
     n_src = int((await db.execute(select(func.count()).select_from(RawSource)
                                   .where(RawSource.kb_id == kb.id))).scalar_one())
     if n_src == 0:
@@ -709,7 +711,7 @@ async def get_graph(kb_id: str = Path(...), user: CurrentUser = Depends(get_curr
 async def studio_generate(kb_id: str = Path(...), kind: str = Path(...),
                           user: CurrentUser = Depends(get_current_user),
                           db: AsyncSession = Depends(get_db_session)) -> dict:
-    """Studio 生成(NotebookLM 式):study_guide/faq/briefing/timeline/mind_map/flashcards/quiz/data_table。"""
+    """Studio generation (NotebookLM-style): study_guide/faq/briefing/timeline/mind_map/flashcards/quiz/data_table."""
     kb, _ = await _load(db, kb_id, user)
     if kind not in studio_service.KINDS:
         raise BizError("VALIDATION_FAILED", {"reason": "kind"})
@@ -727,7 +729,7 @@ async def studio_generate(kb_id: str = Path(...), kind: str = Path(...),
 async def studio_audio_overview(kb_id: str = Path(...),
                                 user: CurrentUser = Depends(get_current_user),
                                 db: AsyncSession = Depends(get_db_session)) -> dict:
-    """Studio 媒体:双人播客音频(TTS),返回 {script, audio(data url)}。"""
+    """Studio media: two-host podcast audio (TTS), returns {script, audio(data url)}."""
     kb, _ = await _load(db, kb_id, user)
     rows = (await db.execute(select(RawSource.title, RawSource.parsed_text)
                              .where(RawSource.kb_id == kb.id, RawSource.parsed_text.is_not(None)))).all()
@@ -745,7 +747,7 @@ async def studio_audio_overview(kb_id: str = Path(...),
 async def studio_slide_export(kb_id: str = Path(...),
                               user: CurrentUser = Depends(get_current_user),
                               db: AsyncSession = Depends(get_db_session)) -> StreamingResponse:
-    """Studio 媒体:幻灯片导出为 .pptx 下载。"""
+    """Studio media: export the slide deck as a .pptx download."""
     import io
 
     kb, _ = await _load(db, kb_id, user)
@@ -766,7 +768,7 @@ async def studio_slide_export(kb_id: str = Path(...),
 @router.get("/{kb_id}/lint")
 async def lint_kb(kb_id: str = Path(...), user: CurrentUser = Depends(get_current_user),
                   db: AsyncSession = Depends(get_db_session)) -> dict:
-    """Agent·Lint 体检:扫描库健康度(源/切片/嵌入/图谱/Wiki),给问题清单 + 评分。"""
+    """Agent Lint health check: scan KB health (sources/chunks/embeddings/graph/Wiki) and produce an issue list + score."""
     kb, _ = await _load(db, kb_id, user)
     n_src = int((await db.execute(select(func.count()).select_from(RawSource)
                                   .where(RawSource.kb_id == kb.id))).scalar_one())
@@ -783,15 +785,15 @@ async def lint_kb(kb_id: str = Path(...), user: CurrentUser = Depends(get_curren
 
     issues: list[dict] = []
     if n_src == 0:
-        issues.append({"level": "info", "code": "no_sources", "msg": "知识库还没有任何资料。"})
+        issues.append({"level": "info", "code": "no_sources", "msg": "This knowledge base has no materials yet."})
     if n_failed:
-        issues.append({"level": "warn", "code": "failed_sources", "msg": f"{n_failed} 个源解析失败。"})
+        issues.append({"level": "warn", "code": "failed_sources", "msg": f"{n_failed} source(s) failed to parse."})
     if n_chunk and n_embed < n_chunk:
-        issues.append({"level": "warn", "code": "unembedded", "msg": f"{n_chunk - n_embed}/{n_chunk} 切片未生成向量(嵌入渠道未配置或失败),向量检索不完整。"})
+        issues.append({"level": "warn", "code": "unembedded", "msg": f"{n_chunk - n_embed}/{n_chunk} chunks have no vector (embedding channel not configured or failed); vector search is incomplete."})
     if n_src and not has_graph:
-        issues.append({"level": "info", "code": "no_graph", "msg": "尚未构建知识图谱,点「构建图谱」可生成。"})
+        issues.append({"level": "info", "code": "no_graph", "msg": "The knowledge graph has not been built yet; click \"Build graph\" to generate it."})
     if n_src and wiki is None:
-        issues.append({"level": "info", "code": "no_wiki", "msg": "尚未编译 Wiki,点「编译 Wiki」可生成。"})
+        issues.append({"level": "info", "code": "no_wiki", "msg": "The Wiki has not been compiled yet; click \"Compile Wiki\" to generate it."})
 
     score = 100
     score -= 40 if n_failed else 0
@@ -812,7 +814,7 @@ def _wiki_out(p) -> dict:
 
 async def _wiki_compile_bg(kb_id: uuid.UUID, ws_id: uuid.UUID, kb_name: str,
                            job_id: uuid.UUID, sources: list[tuple[str, str]]) -> None:
-    """后台编译 Wiki + 回写 job 进度(状态持久化,前端刷新可续看)。自带 session。"""
+    """Compile the Wiki in the background + write job progress back (state is persisted, so a frontend refresh can resume viewing). Manages its own session."""
     from app.db.session import get_sessionmaker
     try:
         async with get_sessionmaker()() as db:
@@ -837,7 +839,7 @@ async def _wiki_compile_bg(kb_id: uuid.UUID, ws_id: uuid.UUID, kb_name: str,
 @router.post("/{kb_id}/wiki/compile")
 async def compile_wiki(kb_id: str = Path(...), user: CurrentUser = Depends(get_current_user),
                        db: AsyncSession = Depends(get_db_session)) -> dict:
-    """知识复利:把库内各源 LLM 编译成结构化 Wiki 概览页(后台 + 进度)。需 editor/owner。"""
+    """Compounding knowledge: have the LLM compile the KB's sources into a structured Wiki overview page (background + progress). Requires editor/owner."""
     kb, role = await _load(db, kb_id, user)
     if role not in ("owner", "editor"):
         raise BizError("PERM_DENIED", {"need": "editor"})
@@ -857,7 +859,7 @@ async def compile_wiki(kb_id: str = Path(...), user: CurrentUser = Depends(get_c
 @router.get("/{kb_id}/wiki/status")
 async def wiki_status(kb_id: str = Path(...), user: CurrentUser = Depends(get_current_user),
                       db: AsyncSession = Depends(get_db_session)) -> dict:
-    """最近一次 Wiki 编译任务的状态/进度(供前端轮询 + 刷新续接进度)。"""
+    """Status/progress of the most recent Wiki compile job (for frontend polling + resuming progress after refresh)."""
     kb, _ = await _load(db, kb_id, user)
     j = (await db.execute(select(IngestJob).where(IngestJob.kb_id == kb.id, IngestJob.kind == "wiki")
                           .order_by(IngestJob.created_at.desc()).limit(1))).scalar_one_or_none()
@@ -886,7 +888,7 @@ async def get_wiki(kb_id: str = Path(...), slug: str = Path(...),
     return _wiki_out(page)
 
 
-# ---- MCP 密钥（把库挂进 Claude/Cursor 的 Bearer 令牌,scope 到本库）----
+# ---- MCP keys (Bearer tokens for mounting the KB into Claude/Cursor, scoped to this KB) ----
 
 class CreateKeyIn(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
@@ -906,7 +908,7 @@ async def create_mcp_key(body: CreateKeyIn, kb_id: str = Path(...),
     db.add(k)
     await db.commit()
     await db.refresh(k)
-    # token 仅此一次返回
+    # The token is returned only this once
     return {"id": str(k.id), "name": k.name, "token": token, "token_prefix": k.token_prefix,
             "mcp_url": "/mcp", "created_at": k.created_at.isoformat() if k.created_at else None}
 
@@ -955,16 +957,16 @@ class ChatIn(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     query: str = Field(min_length=1, max_length=4000)
     top_k: int = Field(default=5, ge=1, le=12)
-    model: str | None = Field(default=None, max_length=128)  # 前台「模型设置」选定的模型(可选)
-    source_id: str | None = Field(default=None)  # 指定 → 仅基于该文档问答(文档级问答)
+    model: str | None = Field(default=None, max_length=128)  # Model selected in the frontend "Model settings" (optional)
+    source_id: str | None = Field(default=None)  # If set -> answer based only on this document (document-level Q&A)
 
 
 @router.post("/{kb_id}/chat")
 async def chat_kb(body: ChatIn, kb_id: str = Path(...),
                   user: CurrentUser = Depends(get_current_user),
                   db: AsyncSession = Depends(get_db_session)) -> StreamingResponse:
-    """RAG 引用问答(SSE)。先发 sources(检索到的带编号切片),再流式发答案 delta,最后 done。
-    注:检索 + 取渠道在返回前完成(DB 会话此时存活);生成器内只用已取好的渠道字段调模型,不碰 DB。"""
+    """RAG citation Q&A (SSE). First emit sources (the retrieved, numbered chunks), then stream answer deltas, then done.
+    Note: retrieval + channel lookup complete before returning (while the DB session is alive); inside the generator we only use the already-fetched channel fields to call the model and never touch the DB."""
     kb, _ = await _load(db, kb_id, user)
     try:
         ssid = uuid.UUID(body.source_id) if body.source_id else None

@@ -1,8 +1,8 @@
-"""b2b 基线：system_settings / branding / audit_logs（平台库 terrane_main）
+"""B2B baseline: system_settings / branding / audit_logs (platform DB terrane_main)
 
-02-database：settings/branding（B 端基线配置）+ audit_logs（append-only，按月 RANGE 分区）。
-audit_logs 合规 HARD RULE：REVOKE UPDATE,DELETE + BEFORE UPDATE/DELETE 触发器双重 append-only 加固。
-非 PG 方言：audit_logs 退化为普通表（分区/REVOKE 为 PG 专属）。
+02-database: settings/branding (B2B baseline config) + audit_logs (append-only, monthly RANGE partitioning).
+audit_logs compliance HARD RULE: REVOKE UPDATE, DELETE + a BEFORE UPDATE/DELETE trigger, double-hardening
+append-only. Non-PG dialects: audit_logs degrades to a plain table (partitioning/REVOKE are PG-only).
 
 Revision ID: 000002
 Revises: 000001
@@ -43,7 +43,7 @@ def upgrade() -> None:
     bind = op.get_bind()
     is_pg = bind.dialect.name == "postgresql"
 
-    # —— system_settings：通用键值配置仓 ——
+    # —— system_settings: generic key-value config store ——
     op.create_table(
         "system_settings",
         sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
@@ -58,7 +58,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("key", "scope", "scope_id", name="uq_system_settings_key_scope"),
     )
 
-    # —— branding：部署级白标单行 ——
+    # —— branding: single deployment-level white-label row ——
     op.create_table(
         "branding",
         sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
@@ -74,7 +74,7 @@ def upgrade() -> None:
                   server_default=sa.text("CURRENT_TIMESTAMP")),
     )
 
-    # —— audit_logs：append-only，按月 RANGE 分区 ——
+    # —— audit_logs: append-only, monthly RANGE partitioning ——
     cols = [
         sa.Column("id", sa.Uuid(as_uuid=True), nullable=False),
         sa.Column("workspace_id", sa.Uuid(as_uuid=True), nullable=True),
@@ -111,7 +111,7 @@ def upgrade() -> None:
         nxt = (today.replace(day=28) + datetime.timedelta(days=4)).replace(day=1)
         _create_month_partition("audit_logs", today)
         _create_month_partition("audit_logs", nxt)
-        # append-only 双重加固：REVOKE + 触发器（owner/superuser 绕过 REVOKE，触发器一律生效）。
+        # append-only double-hardening: REVOKE + trigger (owner/superuser bypass REVOKE, but the trigger always applies).
         op.execute("REVOKE UPDATE, DELETE ON audit_logs FROM PUBLIC")
         op.execute("REVOKE UPDATE, DELETE ON audit_logs FROM CURRENT_USER")
         op.execute(

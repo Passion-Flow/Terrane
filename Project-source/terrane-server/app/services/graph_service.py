@@ -1,7 +1,7 @@
-"""知识图谱（AGE，平台库 terrane_main）。每库一张图 kb_<hex>。
+"""Knowledge graph (AGE, platform database terrane_main). One graph per KB, named kb_<hex>.
 
-LLM(qwen3.7-plus)从文本抽实体/关系 → MERGE 进 AGE 图。图是权威源,wiki 是其投影(后续)。
-AGE 的 `:Label` cypher 语法与 SQLAlchemy `:bind` 冲突 → 走底层 asyncpg 连接直执行 cypher。
+An LLM (qwen3.7-plus) extracts entities/relations from text -> MERGE into the AGE graph. The graph is the source of truth; the wiki is a projection of it (later).
+AGE's `:Label` cypher syntax conflicts with SQLAlchemy's `:bind` -> execute cypher directly over the underlying asyncpg connection.
 """
 
 from __future__ import annotations
@@ -32,13 +32,13 @@ def graph_name(kb_id: uuid.UUID) -> str:
 
 
 def _san(s: str, n: int = 100) -> str:
-    """清洗实体/关系名,避免 cypher 注入:去引号/反斜杠/换行,截断。"""
+    """Sanitize entity/relation names to avoid cypher injection: strip quotes/backslashes/newlines, then truncate."""
     s = re.sub(r"[\\'\"\n\r]", " ", str(s)).strip()
     return s[:n]
 
 
 async def _ac(db: AsyncSession):
-    """取底层 asyncpg 连接并装载 AGE(同一事务,db.commit() 生效)。"""
+    """Get the underlying asyncpg connection and load AGE (same transaction, so db.commit() takes effect)."""
     conn = await db.connection()
     raw = await conn.get_raw_connection()
     ac = raw.driver_connection
@@ -57,12 +57,12 @@ async def ensure_graph(db: AsyncSession, kb_id: uuid.UUID) -> str:
 
 
 async def drop_graph(db: AsyncSession, kb_id: uuid.UUID) -> None:
-    """删除该库的 AGE 图(删源后清理 / 重建前清旧)。幂等。"""
+    """Drop this KB's AGE graph (cleanup after deleting a source / clearing the old one before a rebuild). Idempotent."""
     g = graph_name(kb_id)
     ac = await _ac(db)
     exists = await ac.fetchval("SELECT count(*) FROM ag_catalog.ag_graph WHERE name = $1", g)
     if exists:
-        await ac.execute(f"SELECT drop_graph('{g}', true)")  # true = 级联删标签/数据
+        await ac.execute(f"SELECT drop_graph('{g}', true)")  # true = cascade-delete labels/data
 
 
 def _parse_extraction(raw: str) -> dict:
@@ -80,7 +80,7 @@ def _parse_extraction(raw: str) -> dict:
 
 
 async def build_from_text(db: AsyncSession, kb_id: uuid.UUID, content: str) -> tuple[int, int]:
-    """对一段文本抽取并 MERGE 进图。返回 (实体数, 关系数)。"""
+    """Extract from a piece of text and MERGE into the graph. Returns (entity count, relation count)."""
     g = await ensure_graph(db, kb_id)
     text_in = content[:_MAX_TEXT]
     try:
@@ -116,7 +116,7 @@ async def build_from_text(db: AsyncSession, kb_id: uuid.UUID, content: str) -> t
 
 
 async def build_graph(db: AsyncSession, kb_id: uuid.UUID, sources: list[tuple[str, str]]) -> dict:
-    """对一组 (title, text) 源构建图。sources 已由调用方取好(避免流式生命周期问题)。"""
+    """Build the graph from a set of (title, text) sources. sources are already fetched by the caller (to avoid streaming lifecycle issues)."""
     total_e = total_r = 0
     for _title, txt in sources:
         if not txt or not txt.strip():
@@ -130,7 +130,7 @@ async def build_graph(db: AsyncSession, kb_id: uuid.UUID, sources: list[tuple[st
 
 
 async def graph_data(db: AsyncSession, kb_id: uuid.UUID, limit: int = 300) -> dict:
-    """取图的节点 + 边,供可视化。"""
+    """Fetch the graph's nodes + edges for visualization."""
     g = graph_name(kb_id)
     ac = await _ac(db)
     exists = await ac.fetchval("SELECT count(*) FROM ag_catalog.ag_graph WHERE name = $1", g)

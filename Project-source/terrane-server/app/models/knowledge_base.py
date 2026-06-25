@@ -1,8 +1,10 @@
-"""KnowledgeBase + KbMember（平台库 terrane_main）—— 知识库实体 + 库级共享角色。
+"""KnowledgeBase + KbMember (platform DB terrane_main) — knowledge base entity + KB-level sharing roles.
 
-可见性三档:private(默认,仅 owner+显式 kb_members)/ shared(显式 kb_members 共享)/ workspace(本工作区可见)。
-库级角色 KbMember:viewer/editor(与 Workspace 角色独立,实际权限取交集,PRD 4.1.6)。
-硬删除铁律:workspace→库→kb_members 级联真删。
+Three visibility tiers: private (default, owner + explicit kb_members only) / shared (shared with explicit
+kb_members) / workspace (visible to the whole workspace).
+KB-level role KbMember: viewer/editor (independent of the Workspace role; effective permissions are the
+intersection of the two, PRD 4.1.6).
+Hard-delete rule: workspace → KB → kb_members cascade as a real delete.
 """
 
 from __future__ import annotations

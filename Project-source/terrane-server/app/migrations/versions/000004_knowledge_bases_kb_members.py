@@ -1,11 +1,12 @@
-"""knowledge_bases + kb_members（平台库 terrane_main：知识库实体 + 库级共享角色）
+"""knowledge_bases + kb_members (platform DB terrane_main: knowledge base entity + KB-level sharing roles)
 
 Revision ID: 000004
 Revises: 000003
 Create Date: 2026-06-19
 
-02-database 实体:库(WS 隔离、可见性三档 private/shared/workspace)、库级角色 KbMember(viewer/editor)。
-硬删除铁律:workspace 删 → 库级联删 → kb_members 级联删。
+02-database entities: knowledge base (WS-isolated, three visibility tiers private/shared/workspace),
+KB-level role KbMember (viewer/editor).
+Hard-delete rule: deleting a workspace → cascade-delete its KBs → cascade-delete their kb_members.
 """
 from __future__ import annotations
 

@@ -1,8 +1,8 @@
-"""后台操作员（System Users）管理 API（管理库 terrane_admin：users）。
+"""Admin operators (System Users) management API (admin DB terrane_admin: users).
 
-挂 /admin-api/v1/operators。权限 platform.user.*（registry 明示「后台操作员管理」；super_admin 写、admin 只读）。
-列出 / 新建 / 编辑(角色·状态) / 重置密码 / 删除后台账号。审计落 terrane_main（与业务跨库编排）。
-安全护栏：不能对自己禁用/降级/删除；不能删除/禁用/降级最后一个有效 super_admin（防自锁）。
+Mounted at /admin-api/v1/operators. Permission platform.user.* (the registry explicitly labels this "admin operator management"; super_admin writes, admin reads only).
+List / create / edit (role, status) / reset password / delete admin accounts. Audit records land in terrane_main (cross-DB orchestration with the business data).
+Safety guardrails: you cannot disable/demote/delete yourself; you cannot delete/disable/demote the last active super_admin (prevents self-lockout).
 """
 
 from __future__ import annotations
@@ -70,14 +70,14 @@ class CreateOperatorIn(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     email: EmailStr
     username: str = Field(min_length=1, max_length=64)
-    password: str = Field(default="", max_length=256)  # 留空 = 自动生成强密码（首登强制改）
+    password: str = Field(default="", max_length=256)  # leave blank = auto-generate a strong password (forced change on first login)
     role: RoleLit = "admin"
 
 
 @router.get("")
 async def list_operators(
     _=Depends(require_perm(P.USER_READ)),
-    q: str | None = Query(default=None, description="按邮箱/用户名模糊搜索"),
+    q: str | None = Query(default=None, description="Fuzzy search by email/username"),
     status: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -107,7 +107,7 @@ async def create_operator(
     db: AsyncSession = Depends(get_db_session),
     pdb: AsyncSession = Depends(get_platform_db),
 ) -> dict:
-    """新建后台操作员。密码留空 = 自动生成强密码、一次性返回 + 首登强制改密。"""
+    """Create an admin operator. Blank password = auto-generate a strong password, returned once + forced change on first login."""
     if body.role not in ROLES:
         raise BizError("VALIDATION_FAILED", {"reason": "role"})
     email = str(body.email).lower()
@@ -125,7 +125,7 @@ async def create_operator(
         pw, must_change = body.password, False
     else:
         pw = generated = security.new_token(9)
-        must_change = True  # 自动生成 → 首登强制改密
+        must_change = True  # auto-generated -> force password change on first login
 
     op = User(email=email, username=body.username, role=body.role,
               password_hash=security.hash_password(pw), is_active=True,
@@ -163,7 +163,7 @@ async def update_operator(
 
     if is_self and (demoting or disabling):
         raise BizError("OPERATOR_SELF_FORBIDDEN")
-    # 最后一个有效 super_admin 不可降级/禁用（防自锁）。
+    # The last active super_admin cannot be demoted/disabled (prevents self-lockout).
     if (demoting or disabling) and op.role == "super_admin" and op.is_active \
             and await _active_super_admins(db) <= 1:
         raise BizError("OPERATOR_LAST_SUPER_ADMIN")
@@ -180,7 +180,7 @@ async def update_operator(
     await audit_service.record(
         pdb, action="operator.update", actor_id=user.user_id, actor_name=user.name,
         target_type="operator", target_id=str(op.id), before=before, after=after, **audit_ctx(request))
-    # 禁用/降级 → 踢掉该操作员全部会话。
+    # Disable/demote -> kill all of this operator's sessions.
     if disabling or demoting:
         await SessionService().destroy_all_for_user(str(op.id))
     await db.commit()
@@ -195,7 +195,7 @@ async def reset_operator_password(
     db: AsyncSession = Depends(get_db_session),
     pdb: AsyncSession = Depends(get_platform_db),
 ) -> dict:
-    """重置操作员密码 → 生成新强密码、一次性返回 + 首登强制改密 + 踢全部会话。"""
+    """Reset an operator's password -> generate a new strong password, returned once + forced change on first login + kill all sessions."""
     op = await _get(db, operator_id)
     pw = security.new_token(9)
     op.password_hash = security.hash_password(pw)
@@ -217,7 +217,7 @@ async def delete_operator(
     db: AsyncSession = Depends(get_db_session),
     pdb: AsyncSession = Depends(get_platform_db),
 ) -> dict:
-    """硬删除操作员（铁律：真删）。护栏：不能删自己 / 最后一个有效 super_admin。"""
+    """Hard-delete an operator (iron rule: real deletion). Guardrails: cannot delete yourself / the last active super_admin."""
     op = await _get(db, operator_id)
     if str(op.id) == user.user_id:
         raise BizError("OPERATOR_SELF_FORBIDDEN")

@@ -1,7 +1,8 @@
-"""branding 细分:新增 login_logo + favicon（对齐 Dify 品牌四块）。
+"""branding breakdown: add login_logo + favicon (aligned with Dify's four branding slots).
 
-product_name=应用标题、logo_data=控制台/工作区 Logo（沿用）、login_logo=登录页 Logo、favicon=站点图标。
-均可空，缺省回退（favicon→logo_data→出厂 favicon.svg；login_logo→默认标记）。平台库 terrane_main。
+product_name = app title, logo_data = console/workspace logo (unchanged), login_logo = login-page logo,
+favicon = site icon. All nullable, with default fallbacks (favicon → logo_data → factory favicon.svg;
+login_logo → default mark). Platform DB terrane_main.
 """
 
 from __future__ import annotations

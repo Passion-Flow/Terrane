@@ -1,4 +1,4 @@
-/** 安全设置 —— 修改密码 + 两步验证(2FA)。 */
+/** Security settings —— change password + two-factor authentication (2FA). */
 import { Key } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router";

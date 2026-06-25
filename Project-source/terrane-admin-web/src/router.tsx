@@ -1,7 +1,9 @@
-/** 路由 —— URL 路径式 i18n（i18n.md：所有页带 /<lang>/ 前缀，根路径按浏览器语言 302）。
- *  公开：activate（免登录，锁定态贴 License 解锁，反死锁关键）。
- *  License 守卫区（RequireLicense，轮询吊销/删除 → 踢回 activate）：
- *    login（已登录则跳 /admin）；RequireAuth → /admin 管理控制台。 */
+/** Routing — URL path-based i18n (i18n.md: every page carries a /<lang>/ prefix; the root path
+ *  302-redirects based on browser language).
+ *  Public: activate (no login required; License unlock is reachable in the locked state, key to
+ *  avoiding deadlock).
+ *  License-guarded area (RequireLicense polls for revocation/deletion → kicks back to activate):
+ *    login (redirects to /admin if already logged in); RequireAuth → /admin management console. */
 
 import { useEffect } from "react";
 import { Navigate, Outlet, createBrowserRouter, useParams } from "react-router";
@@ -34,7 +36,7 @@ import { WizardPage } from "@/pages/wizard/WizardPage";
 function LangLayout() {
   const { lang } = useParams();
   const valid = !!lang && isSupported(lang);
-  // changeLanguage 触发 i18next 订阅更新，不能在渲染期执行（React 渲染期 setState 限制）
+  // changeLanguage triggers i18next subscriber updates; it must not run during render (React forbids setState during render).
   useEffect(() => {
     if (lang && isSupported(lang)) applyLang(lang);
   }, [lang]);
@@ -44,7 +46,7 @@ function LangLayout() {
   return <Outlet />;
 }
 
-/** 登录页守卫：已登录访问 /login 直接跳 /admin。 */
+/** Login page guard: a logged-in user visiting /login is redirected straight to /admin. */
 function LoginGate() {
   const { user, loading } = useAuth();
   const { lang } = useParams();
@@ -63,19 +65,19 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="activate" replace /> },
       { path: "activate", element: <ActivatePage /> },
-      // 激活后区域：License 守卫包裹，轮询到吊销/删除 → 踢回 activate。
+      // Post-activation area: wrapped by the License guard; on detecting revocation/deletion → kick back to activate.
       {
         element: <RequireLicense />,
         children: [
           { path: "login", element: <LoginGate /> },
-          // 受保护子树：未登录重定向 /<lang>/login。
+          // Protected subtree: redirects to /<lang>/login when not logged in.
           {
             element: <RequireAuth />,
             children: [
-              // 强制改密页 / 初始化向导：已登录可达（不被 RequireSetup 拦，否则死循环）。
+              // Forced password-change page / setup wizard: reachable once logged in (not gated by RequireSetup, otherwise an infinite loop).
               { path: "change-password", element: <ChangePasswordPage /> },
               { path: "wizard", element: <WizardPage /> },
-              // 控制台：须先完成首登改密（RequireSetup）。
+              // Console: requires the first-login password change to be completed first (RequireSetup).
               {
                 element: <RequireSetup />,
                 children: [

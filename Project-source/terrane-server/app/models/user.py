@@ -1,7 +1,8 @@
-"""User（前台知识库用户，WS 隔离）ORM — 平台库 terrane_main（02-database 实体 #2）。
+"""User (front-end knowledge base user, WS-isolated) ORM — platform DB terrane_main (02-database entity #2).
 
-(workspace_id,email) UNIQUE；硬删级联自 workspace。邮箱+argon2id（L3/L5 哈希）；防枚举。
-2FA TOTP / 备份码密文为字段级加密占位（接 KEK 后落地，阶段后续）。
+(workspace_id, email) UNIQUE; hard-delete cascades from workspace. Email + argon2id (L3/L5 hashing);
+enumeration-resistant. 2FA TOTP / backup-code ciphertext are placeholders for field-level encryption
+(to be implemented once KEK lands, in a later stage).
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, HardTimestampMixin, JSONType, UUIDMixin
 
-STATUSES = ("active", "disabled", "pending")  # pending = 邮箱未验证
+STATUSES = ("active", "disabled", "pending")  # pending = email not yet verified
 
 
 class User(UUIDMixin, HardTimestampMixin, Base):
@@ -36,7 +37,7 @@ class User(UUIDMixin, HardTimestampMixin, Base):
     twofa_enabled: Mapped[bool] = mapped_column(default=False, nullable=False)
     totp_secret_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     backup_codes_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
-    signup_meta: Mapped[dict | None] = mapped_column(JSONType, nullable=True)  # 注册风控/来源
+    signup_meta: Mapped[dict | None] = mapped_column(JSONType, nullable=True)  # signup risk control / source
     last_login_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

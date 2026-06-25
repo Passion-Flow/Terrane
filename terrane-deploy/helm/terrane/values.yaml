@@ -24,7 +24,7 @@ global:
   nodeSelector: {}
   # Extra labels applied to all Terrane workload Pods (Deployment/StatefulSet pod templates). Empty = none.
   podLabels: {}
-  # Custom CA certificate — trust a self-signed / private-CA https endpoint (信创 intranet). When the
+  # Custom CA certificate — trust a self-signed / private-CA https endpoint (Xinchuang (domestic) intranet). When the
   # backend talks to a TLS DB / mail / object store signed by a private CA, enable this.
   customCA:
     # Turn on private-CA trust injection.
@@ -67,7 +67,7 @@ ingress:
 # Application components. Each carries its own image block (default = Aliyun mirror, tag v1.0.0).
 # ==================================================================================================
 
-# ---- 前台业务控制面 (terrane-server) — knowledge base / retrieval / Chat assistant / studio / memory.
+# ---- Front-end business control plane (terrane-server) — knowledge base / retrieval / Chat assistant / studio / memory.
 server:
   # Deploy this component.
   enabled: true
@@ -117,7 +117,7 @@ server:
   #   - name: TERRANE_SOME_FLAG
   #     value: "1"
 
-# ---- 后台管理控制面 (terrane-admin-server) — activation / setup wizard / model channels / members.
+# ---- Admin control plane (terrane-admin-server) — activation / setup wizard / model channels / members.
 # Runs DB migration + factory super-admin bootstrap on startup.
 adminServer:
   # Deploy this component.
@@ -168,7 +168,7 @@ adminServer:
   #   - name: TERRANE_SOME_FLAG
   #     value: "1"
 
-# ---- 数据面网关 (terrane-gateway, Go). Carries its own license verifier-state on the shared volume.
+# ---- Data-plane gateway (terrane-gateway, Go). Carries its own license verifier-state on the shared volume.
 gateway:
   # Deploy this component.
   enabled: true
@@ -202,7 +202,7 @@ gateway:
   #   - name: TERRANE_SOME_FLAG
   #     value: "1"
 
-# ---- 前台 Web (terrane-web) — nginx SPA serving the front app + reverse-proxying /api to terrane-server.
+# ---- Front-end web (terrane-web) — nginx SPA serving the front app + reverse-proxying /api to terrane-server.
 # Stateless, safe to scale horizontally.
 web:
   # Deploy this component.
@@ -232,7 +232,7 @@ web:
   affinity: {}
   tolerations: []
 
-# ---- 后台 Web (terrane-admin-web) — nginx SPA serving the admin console + reverse-proxying
+# ---- Admin web (terrane-admin-web) — nginx SPA serving the admin console + reverse-proxying
 # /admin-api to terrane-admin-server. Stateless.
 adminWeb:
   # Deploy this component.
@@ -280,7 +280,8 @@ license:
   forgeEdgeUrl: ""
   # Shared deployment identity for ALL components (server / admin-server / gateway). REQUIRED so that
   # activating in the admin console also unlocks the front app — without it each pod gets its own
-  # fingerprint and you'll see "后台已激活、前台仍未激活". Generate ONCE: openssl rand -hex 16. One
+  # fingerprint and you'll see the admin "activated" while the front app stays "not activated".
+  # Generate ONCE: openssl rand -hex 16. One
   # cluster = one uid; do NOT change after activating (would require re-activation).
   deploymentUid: "#REPLACE_ME#"
   # Shared license volume holding active.forge + install_id, so the three control planes (server /
@@ -329,7 +330,7 @@ postgres:
   #    memory: 4Gi
 
 # External database — the DEFAULT, required path for a private deployment (used when postgres.enabled
-# =false above). Must be a PostgreSQL-compatible engine (incl. 信创 openGauss / PolarDB-PG) that
+# =false above). Must be a PostgreSQL-compatible engine (incl. Xinchuang (domestic) openGauss / PolarDB-PG) that
 # provides the `age` and `vector` extensions, with two databases reachable: terrane_main + terrane_admin.
 externalDatabase:
   # Use an external customer-managed database. Keep true for private deployment (pair with postgres.enabled=false).
@@ -351,7 +352,7 @@ redis:
   # customer-managed Redis (fill externalRedis below). Set true only for a quick single-host bring-up.
   enabled: false
   # Container image for the bundled Redis (terrane-redis = upstream redis:7-alpine re-tagged, so
-  # everything is pulled from one registry for air-gapped / 信创 delivery).
+  # everything is pulled from one registry for air-gapped / Xinchuang (domestic) delivery).
   image:
     # Full image repository. Defaults to the Aliyun mirror.
     repository: crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror/terrane-redis

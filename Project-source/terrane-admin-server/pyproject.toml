@@ -1,17 +1,17 @@
 [project]
 name = "terrane-admin-server"
 version = "1.0.0"
-description = "Terrane 后台管理控制面（terrane-admin-api）"
+description = "Terrane admin management control plane (terrane-admin-api)"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi==0.136.3",
     "uvicorn[standard]==0.49.0",
-    "httpx==0.28.1",  # 运行期:在线激活校验(forge_verifier online)
+    "httpx==0.28.1",  # runtime: online activation verification (forge_verifier online)
     "pydantic==2.13.4",
     "pydantic-settings==2.14.1",
     "structlog==26.1.0",
     "cryptography==48.0.1",
-    # —— 阶段②认证地基 ——
+    # —— Stage 2 auth foundation ——
     "sqlalchemy[asyncio]==2.0.45",
     "asyncpg==0.31.0",
     "alembic==1.14.0",
@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# 信创 DB 适配矩阵驱动（按 DATABASE_TYPE 选装，缺失时 db/dialects.py 给清晰 ImportError）。
+# Xinchuang (domestic) DB compatibility matrix drivers (installed per DATABASE_TYPE; when missing, db/dialects.py gives a clear ImportError).
 xinchuang-pg = ["asyncpg==0.31.0"]
 xinchuang-mysql = ["asyncmy==0.2.10"]
 xinchuang-oracle = ["oracledb==2.5.1"]

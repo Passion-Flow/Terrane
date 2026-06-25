@@ -1,5 +1,5 @@
-/** 语言切换 —— 自定义下拉组件（i18n.md §4.6：必须下拉、列母语名、非原生 select）。
- *  切换即改 URL 的 /<lang>/ 前缀（路由层 applyLang 生效）。 */
+/** Language switcher — custom dropdown component (i18n.md §4.6: must be a dropdown, list native language names, not a native select).
+ *  Switching rewrites the URL's /<lang>/ prefix (applied by applyLang at the routing layer). */
 
 import { Check, CaretDown, GlobeHemisphereWest } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
@@ -29,7 +29,7 @@ export function LanguageSelect() {
   const pick = (next: Lang) => {
     setOpen(false);
     if (next === current) return;
-    // 替换 URL 首段语言码，保留其余路径。
+    // Replace the leading language code in the URL, keeping the rest of the path.
     const rest = location.pathname.replace(/^\/[^/]+/, "");
     navigate(`/${next}${rest}${location.search}`, { replace: true });
   };

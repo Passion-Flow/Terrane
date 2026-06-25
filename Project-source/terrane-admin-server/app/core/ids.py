@@ -1,4 +1,4 @@
-"""标识符工具 — UUID v7 主键（时序友好，照搬 Forge app/core/ids.py）。"""
+"""Identifier helpers — UUID v7 primary keys (time-ordered, ported from Forge app/core/ids.py)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import uuid_utils
 
 
 def uuid7() -> uuid.UUID:
-    """业务主键用的时序 UUID v7。"""
+    """Time-ordered UUID v7 used as a business primary key."""
     return uuid.UUID(bytes=uuid_utils.uuid7().bytes)
 
 

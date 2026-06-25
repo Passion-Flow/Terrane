@@ -12,14 +12,14 @@ import (
 //	fmt.Println("Deployment ID:", fv.Fingerprint)   // show on activation page
 //	v := fv.VerifyOffline(pastedBlob, nil)           // offline .forge
 //	v := fv.ActivateOnline(pastedCode, "")           // online short code
-//	if !v.Unlocked() { show(v.Message("zh-CN")) }    // 需要激活许可证.
+//	if !v.Unlocked() { show(v.Message("zh-CN")) }    // License activation required.
 type ForgeVerifier struct {
 	masterPub    []byte
 	edgePub      []byte
 	Fingerprint  string
-	InstallID    string            // 反克隆：首激活随机 id（与指纹双锁）
-	DeploymentID string            // 注入的容器/集群权威身份（裸机为空）
-	Signals      map[string]string // 多信号向量
+	InstallID    string            // anti-clone: random id minted at first activation (double-locked with the fingerprint)
+	DeploymentID string            // injected authoritative container/cluster identity (empty on bare metal)
+	Signals      map[string]string // multi-signal vector
 	online       *OnlineClient
 }
 
@@ -34,9 +34,12 @@ func NewWithInstallPath(edgeURL, installIDPath string) *ForgeVerifier {
 		home, _ := os.UserHomeDir()
 		installIDPath = filepath.Join(home, ".config", "forge", "install_id")
 	}
-	// 回退：无注入 UID 时用部署指纹当 deployment_uid——同机多组件（server/admin/gateway）
-	// 共享同一指纹 → edge 按 UID 去重为「一个部署一个席位」，消除多组件抢席位的 binding_mismatch
-	// 横跳。指纹来自硬件不可注入，反克隆/防伪不削弱（克隆机指纹不同→UID 不同→照样被拒）。
+	// Fallback: when no UID is injected, use the deployment fingerprint as deployment_uid.
+	// Multiple components on the same host (server/admin/gateway) share one fingerprint, so the
+	// edge deduplicates by UID into "one deployment, one seat", eliminating the binding_mismatch
+	// flapping caused by components competing for a seat. The fingerprint comes from hardware and
+	// cannot be injected, so anti-clone/anti-forgery is not weakened (a cloned machine has a
+	// different fingerprint → a different UID → still rejected).
 	fingerprint := DeploymentFingerprint()
 	deploymentUID := DeploymentUID()
 	if deploymentUID == "" {

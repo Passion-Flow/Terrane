@@ -1,7 +1,7 @@
-/** 激活页（licensing.md 标准激活流程，UX 参考 Dify Enterprise + 用户参考图）：
- *  锁定态 = 居中状态卡（图标 + 橙点徽标 + 逐字锁定文案 + 按 verdict 区分描述）+「激活」按钮唤起弹窗；
- *  弹窗 = 在线/离线单选；在线填「许可证 ID」，离线展示「集群 ID」可复制 +「离线激活码」粘贴；
- *  已激活 → 跳 /login。错误/成功经右上角 toast。 */
+/** Activation page (standard activation flow per licensing.md, UX modeled on Dify Enterprise + the user's reference mockup):
+ *  Locked state = centered status card (icon + orange-dot badge + verbatim lock copy + description varying by verdict) + an "Activate" button that opens the modal;
+ *  Modal = online/offline radio; online takes a "License ID", offline shows a copyable "Cluster ID" + a paste field for the "Offline activation code";
+ *  Already activated → redirect to /login. Errors/successes surface via the top-right toast. */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -28,7 +28,7 @@ function errorKey(err: unknown): string {
   return `errors.${code}`;
 }
 
-/* ── toast（右上角，自动消失） ── */
+/* ── toast (top-right, auto-dismissing) ── */
 
 interface ToastMsg {
   kind: "error" | "success";
@@ -56,7 +56,7 @@ function Toast({ toast, onDone }: { toast: ToastMsg | null; onDone: () => void }
   );
 }
 
-/* ── 部署 ID（弹窗内固定展示，单行截断 + 复制；对齐 OpenRelay 激活弹窗） ── */
+/* ── Deployment ID (always shown in the modal, single-line truncation + copy; aligned with the OpenRelay activation modal) ── */
 
 function DeploymentId({ value }: { value: string }) {
   const { t } = useTranslation();
@@ -87,7 +87,7 @@ function DeploymentId({ value }: { value: string }) {
   );
 }
 
-/* ── 激活弹窗 ── */
+/* ── Activation modal ── */
 
 function ActivateModal({
   fingerprint,
@@ -175,7 +175,7 @@ function ActivateModal({
             </fieldset>
           </div>
 
-          {/* 部署 ID 固定展示（对齐 OpenRelay：在线/离线都展示，硬绑定身份供厂商签发） */}
+          {/* Deployment ID always shown (aligned with OpenRelay: displayed for both online/offline, the hard-bound identity the vendor signs against) */}
           <DeploymentId value={fingerprint} />
 
           <div>
@@ -216,7 +216,7 @@ function ActivateModal({
   );
 }
 
-/* ── 锁定状态卡（图标 + 橙点徽标 + 逐字锁定文案 + 按状态区分描述 + 激活按钮） ── */
+/* ── Locked status card (icon + orange-dot badge + verbatim lock copy + description varying by status + activate button) ── */
 
 function lockedDescKey(status: LicenseCard["status"]): string {
   if (status === "expired") return "locked.expiredDesc";
@@ -237,7 +237,7 @@ function LockedCard({ card, onActivate }: { card: LicenseCard; onActivate: () =>
           !
         </span>
       </div>
-      {/* 锁定提示 —— 文案逐字锁定（licensing.md） */}
+      {/* Lock notice —— copy is locked verbatim (licensing.md) */}
       <h2 className="mb-1.5 text-[15px] font-semibold text-ink">{t("locked.message")}</h2>
       <p className="mb-4 text-[13px] leading-relaxed text-ink-secondary">{t(lockedDescKey(card.status))}</p>
       <button
@@ -251,7 +251,7 @@ function LockedCard({ card, onActivate }: { card: LicenseCard; onActivate: () =>
   );
 }
 
-/* ── 页面 ── */
+/* ── Page ── */
 
 export function ActivatePage() {
   const { t } = useTranslation();
@@ -263,12 +263,12 @@ export function ActivatePage() {
   const { data: card, error } = useQuery({
     queryKey: ["license"],
     queryFn: getLicenseCard,
-    // 锁定时快轮询（3s）让激活近即时反映；已激活后回落 8s（仍能捕获吊销→重新落锁定页）。
+    // While locked, poll fast (3s) so activation is reflected near-instantly; once activated, fall back to 8s (still catches revocation → returns to the locked page).
     refetchInterval: (query) => (query.state.data?.unlocked ? 8_000 : 3_000),
   });
 
-  // 开源版（门控关闭）→ 不展示激活，直接重定向登录页。
-  // 激活成功（解锁）→ 跳登录页（认证在后续阶段落地）。
+  // Open-source edition (gating off) → don't show activation, redirect straight to the login page.
+  // Activation succeeded (unlocked) → go to the login page (authentication lands in a later stage).
   useEffect(() => {
     if (card?.required === false || card?.unlocked) navigate(`/${seg}/login`, { replace: true });
   }, [card?.required, card?.unlocked, navigate, seg]);

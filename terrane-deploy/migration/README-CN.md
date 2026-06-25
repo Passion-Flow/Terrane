@@ -1,41 +1,51 @@
-# Terrane 备份 / 迁移(docker-compose 部署)
+# Terrane backup / migration (docker-compose deployment)
 
-把一台 Terrane 整机搬到新服务器,或做日常灾备。脚本在 `Scripts/`。
+Move a whole Terrane host to a new server, or run routine disaster recovery. Scripts are in `Scripts/`.
 
-> 适用于 docker-compose **自带数据库**部署(默认即是,脚本用 `docker compose exec postgres pg_dump` 导库)。
-> 若你改用了**外部数据库**,数据库备份由你的 PG 侧负责;本脚本只需备 `license` 卷 + `.env`(KEK),
-> 数据库部分用你 DBA 的 dump/恢复流程。
+> Applies to docker-compose deployments **using the bundled database** (the default — the scripts use
+> `docker compose exec postgres pg_dump` to dump the databases).
+> If you switched to an **external database**, the database backup is handled on your PG side; these scripts
+> only need to back up the `license` volume + `.env` (KEK), and you use your DBA's dump/restore process for
+> the database.
 
-## 备份(旧服务器,在 docker-compose 部署目录内)
+## Backup (old server, run inside the docker-compose deployment directory)
 
 ```bash
-bash migration/Scripts/backup-terrane.sh           # 热备份(不停服,适合演练/日常)
-bash migration/Scripts/backup-terrane.sh --final    # 终备份(停应用层冻结写入,正式割接当天)
+bash migration/Scripts/backup-terrane.sh           # hot backup (no downtime; good for drills/routine)
+bash migration/Scripts/backup-terrane.sh --final    # final backup (stops the app layer to freeze writes; for the actual cutover day)
 ```
-产物 `terrane-migration-<时间戳>.tar.gz`,含:**双库 dump**(terrane_main + terrane_admin)、**License 卷**(active.forge + install_id)、**.env**(含 KEK)、SHA256 校验清单。
+Output `terrane-migration-<timestamp>.tar.gz`, containing: **both DB dumps** (terrane_main + terrane_admin),
+the **License volume** (active.forge + install_id), **.env** (with the KEK), and a SHA256 checksum manifest.
 
-> ⚠ 整包含 KEK 与全部数据,只走加密通道(scp/sftp)传输,落地后尽快删中转副本。
+> ⚠ The archive contains the KEK and all data. Transfer only over an encrypted channel (scp/sftp), and delete
+> the intermediate copy as soon as possible after landing.
 
-## 恢复(新服务器)
+## Restore (new server)
 
-前置:装好 Docker+Compose;解压同版本部署包并 `cd` 进 `docker-compose/`;配好镜像仓库登录。
+Prerequisites: Docker + Compose installed; the same-version deployment package unpacked and `cd`'d into
+`docker-compose/`; registry login configured.
 
 ```bash
 scp terrane-migration-*.tar.gz user@new-host:/path/terrane-deploy/docker-compose/
-# 新服务器:
-bash migration/Scripts/restore-terrane.sh /path/terrane-migration-<时间戳>.tar.gz
+# On the new server:
+bash migration/Scripts/restore-terrane.sh /path/terrane-migration-<timestamp>.tar.gz
 ```
-脚本会:校验 → 落 .env → 起 PG → 恢复双库 → 恢复 License 卷 → 起全栈 → 等健康。
+The script will: verify → put .env in place → start PG → restore both databases → restore the License volume
+→ start the full stack → wait for health.
 
-## 验证清单(切流量前必过)
+## Verification checklist (must pass before switching traffic)
 
-1. 后台能登(用改密后的超管账号),前台知识库 / 记忆 / 对话历史数据都在。
-2. License 状态 `active`(后台 License 卡片)。
-3. 模型渠道在、Chat 能正常回答。
+1. Admin login works (with the post-change-password super-admin account); the front-end knowledge base / memory
+   / conversation-history data is all present.
+2. License status is `active` (License card in the admin console).
+3. Model channels are present and Chat answers normally.
 
-## 关键铁律
+## Key rules
 
-- **KEK 必须逐字一致**:新机 `.env` 的 `TERRANE_KEK` 与旧机相同,否则 SMTP/2FA/凭据密文解不开。
-- **验证全过前不要关旧服务器、不要切 DNS/流量**。
-- License 因部署指纹变化掉证:正常,后台用激活码**重激活**即可(install_id 已随卷迁移,多数情况无感)。
-- 卷名假设为默认 `terrane_license`;若 compose project 名不同(`docker volume ls` 查),按实际卷名调脚本。
+- **The KEK must match exactly**: the new host's `.env` `TERRANE_KEK` must equal the old host's, otherwise the
+  SMTP/2FA/credential ciphertext cannot be decrypted.
+- **Do not shut down the old server and do not switch DNS/traffic until everything has been verified.**
+- License dropped because the deployment fingerprint changed: this is normal — just **re-activate** in the admin
+  console with the activation code (install_id has migrated with the volume, so in most cases it's seamless).
+- The volume name is assumed to be the default `terrane_license`; if your compose project name differs
+  (check with `docker volume ls`), adjust the scripts to the actual volume name.

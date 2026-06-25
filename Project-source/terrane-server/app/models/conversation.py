@@ -1,4 +1,4 @@
-"""Conversation + Message（平台库 terrane_main）—— 个人 AI 助手对话持久化。per-user 级联。"""
+"""Conversation + Message (platform DB terrane_main) — persistence for the personal AI assistant chat. Cascades per-user."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ class Conversation(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    title: Mapped[str] = mapped_column(String(200), nullable=False, default="新对话")
+    title: Mapped[str] = mapped_column(String(200), nullable=False, default="New chat")
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 

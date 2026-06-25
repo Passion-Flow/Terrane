@@ -1,5 +1,5 @@
-/** 设置 → License。授权详情(许可证状态 + 订阅配额) + 激活/换证(超管,已激活态须鉴权)。
- *  对齐 Relio/Dify:两张卡片 + 右上「激活」→ 居中模态(在线/离线 + 凭据)。 */
+/** Settings → License. License details (license status + subscription quotas) plus activation / re-licensing (super admin only; authentication required when already activated).
+ *  Aligned with Relio/Dify: two cards + an "Activate" button in the top right → centered modal (online/offline + credential). */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -70,7 +70,7 @@ export function LicenseSettingsPage() {
         )}
       </div>
 
-      {/* 许可证状态 */}
+      {/* License status */}
       <section className="mt-5 rounded-xl border border-border/70 bg-surface/40 p-5">
         <h2 className="border-b border-border/60 pb-3 text-base font-semibold text-ink">{t("settings.license.current")}</h2>
         <dl className="mt-1 divide-y divide-border/50">
@@ -87,7 +87,7 @@ export function LicenseSettingsPage() {
         </dl>
       </section>
 
-      {/* 订阅 */}
+      {/* Subscription */}
       <section className="mt-5 rounded-xl border border-border/70 bg-surface/40 p-5">
         <h2 className="border-b border-border/60 pb-3 text-base font-semibold text-ink">{t("overview.subscription")}</h2>
         <dl className="mt-1 divide-y divide-border/50">
@@ -99,7 +99,7 @@ export function LicenseSettingsPage() {
         </dl>
       </section>
 
-      {/* 激活/换证模态 */}
+      {/* Activation / re-licensing modal */}
       <Modal open={open} onClose={() => setOpen(false)} title={t("activate.modalTitle")}
         footer={<>
           <button type="button" onClick={() => setOpen(false)} className="rounded-(--radius-control) px-3.5 py-1.5 text-[13px] text-ink-secondary hover:bg-canvas">{t("activate.cancel")}</button>

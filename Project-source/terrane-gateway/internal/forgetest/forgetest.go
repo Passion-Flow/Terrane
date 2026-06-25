@@ -1,5 +1,6 @@
-// Package forgetest — 测试专用：生成测试主密钥并按 Forge compact token 格式签发 License。
-// 仅被 _test.go 引用，不进产物二进制。
+// Package forgetest — test-only: generates a test master key and issues licenses in the
+// Forge compact token format. Referenced only by _test.go files; never compiled into the
+// shipped binary.
 package forgetest
 
 import (
@@ -37,8 +38,8 @@ func (i *Issuer) EmbeddedKeysJSON() string {
 
 func b64u(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 
-// Sign 按 <b64u(canonical_json)>.<b64u(sig)> 格式签发任意 payload。
-// canonical: key 排序 + 紧凑分隔符（与 forge-server forge_file.py 对齐）。
+// Sign issues an arbitrary payload in the <b64u(canonical_json)>.<b64u(sig)> format.
+// canonical: keys sorted + compact separators (matching forge-server forge_file.py).
 func (i *Issuer) Sign(payload map[string]any) string {
 	b, err := canonicalJSON(payload)
 	if err != nil {
@@ -48,12 +49,12 @@ func (i *Issuer) Sign(payload map[string]any) string {
 	return b64u(b) + "." + b64u(sig)
 }
 
-// Issue 签发一份绑定指定部署指纹的标准测试 License。
+// Issue issues a standard test license bound to the given deployment fingerprint.
 func (i *Issuer) Issue(fingerprint string, days int) string {
 	now := time.Now().UTC()
 	return i.Sign(map[string]any{
 		"license_id":        "11112222-3333-4444-5555-666677778888",
-		"customer":          "测试客户有限公司",
+		"customer":          "Test Customer Co., Ltd.",
 		"product":           "terrane",
 		"active_from":       now.Format(time.RFC3339),
 		"active_until":      now.AddDate(0, 0, days).Format(time.RFC3339),
@@ -63,7 +64,8 @@ func (i *Issuer) Issue(fingerprint string, days int) string {
 	})
 }
 
-// canonicalJSON — Go encoding/json 对 map 已按 key 排序；去掉 HTML 转义并紧凑输出。
+// canonicalJSON — Go's encoding/json already sorts map keys; this drops HTML escaping and
+// emits compact output.
 func canonicalJSON(v any) ([]byte, error) {
 	b, err := json.Marshal(v)
 	if err != nil {

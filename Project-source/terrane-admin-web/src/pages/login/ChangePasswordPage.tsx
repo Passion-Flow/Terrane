@@ -1,6 +1,7 @@
-/** 强制改密页 —— 初始化向导「超管」步：出厂超管密码=邮箱，首登必须改密才放行控制台。
- *  当前密码 + 新密码 + 确认；成功后 refresh()（must_change_password 清零）→ 进 /admin。
- *  视觉与 LoginPage 同款（header + 居中窄列 + 右上 toast）。 */
+/** Forced password change page —— the "super admin" step of the setup wizard: the factory super-admin password equals the email,
+ *  and on first login the password must be changed before the console is unlocked.
+ *  Current password + new password + confirm; on success, refresh() (clears must_change_password) → enter /admin.
+ *  Visually identical to LoginPage (header + centered narrow column + top-right toast). */
 
 import { CheckCircle, Eye, EyeSlash, XCircle } from "@phosphor-icons/react";
 import { useEffect, useState, type FormEvent } from "react";

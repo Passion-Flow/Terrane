@@ -1,4 +1,4 @@
-/** 工作台首页 —— 知识库列表(SaaS 网格卡片 + 新建)。点击进入库详情。 */
+/** Workspace home — knowledge base list (SaaS grid cards + create). Click a card to open the KB detail. */
 
 import { Books, Buildings, Lock, Plus, UsersThree } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";

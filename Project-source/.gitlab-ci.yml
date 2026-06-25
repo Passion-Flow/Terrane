@@ -1,4 +1,4 @@
-# Terrane CI/CD —— 构建 5 镜像 → 推仓库 → (可选) Helm 升级。私有化交付三件套之一。
+# Terrane CI/CD — build 5 images -> push to registry -> (optional) Helm upgrade. One of the three pieces of the on-premise delivery suite.
 stages: [build, release, deploy]
 
 variables:

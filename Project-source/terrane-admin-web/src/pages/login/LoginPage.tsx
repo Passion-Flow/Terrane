@@ -1,6 +1,6 @@
-/** 登录页 —— 邮箱 + 密码 + 2FA（条件显示：收到 AUTH_2FA_REQUIRED 后才出）。
- *  提交：login → refresh()（拉 /me）→ 导航 /<lang>/admin；失败按 code 翻译错误。
- *  视觉对齐 activate 页（同款 header + 居中窄列 + 右上 toast）。 */
+/** Login page —— email + password + 2FA (shown conditionally: only after receiving AUTH_2FA_REQUIRED).
+ *  Submit: login → refresh() (fetches /me) → navigate to /<lang>/admin; on failure, translate the error by code.
+ *  Visually aligned with the activate page (same header + centered narrow column + top-right toast). */
 
 import { CheckCircle, Eye, EyeSlash, XCircle } from "@phosphor-icons/react";
 import { useEffect, useState, type FormEvent } from "react";
@@ -21,7 +21,7 @@ function errorKey(err: unknown): string {
   return `errors.${code}`;
 }
 
-/* ── toast（右上角，自动消失）—— 与 activate 页同款 ── */
+/* ── toast (top-right, auto-dismissing) —— same as the activate page ── */
 
 interface ToastMsg {
   kind: "error" | "success";
@@ -78,7 +78,7 @@ export function LoginPage() {
       await refresh();
       navigate(`/${seg}/admin`, { replace: true });
     } catch (err) {
-      // 首次缺 2FA：弹出验证码输入框（不算硬错误，提示语用 AUTH_2FA_REQUIRED 文案）。
+      // First time without 2FA: reveal the verification-code input (not a hard error; the message uses the AUTH_2FA_REQUIRED copy).
       if (err instanceof ApiError && err.code === "AUTH_2FA_REQUIRED") {
         setNeed2fa(true);
       }
@@ -88,7 +88,7 @@ export function LoginPage() {
     }
   }
 
-  // 较高输入框、克制描边、聚焦强调环（teal accent）。
+  // Taller input fields, restrained borders, focus accent ring (teal accent).
   const fieldClass =
     "w-full rounded-(--radius-control) border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink-faint focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50";
 
@@ -103,7 +103,7 @@ export function LoginPage() {
         </div>
       </header>
 
-      {/* 无卡片描边，内容居中成窄列，大标题 + 欢迎语 + 表单 */}
+      {/* No card border; content centered into a narrow column, with a large heading + welcome message + form */}
       <main className="flex flex-1 items-center justify-center px-4 pb-24">
         <div className="w-full max-w-[400px]">
           {loginLogo && <img src={loginLogo} alt="" className="mb-5 h-11 w-auto object-contain" />}

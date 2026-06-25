@@ -1,10 +1,11 @@
-"""conversations + messages（平台库 terrane_main：个人 AI 助手的对话持久化/聊天记录）
+"""conversations + messages (platform DB terrane_main: conversation persistence / chat history for the personal AI assistant)
 
 Revision ID: 000009
 Revises: 000008
 Create Date: 2026-06-20
 
-全局助手:跨用户全部知识库自动检索 + 记忆唤回 + 持久化对话历史。per-user,硬删级联。
+Global assistant: automatic retrieval across all of a user's knowledge bases + memory recall + persisted
+conversation history. per-user, hard-delete cascade.
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ def upgrade() -> None:
         CREATE TABLE conversations (
             id uuid PRIMARY KEY,
             user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            title varchar(200) NOT NULL DEFAULT '新对话',
+            title varchar(200) NOT NULL DEFAULT 'New chat',
             created_at timestamptz NOT NULL DEFAULT now(),
             updated_at timestamptz NOT NULL DEFAULT now()
         )
@@ -33,7 +34,7 @@ def upgrade() -> None:
             conversation_id uuid NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
             role varchar(16) NOT NULL,                 -- user/assistant
             content text NOT NULL,
-            meta jsonb NOT NULL DEFAULT '{}'::jsonb,    -- 引用来源等
+            meta jsonb NOT NULL DEFAULT '{}'::jsonb,    -- cited sources, etc.
             created_at timestamptz NOT NULL DEFAULT now()
         )
     """)

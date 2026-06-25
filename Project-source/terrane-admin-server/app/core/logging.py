@@ -1,4 +1,4 @@
-"""structlog JSON 日志（observability.md：结构化日志 + request_id 贯穿）。"""
+"""structlog JSON logging (observability.md: structured logs + request_id threaded throughout)."""
 
 from __future__ import annotations
 

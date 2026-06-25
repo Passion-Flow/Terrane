@@ -1,4 +1,4 @@
-/** Studio 生成 API（NotebookLM 式产物)。POST /knowledge-bases/{id}/studio/{kind}。 */
+/** Studio generation API (NotebookLM-style artifacts). POST /knowledge-bases/{id}/studio/{kind}. */
 
 import { request } from "@/lib/api";
 import { apiBase } from "@/lib/config";
@@ -30,12 +30,12 @@ export const generateStudio = (kbId: string, kind: StudioKind) =>
     method: "POST", credentials: "include",
   });
 
-/** 播客音频(双人 TTS),返回 {script, audio(data url)} 或 {ok:false,reason}。 */
+/** Podcast audio (two-speaker TTS); returns {script, audio(data url)} or {ok:false,reason}. */
 export const generateAudioOverview = (kbId: string) =>
   request<{ kind: string; format: string; content: Podcast | null; ok?: boolean; reason?: string }>(
     `/api/v1/knowledge-bases/${kbId}/audio-overview`, { method: "POST", credentials: "include" });
 
-/** 幻灯片导出为 pptx 下载。 */
+/** Export the slide deck as a pptx download. */
 export async function exportSlideDeck(kbId: string): Promise<void> {
   const resp = await fetch(`${apiBase()}/api/v1/knowledge-bases/${kbId}/slide-deck/export`, {
     method: "POST", credentials: "include",

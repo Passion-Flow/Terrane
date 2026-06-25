@@ -1,7 +1,7 @@
 [project]
 name = "terrane-server"
 version = "1.0.0"
-description = "Terrane 前台业务控制面（terrane-api）"
+description = "Terrane frontend business control plane (terrane-api)"
 requires-python = ">=3.13"
 dependencies = [
     "PyJWT[crypto]>=2.8",
@@ -10,19 +10,19 @@ dependencies = [
     "openpyxl>=3.1",
     "python-docx>=1.1",
     "PyMuPDF>=1.27",
-    "Pillow>=11.0",            # PDF 页面像素图 → WebP 编码（pil_tobytes）
-    # —— 对象存储 8-provider（惰性 import：未选中的 provider 不触发）——
-    "boto3>=1.35",            # S3 兼容：AWS S3 + 4 国产云 + SeaweedFS（自托管默认）
-    "azure-storage-blob>=12.24",  # Azure Blob（原生 SDK）
-    "google-cloud-storage>=2.19",  # Google Cloud Storage（原生 SDK）
+    "Pillow>=11.0",            # PDF page pixmap -> WebP encoding (pil_tobytes)
+    # -- Object storage, 8 providers (lazy import: unselected providers are not triggered) --
+    "boto3>=1.35",            # S3-compatible: AWS S3 + 4 domestic clouds + SeaweedFS (self-hosted default)
+    "azure-storage-blob>=12.24",  # Azure Blob (native SDK)
+    "google-cloud-storage>=2.19",  # Google Cloud Storage (native SDK)
     "fastapi==0.136.3",
     "uvicorn[standard]==0.49.0",
-    "httpx==0.28.1",  # 运行期:所有模型调用(chat/embed/rerank/vl/asr/tts)+ 在线激活
+    "httpx==0.28.1",  # runtime: all model calls (chat/embed/rerank/vl/asr/tts) + online activation
     "pydantic==2.13.4",
     "pydantic-settings==2.14.1",
     "structlog==26.1.0",
     "cryptography==48.0.1",
-    # —— 阶段②平台库地基 ——
+    # -- Stage 2 platform-DB foundation --
     "sqlalchemy[asyncio]==2.0.45",
     "asyncpg==0.31.0",
     "alembic==1.14.0",

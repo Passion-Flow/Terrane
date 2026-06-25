@@ -39,11 +39,12 @@ x-shared-env: &backend-env
   # identity (anti-clone double-lock) and activation persists across restarts.
   TERRANE_LICENSE_PATH: /var/lib/terrane/license/active.forge
   TERRANE_LICENSE_CRL_PATH: /var/lib/terrane/license/crl.forge
-  # ---- 多组件部署身份(关键!)----
+  # ---- Multi-component deployment identity (critical!) ----
   # Same value across server / admin-server / gateway → inside containers they derive ONE shared
   # deployment fingerprint, so online activation is shared across components. WITHOUT this, each
   # container uses its own random machine-id and the admin activating does NOT unlock the front
-  # ("后台已激活、前台仍显示未激活"). Generate once: openssl rand -hex 16. Do NOT change after activating.
+  # (admin shows "activated" while the front app still shows "not activated"). Generate once:
+  # openssl rand -hex 16. Do NOT change after activating.
   FORGE_DEPLOYMENT_UID: ${FORGE_DEPLOYMENT_UID:-#REPLACE_ME#}
   # ---- Object storage (8-provider; bundled self-hosted default = SeaweedFS, S3-compatible) ----
   # Stores uploaded originals + per-page WebP layout images (knowledge-base preview). DEFAULT points at
@@ -51,15 +52,15 @@ x-shared-env: &backend-env
   # s3 / aliyun-oss / tencent-cos / volcengine-tos / huawei-obs / azure-blob / google-storage and fill its
   # credentials (see .env.example). If unreachable, originals fall back to the DB and preview degrades.
   OBJECT_STORAGE_TYPE: ${OBJECT_STORAGE_TYPE:-local}
-  OBJECT_STORAGE_LOCAL_MODE: ${OBJECT_STORAGE_LOCAL_MODE:-s3}      # s3 = 委托内置 SeaweedFS；filesystem = 纯磁盘
+  OBJECT_STORAGE_LOCAL_MODE: ${OBJECT_STORAGE_LOCAL_MODE:-s3}      # s3 = delegate to the bundled SeaweedFS; filesystem = plain disk
   OBJECT_STORAGE_DEFAULT_BUCKET: ${OBJECT_STORAGE_DEFAULT_BUCKET:-terrane}
   OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-http://seaweedfs:8333}
   OBJECT_STORAGE_REGION: ${OBJECT_STORAGE_REGION:-us-east-1}
   OBJECT_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:-terrane_app}
   OBJECT_STORAGE_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:-Seaweedfs@!QAZxsw2.}
-  OBJECT_STORAGE_SECURE: ${OBJECT_STORAGE_SECURE:-false}            # 内网 SeaweedFS 走 http
+  OBJECT_STORAGE_SECURE: ${OBJECT_STORAGE_SECURE:-false}            # in-cluster SeaweedFS uses http
   OBJECT_STORAGE_LOCAL_PATH: ${OBJECT_STORAGE_LOCAL_PATH:-/var/lib/terrane/uploads}
-  # ---- private CA (optional): trust a self-signed / private-CA https endpoint (信创 intranet) ----
+  # ---- private CA (optional): trust a self-signed / private-CA https endpoint (Xinchuang (domestic) intranet) ----
   SSL_CERT_FILE: ${TERRANE_CA_FILE:+/etc/terrane/ca-bundle.crt}
   REQUESTS_CA_BUNDLE: ${TERRANE_CA_FILE:+/etc/terrane/ca-bundle.crt}
   CURL_CA_BUNDLE: ${TERRANE_CA_FILE:+/etc/terrane/ca-bundle.crt}
@@ -67,7 +68,7 @@ x-shared-env: &backend-env
 x-registry: &registry ${REGISTRY:-crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror}
 
 services:
-  # ---- 前台业务控制面 (terrane-server, internal :43001) ----------------------------------------
+  # ---- Front-end business control plane (terrane-server, internal :43001) ----------------------
   terrane-server:
     image: ${REGISTRY:-crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror}/terrane-server:${TERRANE_TAG:-v1.0.0}
     restart: always
@@ -89,11 +90,12 @@ services:
       # required:false → if you comment out the bundled PG/Redis to use an external one, this won't error.
       postgres: { condition: service_healthy, required: false }
       redis: { condition: service_healthy, required: false }
-      # 对象存储是可降级依赖:只等启动(不等健康),挂了也不阻塞前台(原文回退 DB、预览降级)。
+      # Object storage is a degradable dependency: wait only for it to start (not for health). If it
+      # goes down it does not block the front app (originals fall back to the DB, preview degrades).
       seaweedfs: { condition: service_started, required: false }
     networks: [internal]
 
-  # ---- 后台管理控制面 (terrane-admin-server, internal :43003) — 迁移 + 出厂建超管 --------------
+  # ---- Admin control plane (terrane-admin-server, internal :43003) — migration + factory super-admin bootstrap --
   terrane-admin-server:
     image: ${REGISTRY:-crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror}/terrane-admin-server:${TERRANE_TAG:-v1.0.0}
     restart: always
@@ -117,7 +119,7 @@ services:
       redis: { condition: service_healthy, required: false }
     networks: [internal]
 
-  # ---- 数据面网关 (Go) -------------------------------------------------------------------------
+  # ---- Data-plane gateway (Go) -----------------------------------------------------------------
   terrane-gateway:
     image: ${REGISTRY:-crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror}/terrane-gateway:${TERRANE_TAG:-v1.0.0}
     restart: always
@@ -130,7 +132,7 @@ services:
       terrane-server: { condition: service_healthy }
     networks: [internal]
 
-  # ---- 前台 Web (nginx SPA + /api 反代 terrane-server) -----------------------------------------
+  # ---- Front-end web (nginx SPA + /api reverse-proxied to terrane-server) ----------------------
   terrane-web:
     image: ${REGISTRY:-crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror}/terrane-web:${TERRANE_TAG:-v1.0.0}
     restart: always
@@ -140,7 +142,7 @@ services:
       terrane-server: { condition: service_healthy }
     networks: [internal, public]
 
-  # ---- 后台 Web (nginx SPA + /admin-api 反代 terrane-admin-server) ------------------------------
+  # ---- Admin web (nginx SPA + /admin-api reverse-proxied to terrane-admin-server) --------------
   terrane-admin-web:
     image: ${REGISTRY:-crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror}/terrane-admin-web:${TERRANE_TAG:-v1.0.0}
     restart: always
@@ -157,8 +159,9 @@ services:
   postgres:
     # PostgreSQL 18 + Apache AGE (knowledge graph) + pgvector (semantic retrieval). REQUIRED stack —
     # Terrane will not run on a plain DB without these extensions.
-    # Bundled and started BY DEFAULT (single-host appliance). To use an EXTERNAL/managed/信创 PG
-    # instead, point DATABASE_HOST in .env at it and comment out this `postgres` service.
+    # Bundled and started BY DEFAULT (single-host appliance). To use an EXTERNAL / managed /
+    # Xinchuang (domestic) PG instead, point DATABASE_HOST in .env at it and comment out this
+    # `postgres` service.
     image: ${REGISTRY:-crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror}/terrane-postgres:${TERRANE_TAG:-v1.0.0}
     restart: always
     environment:
@@ -179,7 +182,7 @@ services:
 
   redis:
     # terrane-redis = upstream redis:7-alpine re-tagged, pulled from the same registry as the rest
-    # (one registry for air-gapped / 信创 delivery). Started BY DEFAULT. To use an EXTERNAL Redis,
+    # (one registry for air-gapped / Xinchuang (domestic) delivery). Started BY DEFAULT. To use an EXTERNAL Redis,
     # point CACHE_HOST in .env at it and comment out this `redis` service.
     image: ${REGISTRY:-crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror}/terrane-redis:${TERRANE_TAG:-v1.0.0}
     restart: always
@@ -193,8 +196,9 @@ services:
       retries: 30
     networks: [internal]
 
-  # ---- 对象存储 (SeaweedFS, S3 兼容, 自托管默认) -----------------------------------------------
-  # 存原文 + 逐页 WebP 版面图。S3 端点 :8333(仅内网)。要用云上 OSS 改 .env 的 OBJECT_STORAGE_* 并停本服务。
+  # ---- Object storage (SeaweedFS, S3-compatible, self-hosted default) --------------------------
+  # Stores originals + per-page WebP layout images. S3 endpoint :8333 (internal only). To use a cloud
+  # bucket instead, set OBJECT_STORAGE_* in .env and stop this service.
   seaweedfs:
     image: ${REGISTRY:-crpi-ew8juv9423tvogc4.cn-hongkong.personal.cr.aliyuncs.com/navtra-mirror}/terrane-seaweedfs:${TERRANE_TAG:-v1.0.0}
     restart: always

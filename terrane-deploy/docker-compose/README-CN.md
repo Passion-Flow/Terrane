@@ -1,67 +1,79 @@
-# Terrane 部署 — docker-compose(单机 / 私有化 / 离线)
+# Terrane deploy — docker-compose (single host / on-prem / offline)
 
-适用:单台 Linux 服务器、一体机、内网气隙环境。一条命令拉起全栈(含自带 PG18+AGE+pgvector 与 Redis)。
+Use when: a single Linux server, an appliance, or an air-gapped intranet. One command brings up the full
+stack (incl. bundled PG18+AGE+pgvector and Redis).
 
-## 0. 前置
+## 0. Prerequisites
 
-- 一台 Linux(2C4G 起,推荐 4C8G;**纯 CPU,无需 GPU**),装好 Docker + Docker Compose 插件。
-- 能访问镜像仓库(阿里云 ACR / 内网 Harbor),或已离线导入镜像 tar。
-- 你自己的模型 API key(出厂不带,首启在后台填)。
-- 一张 Forge 签发的 License 激活码(在线码或离线 `.forge`)。
+- One Linux host (2C4G min, 4C8G recommended; **CPU only, no GPU**) with Docker + the Docker Compose plugin.
+- Access to the image registry (Aliyun ACR / internal Harbor), or images pre-loaded from tarballs.
+- Your own model API key (not shipped — set it in the admin console on first run).
+- A Forge-issued License activation code (online code or offline `.forge`).
 
-## 1. 配置
+## 1. Configure
 
 ```bash
 cd terrane-deploy/docker-compose
 cp .env.example .env
-# 编辑 .env,逐个填掉 #REPLACE_ME#:
-#   TERRANE_KEK          openssl rand -base64 32   ← 务必备份,丢了既有密文解不开
-#   DATABASE_PASSWORD    强随机
-#   CACHE_PASSWORD       强随机
-#   TERRANE_FORGE_EDGE_URL  你的 Forge 发证 edge(离线激活可留空)
-#   SESSION_COOKIE_SECURE   HTTPS 部署设 true(HTTP 试用保持 false)
+# Edit .env and fill every #REPLACE_ME#:
+#   TERRANE_KEK          openssl rand -base64 32   ← back this up; lose it and existing ciphertext is unrecoverable
+#   DATABASE_PASSWORD    strong random
+#   CACHE_PASSWORD       strong random
+#   TERRANE_FORGE_EDGE_URL  your Forge issuing edge (leave empty for offline activation)
+#   SESSION_COOKIE_SECURE   set true for HTTPS deployment (keep false for an HTTP trial)
 ```
 
-> 私有仓库需先登录:`bash Scripts/generate-image-repo-secret.sh <registry> <user> <pass>`
+> Private registry login first: `bash Scripts/generate-image-repo-secret.sh <registry> <user> <pass>`
 
-## 2. 启动(自带库,一把全起)
+## 2. Start (bundled datastores, one command brings everything up)
 
-docker-compose 是单机一体机:**自带 PG18+AGE+pgvector 与 Redis,默认随栈启动**,无需外接。
+docker-compose is the single-host appliance path: it **ships PG18+AGE+pgvector and Redis, started with the
+stack by default** — no external services needed.
 
 ```bash
-docker compose pull        # 用仓库镜像;若现场构建则 docker compose up -d --build
+docker compose pull        # use registry images; to build on site: docker compose up -d --build
 docker compose up -d
-docker compose ps          # 等 7 个容器 healthy
+docker compose ps          # wait for 7 containers to become healthy
 ```
 
-起来的容器:`postgres`(PG18+AGE+pgvector)/ `redis` / `terrane-server`(前台 API)/
-`terrane-admin-server`(后台 API,自动跑迁移+建超管)/ `terrane-gateway` / `terrane-web`(前台)/
-`terrane-admin-web`(后台)。
+Containers that come up: `postgres` (PG18+AGE+pgvector) / `redis` / `terrane-server` (front-end API) /
+`terrane-admin-server` (admin API, auto-runs migrations + bootstraps the super admin) / `terrane-gateway` /
+`terrane-web` (front app) / `terrane-admin-web` (admin console).
 
-> 想对接**已有的外部 PG/Redis**(而非自带):在 `.env` 把 `DATABASE_HOST`/`CACHE_HOST` 指过去
-> (PG 须含 `age`+`vector` 扩展),并把 `docker-compose.yaml` 里的 `postgres`/`redis` 服务注释掉。
-> (集群/企业级走 Helm,默认就是外部库 —— 见 `../helm/`。)
+> To connect to your **existing external PG/Redis** (instead of the bundled ones): point
+> `DATABASE_HOST`/`CACHE_HOST` in `.env` at them (the PG must include the `age`+`vector` extensions) and
+> comment out the `postgres`/`redis` services in `docker-compose.yaml`.
+> (For cluster/enterprise, use Helm — it defaults to external databases; see `../helm/`.)
 
-## 3. 首次开机三步(后台 `http://<host>:8081`)
+## 3. First-run, three steps (admin console at `http://<host>:8081`)
 
-1. **激活 License** —— 输入 Forge 发的激活码。激活凭据 + install_id 落共享 `license` 卷,**重启持久、三组件共享部署身份**(反克隆双锁)。
-2. **超管登录 + 改密** —— 出厂账号 `terrane@navtra.ai`,初始密码=邮箱,**首登强制改密**;随后走初始化向导(邮件 / 品牌)。
-3. **配模型渠道** —— 后台「模型渠道」新建 chat / embed / rerank / vl / asr / tts,**填你自己的 API key**(出厂零渠道、零 key)。配完前台全功能(知识库 / 图谱 / Chat / Studio / 记忆)即可用。
+1. **Activate License** — enter the Forge activation code. The activation credential + install_id land on the
+   shared `license` volume, so activation **persists across restarts and is shared by all three components**
+   (anti-clone double-lock).
+2. **Super-admin login + change password** — factory account `terrane@navtra.ai`, initial password = email,
+   **forced change on first login**; then run the setup wizard (email / branding).
+3. **Configure model channels** — admin console → "Model Channels" → add chat / embed / rerank / vl / asr / tts,
+   **filling in your own API key** (ships with zero channels and zero keys). Once configured, the full front
+   app (knowledge base / graph / Chat / Studio / memory) is ready.
 
-前台访问:`http://<host>:80`。
+Front app: `http://<host>:80`.
 
-## 4. HTTPS(生产必做)
+## 4. HTTPS (required for production)
 
-前面挂一层 Nginx / Caddy 反代,把 80 / 8081 收到 443 并配证书,然后 `.env` 设 `SESSION_COOKIE_SECURE=true`(否则 HTTPS 下浏览器丢 cookie,登录态保不住)。内网私有 CA 证书:把 CA bundle 路径填 `TERRANE_CA_FILE`。
+Put an Nginx / Caddy reverse proxy in front, terminate 80 / 8081 onto 443 with certificates, then set
+`SESSION_COOKIE_SECURE=true` in `.env` (otherwise the browser drops the cookie over HTTPS and the login
+session won't stick). For an intranet private-CA certificate, set its CA bundle path in `TERRANE_CA_FILE`.
 
-## 5. 运维
+## 5. Operations
 
-- **日志**:`docker compose logs -f terrane-server`
-- **升级**:`docker compose pull && docker compose up -d`(pgdata / license 卷保留)
-- **备份 / 迁移**:见 `../migration/README-CN.md`(`backup-terrane.sh` / `restore-terrane.sh`)
-- ⚠ `license` 卷别丢 —— 丢了要重新激活;`TERRANE_KEK` 跟数据一起备份。
+- **Logs**: `docker compose logs -f terrane-server`
+- **Upgrade**: `docker compose pull && docker compose up -d` (pgdata / license volumes kept)
+- **Backup / migrate**: see `../migration/README-CN.md` (`backup-terrane.sh` / `restore-terrane.sh`)
+- ⚠ Don't lose the `license` volume — losing it means you must re-activate; back up `TERRANE_KEK` together with the data.
 
-## 6. 离线 / 信创
+## 6. Offline / Xinchuang (domestic)
 
-- 离线:在有网机器 `docker save` 6 个镜像 → 拷进内网 `docker load` → `docker compose up -d`;License 用离线 `.forge` 激活(edge URL 留空)。
-- 外接信创 PG:必须提供 `age` + `vector` 扩展(知识图谱与向量检索强依赖),把 `DATABASE_*` 指过去并注释掉自带 `postgres` 服务。
+- Offline: on a connected machine `docker save` the 6 images → copy to the intranet → `docker load` →
+  `docker compose up -d`; activate the License with an offline `.forge` (leave the edge URL empty).
+- External Xinchuang (domestic) PG: must provide the `age` + `vector` extensions (hard dependency for the
+  knowledge graph and vector retrieval); point `DATABASE_*` at it and comment out the bundled `postgres` service.

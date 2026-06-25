@@ -1,8 +1,8 @@
-"""服务端 Session 存储（Redis）— 照搬 Forge app/services/session_service.py。
+"""Server-side session store (Redis) -- ported from Forge app/services/session_service.py.
 
-Session 是服务端不透明记录，由随机 sid 索引；cookie 只携带 sid。滑动续期至绝对 TTL。
-按用户索引集合支持全局登出（改密/重置/角色变更/禁用时踢全部会话）。
-key 前缀：terrane_session:
+A session is an opaque server-side record indexed by a random sid; the cookie carries only the sid. Sliding renewal up to an absolute TTL.
+A per-user index set supports global logout (kicking all sessions on password change / reset / role change / disable).
+Key prefix: terrane_session:
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ class SessionService:
         if now >= data["absolute_expiry"]:
             await self.destroy(sid)
             return None
-        # 滑动续期（受绝对过期上限约束）
+        # Sliding renewal (capped by the absolute expiry)
         data["last_activity_at"] = now
         ttl = min(self.settings.session_idle_ttl_seconds, data["absolute_expiry"] - now)
         await self.redis.set(self._key(sid), json.dumps(data), ex=ttl)
@@ -67,7 +67,7 @@ class SessionService:
         await self.redis.delete(self._key(sid))
 
     async def destroy_all_for_user(self, user_id: str) -> None:
-        """全局登出 — 改密/重置/角色变更/禁用时调用。"""
+        """Global logout -- called on password change / reset / role change / disable."""
         sids = await self.redis.smembers(self._user_index(user_id))
         for sid in sids:
             await self.redis.delete(self._key(sid))

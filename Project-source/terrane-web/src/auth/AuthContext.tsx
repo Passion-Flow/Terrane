@@ -1,4 +1,4 @@
-/** 前台鉴权上下文 —— 挂载即 refresh()（GET /me 被动恢复登录态）。 */
+/** Frontend auth context — calls refresh() on mount (GET /me passively restores the session). */
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 

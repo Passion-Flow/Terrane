@@ -1,4 +1,4 @@
-/** 记忆 —— per-user 个人记忆:自动记忆(从聊天/上传文档抽取)+ 手动添加 + 语义唤回 + 删除。 */
+/** Memory —— per-user personal memory: automatic memory (extracted from chats / uploaded documents) + manual add + semantic recall + delete. */
 
 import { Brain, ChatCircleText, FileText, MagnifyingGlass, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
@@ -64,7 +64,7 @@ export function MemoryPage() {
         <h1 className="text-2xl font-bold tracking-tight text-ink">{t("memory.title")}</h1>
         <p className="mt-1.5 text-sm text-ink-secondary">{t("memory.subtitle")}</p>
 
-        {/* 自动记忆开关 */}
+        {/* Automatic memory toggle */}
         <div className="mt-5 flex items-start justify-between gap-4 rounded-xl border border-border/70 bg-surface/40 p-4">
           <div className="min-w-0">
             <p className="text-sm font-medium text-ink">{t("memory.autoTitle")}</p>
@@ -79,7 +79,7 @@ export function MemoryPage() {
           </button>
         </div>
 
-        {/* 手动添加 */}
+        {/* Manual add */}
         <div className="mt-4 flex items-center gap-2">
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onAdd()}
             placeholder={t("memory.addPlaceholder")} disabled={busy} className={field} />
@@ -94,7 +94,7 @@ export function MemoryPage() {
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("memory.recallPlaceholder")} className={`${field} ps-9`} />
         </form>
 
-        {/* 来源筛选 */}
+        {/* Source filter */}
         <div className="mt-5 flex flex-wrap gap-1.5">
           {(["all", "manual", "chat", "document"] as SrcKey[]).map((k) => (
             <button key={k} onClick={() => setFilter(k)}

@@ -1,4 +1,4 @@
-"""前台认证 API schema（Pydantic v2 strict）。"""
+"""Frontend authentication API schemas (Pydantic v2 strict)."""
 
 from __future__ import annotations
 
@@ -59,5 +59,5 @@ class RegisterOut(BaseModel):
     id: str
     email: str
     status: str
-    # 注册后是否需要邮箱验证（出厂总为 True）。
+    # Whether email verification is required after registration (always True out of the box).
     email_verification_required: bool = True

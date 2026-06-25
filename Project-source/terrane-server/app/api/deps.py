@@ -1,4 +1,4 @@
-"""FastAPI 依赖 — DB session（平台库）+ 当前用户（前台 session cookie）。"""
+"""FastAPI dependencies — DB session (platform database) + current user (frontend session cookie)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ class CurrentUser:
 
 
 async def get_current_user(request: Request) -> CurrentUser:
-    """从服务端 session（HttpOnly cookie）解析已认证前台用户。"""
+    """Resolve the authenticated frontend user from the server-side session (HttpOnly cookie)."""
     sid = request.cookies.get(get_settings().session_cookie_name)
     if not sid:
         raise BizError("AUTH_REQUIRED")

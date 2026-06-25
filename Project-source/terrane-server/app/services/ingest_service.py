@@ -1,8 +1,8 @@
-"""知识库摄入 + 混合检索（平台库 terrane_main）。
+"""Knowledge base ingestion + hybrid retrieval (platform database terrane_main).
 
-摄入:文本源 → 切片 → 入库 → 调嵌入渠道回填 chunks.embedding(halfvec,原始 SQL ::halfvec)。
-检索:向量(HNSW cosine)+ 词法(pg_trgm)双路召回 → 合并 → rerank(qwen3-rerank)精排。
-全程优雅降级:无 embed 渠道→纯词法;无 rerank→向量/词法分数合并。
+Ingestion: text source -> chunking -> persist -> call the embedding channel to backfill chunks.embedding (halfvec, raw SQL ::halfvec).
+Retrieval: dual recall via vector (HNSW cosine) + lexical (pg_trgm) -> merge -> rerank (qwen3-rerank) for fine ranking.
+Graceful degradation throughout: no embed channel -> lexical only; no rerank -> merge vector/lexical scores.
 """
 
 from __future__ import annotations
@@ -22,11 +22,11 @@ log = structlog.get_logger("terrane.ingest")
 
 _CHUNK_CHARS = 500
 _OVERLAP = 60
-_RECALL = 20  # 每路召回上限
+_RECALL = 20  # Per-path recall cap
 
 
 def chunk_text(body: str, size: int = _CHUNK_CHARS) -> list[str]:
-    """按段落聚合到 ~size 字符的切片(带轻量重叠保上下文)。"""
+    """Aggregate paragraphs into chunks of ~size characters (with light overlap to preserve context)."""
     paras = [p.strip() for p in re.split(r"\n\s*\n", body) if p.strip()]
     chunks: list[str] = []
     buf = ""
@@ -52,7 +52,7 @@ def _vec_literal(vec: list[float]) -> str:
 
 
 async def _embed_chunks(db: AsyncSession, chunk_ids: list[uuid.UUID], contents: list[str]) -> int:
-    """调嵌入渠道为切片回填向量。无渠道→0;失败→记录但不阻断摄入(切片仍可词法检索)。"""
+    """Call the embedding channel to backfill vectors for chunks. No channel -> 0; failure -> logged but does not block ingestion (chunks remain lexically searchable)."""
     try:
         vecs = await model_client.embed_texts(db, contents)
     except ModelError as e:
@@ -70,7 +70,7 @@ async def _embed_chunks(db: AsyncSession, chunk_ids: list[uuid.UUID], contents: 
 
 async def add_text_source(db: AsyncSession, *, kb_id: uuid.UUID, workspace_id: uuid.UUID,
                           title: str, body: str, kind: str = "text") -> tuple[RawSource, int]:
-    """新增文本源 → 切片入库 → 回填向量。返回 (raw_source, chunk_count)。"""
+    """Add a text source -> persist chunks -> backfill vectors. Returns (raw_source, chunk_count)."""
     raw = RawSource(kb_id=kb_id, workspace_id=workspace_id, kind=kind, title=title,
                     mime="text/plain", size_bytes=len(body.encode("utf-8")),
                     status="parsed", parsed_text=body)
@@ -90,7 +90,7 @@ async def add_text_source(db: AsyncSession, *, kb_id: uuid.UUID, workspace_id: u
 
 async def create_pending_source(db: AsyncSession, *, kb_id: uuid.UUID, workspace_id: uuid.UUID,
                                 title: str, mime: str, size: int, status: str = "parsing") -> RawSource:
-    """先建一个「解析中」的文件源占位(异步摄入:上传即返,后台解析)。"""
+    """Create a placeholder file source in the "parsing" state (async ingestion: return immediately on upload, parse in the background)."""
     raw = RawSource(kb_id=kb_id, workspace_id=workspace_id, kind="file", title=title,
                     mime=mime or "application/octet-stream", size_bytes=size, status=status)
     db.add(raw)
@@ -101,7 +101,7 @@ async def create_pending_source(db: AsyncSession, *, kb_id: uuid.UUID, workspace
 
 
 async def reingest(db: AsyncSession, raw: RawSource, body: str) -> int:
-    """给已存在的源写入解析文本 → 清旧切片 → 重新切片 + 回填向量 → status=parsed。返回 chunk 数。"""
+    """Write parsed text to an existing source -> clear old chunks -> re-chunk + backfill vectors -> status=parsed. Returns the chunk count."""
     await db.execute(delete(Chunk).where(Chunk.raw_source_id == raw.id))
     raw.parsed_text = body
     raw.status = "parsed"
@@ -121,8 +121,8 @@ async def reingest(db: AsyncSession, raw: RawSource, body: str) -> int:
 async def search_chunks(db: AsyncSession, *, kb_id: uuid.UUID, query: str, limit: int = 10,
                         embed_model: str | None = None, rerank_model: str | None = None,
                         raw_source_id: uuid.UUID | None = None) -> list[dict]:
-    """混合检索:向量 + 词法召回 → rerank 精排(均优雅降级)。
-    raw_source_id 指定 → 限定到该文档的切片(文档级问答)。"""
+    """Hybrid retrieval: vector + lexical recall -> rerank for fine ranking (both degrade gracefully).
+    If raw_source_id is given -> limit to that document's chunks (document-level Q&A)."""
     q = query.strip()
     if not q:
         return []
@@ -130,7 +130,7 @@ async def search_chunks(db: AsyncSession, *, kb_id: uuid.UUID, query: str, limit
 
     cand: dict[str, dict] = {}
 
-    # 词法召回(pg_trgm,中英通用);sid 非空时限定到该文档
+    # Lexical recall (pg_trgm, works for both Chinese and English); when sid is set, limit to that document
     lex = (await db.execute(text("""
         SELECT c.id, c.content, c.ord, r.title AS src, r.id AS sid, similarity(c.content, :q) AS sc
         FROM chunks c JOIN raw_sources r ON r.id = c.raw_source_id
@@ -143,7 +143,7 @@ async def search_chunks(db: AsyncSession, *, kb_id: uuid.UUID, query: str, limit
                               "source_title": r["src"], "source_id": str(r["sid"]),
                               "lex": float(r["sc"] or 0), "vec": 0.0}
 
-    # 向量召回(HNSW cosine);无 embed 渠道则跳过
+    # Vector recall (HNSW cosine); skipped if there is no embed channel
     qvec = None
     try:
         qvec = await model_client.embed_query(db, q, model=embed_model)
@@ -171,7 +171,7 @@ async def search_chunks(db: AsyncSession, *, kb_id: uuid.UUID, query: str, limit
     if not items:
         return []
 
-    # rerank 精排;无 rerank 渠道则按 max(vec,lex) 合并
+    # Rerank for fine ranking; without a rerank channel, merge by max(vec, lex)
     reranked = None
     try:
         reranked = await model_client.rerank(db, q, [c["content"] for c in items], top_n=limit, model=rerank_model)

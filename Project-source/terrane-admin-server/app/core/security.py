@@ -1,4 +1,4 @@
-"""密码哈希（argon2id）+ 密码策略 + 一次性 token（照搬 Forge app/core/security.py）。"""
+"""Password hashing (argon2id) + password policy + one-time tokens (ported from Forge app/core/security.py)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from argon2.exceptions import InvalidHashError, VerifyMismatchError
 
 from app.core.errors import BizError
 
-_hasher = PasswordHasher()  # argon2id 默认参数（服务端内存/时间成本合理）
+_hasher = PasswordHasher()  # argon2id default parameters (reasonable server-side memory/time cost)
 
 _WEAK = {"password", "123456", "12345678", "qwerty", "admin", "terrane", "letmein"}
 
@@ -42,9 +42,9 @@ def validate_password_policy(
     require_char_classes: int = 3,
     forbid_identity: bool = True,
 ) -> None:
-    """违反策略则抛 AUTH_PASSWORD_WEAK。
+    """Raises AUTH_PASSWORD_WEAK if the policy is violated.
 
-    `forbid_identity` 可调：Terrane 出厂默认密码=邮箱要能用，故默认配置为 False。
+    `forbid_identity` is tunable: Terrane's factory-default password equals the email and must be usable, so it defaults to False.
     """
     if len(password) < min_length:
         raise BizError("AUTH_PASSWORD_WEAK", {"reason": "min_length", "min_length": min_length})
@@ -63,7 +63,7 @@ def validate_password_policy(
 
 
 def new_token(nbytes: int = 32) -> str:
-    """URL-safe 一次性 token（>= 32 字节熵），用于密码重置 / API key。"""
+    """URL-safe one-time token (>= 32 bytes of entropy), used for password reset / API key."""
     return secrets.token_urlsafe(nbytes)
 
 

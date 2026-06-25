@@ -18,7 +18,7 @@ stages: [lint, build, push, deploy]
 
 variables:
   VERSION: "v1.0.0"
-  PLATFORMS: "linux/amd64,linux/arm64"     # 信创: Hygon/Zhaoxin x86 + Kunpeng/Phytium arm64
+  PLATFORMS: "linux/amd64,linux/arm64"     # Xinchuang (domestic): Hygon/Zhaoxin x86 + Kunpeng/Phytium arm64
   IMG_SERVER:     "$REGISTRY/$REGISTRY_NAMESPACE/terrane-server"
   IMG_ADMIN:      "$REGISTRY/$REGISTRY_NAMESPACE/terrane-admin-server"
   IMG_GATEWAY:    "$REGISTRY/$REGISTRY_NAMESPACE/terrane-gateway"

@@ -1,8 +1,8 @@
-"""初始化向导 API（/admin-api/v1/wizard）— License→超管→邮件→Branding→完成。
+"""Setup wizard API (/admin-api/v1/wizard) — License -> super admin -> email -> branding -> complete.
 
-仅超管可操作（PRD：首启强制向导）。配置写平台库 terrane_main（settings/branding），
-变更落 audit_logs（append-only）。邮件密码字段加密待 KEK 基建落地（当前明文存储 + __enc 标记，
-与 2FA 占位一致；绝不回传前端 → GET 脱敏）。
+Super admin only (PRD: wizard is mandatory on first launch). Config is written to the platform DB terrane_main (settings/branding),
+and changes are recorded in audit_logs (append-only). Encryption of the email password field is pending the KEK infrastructure (currently stored in plaintext + __enc flag,
+consistent with the 2FA placeholder; never returned to the frontend -> redacted on GET).
 """
 
 from __future__ import annotations
@@ -58,21 +58,21 @@ async def save_email(body: EmailConfigIn, request: Request,
                      pdb: AsyncSession = Depends(get_platform_db)) -> dict:
     _require_super_admin(user)
     existing = await get_setting(pdb, EMAIL_KEY) or {}
-    # 留空密码 = 沿用既有（避免回填星号导致覆盖为空）。
+    # Empty password = keep the existing one (avoids the masked-asterisk echo overwriting it with blank).
     password = body.password or existing.get("password", "")
     cfg = {
         "provider": "smtp", "host": body.host, "port": body.port,
         "encryption": body.encryption, "username": body.username, "password": password,
         "from_address": str(body.from_address), "from_name": body.from_name,
         "allow_insecure": body.allow_insecure,
-        "configured": True, "__enc": False,  # TODO: KEK 落地后 password 走 [L5-ENC]
+        "configured": True, "__enc": False,  # TODO: route password through [L5-ENC] once KEK lands
     }
     await set_setting(pdb, EMAIL_KEY, cfg)
     await audit_service.record(
         pdb, action="wizard.email.configure", actor_id=user.user_id, actor_name=user.name,
         target_type="setting", target_id=EMAIL_KEY,
         after={"host": body.host, "port": body.port, "encryption": body.encryption,
-               "from_address": str(body.from_address), "has_password": bool(password)},  # 脱敏
+               "from_address": str(body.from_address), "has_password": bool(password)},  # redacted
         **audit_ctx(request))
     await pdb.commit()
     return {"data": {"ok": True}}
@@ -81,7 +81,7 @@ async def save_email(body: EmailConfigIn, request: Request,
 @router.post("/email/test")
 async def test_email(body: EmailTestIn, user: CurrentUser = Depends(get_current_user),
                      pdb: AsyncSession = Depends(get_platform_db)) -> dict:
-    """用当前已保存的邮件配置发一封测试邮件（先保存再测）。"""
+    """Send a test email using the currently saved email config (save first, then test)."""
     _require_super_admin(user)
     cfg = await get_setting(pdb, EMAIL_KEY)
     if not cfg or not cfg.get("configured"):

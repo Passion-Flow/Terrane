@@ -1,4 +1,4 @@
-"""阿里云 OSS 经其 S3 兼容端点（oss-<region>.aliyuncs.com）。"""
+"""Aliyun OSS via its S3-compatible endpoint (oss-<region>.aliyuncs.com)."""
 
 from __future__ import annotations
 

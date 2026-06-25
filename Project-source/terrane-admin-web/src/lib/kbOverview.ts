@@ -1,4 +1,4 @@
-/** 后台库总览 API（/admin-api/v1/knowledge-bases，只读元数据)。 */
+/** Admin knowledge-base overview API (/admin-api/v1/knowledge-bases, read-only metadata). */
 
 import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query";
 

@@ -1,4 +1,4 @@
-"""Alembic async env — engine 由字段化配置拼装（照搬 Forge，去 multi-DB 适配层）。"""
+"""Alembic async env — engine assembled from field-based config (ported from Forge, without the multi-DB adaptation layer)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.db.base import Base
 from app.db.session import dsn_string, get_engine
 
-# 导入所有模型，让 autogenerate / metadata 能看到。
+# Import all models so autogenerate / metadata can see them.
 from app.models import user  # noqa: F401
 
 target_metadata = Base.metadata

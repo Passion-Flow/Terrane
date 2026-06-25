@@ -1,4 +1,4 @@
-/** 个人资料编辑居中弹窗 —— 换头像(任意图片格式,canvas 缩放成 256px jpeg)+ 改名字。 */
+/** Centered profile edit modal — change avatar (any image format, scaled to a 256px jpeg via canvas) + rename. */
 
 import { Camera, Trash } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
@@ -9,7 +9,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Modal } from "@/components/ui/Modal";
 import { updateProfile } from "@/lib/auth";
 
-/** 任意图片 → 居中裁剪 256px 方形 jpeg dataURL(支持 png/jpg/webp/gif…)。 */
+/** Any image → center-cropped 256px square jpeg dataURL (supports png/jpg/webp/gif…). */
 function resizeImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);

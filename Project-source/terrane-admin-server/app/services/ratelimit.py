@@ -1,4 +1,4 @@
-"""固定窗口限流 + 登录失败锁定（Redis）— 照搬 Forge app/services/ratelimit.py。"""
+"""Fixed-window rate limiting + login-failure lockout (Redis) — ported from Forge app/services/ratelimit.py."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ class RateLimiter:
 
     async def hit(self, key: str, *, limit: int, window: int,
                   code: str = "RATE_LIMIT_EXCEEDED") -> None:
-        """递增固定窗口计数；超限抛 BizError(code)。"""
+        """Increment the fixed-window counter; raise BizError(code) when the limit is exceeded."""
         now = int(time.time())
         bucket = f"rl:{key}:{now // window}"
         count = await self.redis.incr(bucket)
@@ -27,7 +27,7 @@ class RateLimiter:
 
     async def record_login_failure(self, email: str, *, threshold: int | None = None,
                                    lock_seconds: int | None = None) -> None:
-        """记一次登录失败；达阈值则锁定。阈值/时长缺省回退 config，调用方传平台安全策略覆盖值。"""
+        """Record a login failure; lock the account once the threshold is reached. Threshold/duration fall back to config when unset; callers may pass platform security-policy overrides."""
         threshold = threshold if threshold is not None else self.settings.login_lock_threshold
         lock_seconds = lock_seconds if lock_seconds is not None else self.settings.login_lock_seconds
         key = f"login_fail:{email.lower()}"

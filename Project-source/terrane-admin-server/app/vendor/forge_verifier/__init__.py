@@ -35,10 +35,10 @@ class ForgeVerifier:
         self.master_pub = keys.master_public_pem()
         self.edge_pub = keys.edge_lease_public_pem()
         self.fingerprint = deployment_fingerprint()
-        # 反克隆身份（design 07）：注入 UID（容器/集群权威）、多信号向量、首激活随机 install_id。
-        # 回退：无注入 UID 时用部署指纹当 deployment_uid——同机多组件（server/admin/gateway）
-        # 共享同一指纹 → edge 按 UID 去重为「一个部署一个席位」，消除多组件抢席位的 binding_mismatch
-        # 横跳。指纹来自硬件不可注入，故反克隆/防伪不削弱（克隆机指纹不同→UID 不同→照样被拒）。
+        # Anti-clone identity (design 07): inject UID (container/cluster authoritative), multi-signal vector, random install_id on first activation.
+        # Fallback: when no UID is injected, use the deployment fingerprint as deployment_uid — multiple components on the same host (server/admin/gateway)
+        # share the same fingerprint → edge deduplicates by UID into "one deployment, one seat", eliminating the binding_mismatch
+        # flapping where multiple components fight over a seat. The fingerprint comes from hardware and cannot be injected, so anti-clone/anti-forgery is not weakened (a cloned host has a different fingerprint → different UID → still rejected).
         self.deployment_uid = deployment_uid() or self.fingerprint
         self.signals = collect_signals()
         self.install_id = ensure_install_id(install_id_path or _DEFAULT_INSTALL_ID_PATH)

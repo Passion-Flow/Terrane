@@ -1,13 +1,13 @@
-/** 复制到剪贴板 —— 安全上下文(HTTPS / localhost)走 navigator.clipboard;
- *  非安全上下文(HTTP + IP 部署,clipboard API 不可用)回退到 textarea + execCommand,
- *  保证生产环境(http://IP:端口)也能复制。返回是否成功。 */
+/** Copy to clipboard — uses navigator.clipboard in secure contexts (HTTPS / localhost);
+ *  in non-secure contexts (HTTP + IP deployment, where the clipboard API is unavailable) it falls back
+ *  to textarea + execCommand, ensuring copy works even in production (http://IP:port). Returns whether it succeeded. */
 export async function copyText(text: string): Promise<boolean> {
   if (navigator.clipboard && window.isSecureContext) {
     try {
       await navigator.clipboard.writeText(text);
       return true;
     } catch {
-      /* 落到下面的回退 */
+      /* Fall through to the fallback below */
     }
   }
   try {

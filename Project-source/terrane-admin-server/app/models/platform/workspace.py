@@ -1,6 +1,6 @@
-"""Workspace（平台库 terrane_main：workspaces）— ORM 映射拷贝（admin 只读管理）。
+"""Workspace (platform DB terrane_main: workspaces) — ORM mapping copy (admin manages read-only).
 
-schema 权威在 terrane-server/app/models/workspace.py + 迁移 000001。
+The authoritative schema lives in terrane-server/app/models/workspace.py + migration 000001.
 """
 
 from __future__ import annotations

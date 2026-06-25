@@ -1,4 +1,4 @@
-/** 复制按钮 —— 点击复制 value,成功后短暂显示 ✓ 反馈。兼容 HTTP 非安全上下文(见 lib/clipboard)。 */
+/** Copy button — copies `value` on click and briefly shows a ✓ confirmation. Works in non-secure HTTP contexts (see lib/clipboard). */
 
 import { Check, Copy } from "@phosphor-icons/react";
 import { useState } from "react";

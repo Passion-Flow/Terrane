@@ -1,4 +1,4 @@
-/** 工作区列表 API（/admin-api/v1/workspaces）—— 只读、页码分页、名称/slug 搜索。 */
+/** Workspaces list API (/admin-api/v1/workspaces) — read-only, page-number pagination, name/slug search. */
 
 import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query";
 

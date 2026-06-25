@@ -1,5 +1,5 @@
-/** 模型渠道 —— 平台级 LLM/嵌入/重排/web-search 后端。变体范式:「新建渠道」→ 类型下拉 → 居中模态配置。
- *  列表 + 行 ⋯(编辑/测试连通/删除·输入名称确认)。api_key 脱敏;测试走真实 /models 探测。 */
+/** Model channels —— platform-level LLM / embedding / rerank / web-search backends. Variant pattern: "New channel" -> type dropdown -> centered modal configuration.
+ *  List + row ⋯ (edit / test connectivity / delete with type-to-confirm name). api_key is masked; the test performs a real /models probe. */
 
 import { CaretDown, CheckCircle, PencilSimple, Plus, Pulse, Trash, XCircle } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -46,19 +46,19 @@ export function ChannelsPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  // 新建(变体):选中的 provider 预设 → 打开模态
+  // Create (variant): the selected provider preset -> open the modal
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const [createPreset, setCreatePreset] = useState<ProviderPreset | null>(null);
-  // 编辑
+  // Edit
   const [editing, setEditing] = useState<ChannelItem | null>(null);
-  // 表单(create+edit 共用)
+  // Form (shared between create + edit)
   const [name, setName] = useState("");
   const [kind, setKind] = useState<ChannelKind>("chat");
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
-  // 删除
+  // Delete
   const [delT, setDelT] = useState<ChannelItem | null>(null);
 
   useEffect(() => {
@@ -185,7 +185,7 @@ export function ChannelsPage() {
         </table>
       </div>
 
-      {/* 新建/编辑 模态(变体配置) */}
+      {/* Create / edit modal (variant configuration) */}
       <Modal open={modalOpen} onClose={() => { setCreatePreset(null); setEditing(null); }}
         title={editing ? t("channels.editTitle") : t("channels.createTitle", { p: createPreset?.label ?? "" })}
         footer={<>

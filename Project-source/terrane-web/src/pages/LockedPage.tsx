@@ -1,6 +1,7 @@
-/** 前台锁定页（参考 Dify 前台 signin 锁定态）：轮询 License 状态，未激活时展示逐字锁定文案
- *  + 按 verdict 区分描述 + 引导去管理后台激活（前台无激活权，激活动作仅 admin-web）。
- *  激活后（unlocked）自动进入业务（阶段②落地，本阶段为占位欢迎）。 */
+/** Frontend locked page (modeled on Dify's frontend signin locked state): polls License status, showing
+ *  the locked copy character-by-character when not activated + a description that varies by verdict +
+ *  guidance to activate in the admin console (the frontend has no activation rights; activation lives only in admin-web).
+ *  Once activated (unlocked), automatically proceeds into the app (delivered in stage ②; for now a placeholder welcome). */
 
 import { useQuery } from "@tanstack/react-query";
 import { SealCheck } from "@phosphor-icons/react";
@@ -29,7 +30,7 @@ export function LockedPage() {
   const { data: status, error } = useQuery({
     queryKey: ["license-status"],
     queryFn: getLicenseStatus,
-    // 锁定时快轮询（3s）让管理员激活后本页近即时进入；已激活回落 8s。
+    // Poll fast (3s) while locked so this page enters near-instantly once the admin activates; fall back to 8s once unlocked.
     refetchInterval: (query) => (query.state.data?.unlocked ? 8_000 : 3_000),
   });
 
@@ -59,12 +60,12 @@ export function LockedPage() {
             <p className="text-[13px] leading-relaxed text-ink-secondary">{t(lockedDescKey(status.status))}</p>
           </div>
         ) : status?.unlocked ? (
-          // 已激活：业务前台在阶段②落地，此处占位欢迎。
+          // Activated: the business frontend ships in stage ②; placeholder welcome here.
           <div className="w-full max-w-sm rounded-xl border border-border/70 bg-surface p-6 text-center shadow-sm">
             <div className="mb-3 flex justify-center">
               <Logo />
             </div>
-            <p className="text-[13px] text-ink-secondary">已激活 · 知识工作台将在后续阶段提供</p>
+            <p className="text-[13px] text-ink-secondary">Activated · The knowledge workspace will be available in a later stage</p>
           </div>
         ) : error != null ? (
           <p role="alert" className="text-sm text-danger">

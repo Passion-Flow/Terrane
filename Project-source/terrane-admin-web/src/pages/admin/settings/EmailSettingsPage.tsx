@@ -1,4 +1,4 @@
-/** 设置 → 邮件服务（SMTP）。向导后随时编辑；密码脱敏（留空不变）。字段标签复用 wizard.*。 */
+/** Settings → Email service (SMTP). Editable anytime after the wizard; password is masked (leave blank to keep unchanged). Field labels are reused from wizard.*. */
 
 import { PaperPlaneTilt } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -37,7 +37,7 @@ export function EmailSettingsPage() {
   useEffect(() => {
     const s = query.data;
     if (!s || hydrated) return;
-    // 按已保存的 host 反推邮箱服务商预设（后端不存 preset id）→ 下拉回显。
+    // Infer the email provider preset from the saved host (the backend doesn't store a preset id) to restore the dropdown selection.
     const matched = s.email.host
       ? s.email_presets.find((p) => p.host && p.host === s.email.host)
       : undefined;
@@ -83,7 +83,7 @@ export function EmailSettingsPage() {
   async function onTest() {
     setBusy(true);
     try {
-      await updateEmail(payload());  // 先保存当前配置再测连
+      await updateEmail(payload());  // Save the current config before testing the connection
       await qc.invalidateQueries({ queryKey: ["settings"] });
       if (smtpPass) setHasPassword(true);
       setSmtpPass("");

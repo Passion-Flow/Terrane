@@ -1,2 +1,2 @@
-// 运行时注入配置（部署期可覆盖，不进构建产物）。空 apiBase = 同源（dev 走 vite 代理）。
+// Runtime-injected config (overridable at deploy time, not part of the build output). Empty apiBase = same origin (dev goes through the vite proxy).
 window.__APP_CONFIG__ = { apiBase: "" };

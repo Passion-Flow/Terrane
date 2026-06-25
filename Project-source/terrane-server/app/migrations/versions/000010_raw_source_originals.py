@@ -1,11 +1,11 @@
-"""raw_source_originals（平台库 terrane_main：上传文件的原始字节,用于「原文/解析」对照预览）
+"""raw_source_originals (platform DB terrane_main: raw bytes of uploaded files, for the "original vs. parsed" side-by-side preview)
 
 Revision ID: 000010
 Revises: 000009
 Create Date: 2026-06-21
 
-只存上传文件(file kind)的原始字节,粘贴文本无原文。随 raw_source 硬删级联。单独成表,使 list/get
-不加载大字段(blob)。
+Stores raw bytes only for uploaded files (file kind); pasted text has no original. Hard-deleted by cascade
+from raw_source. Kept in a separate table so list/get don't load the large field (blob).
 """
 from __future__ import annotations
 

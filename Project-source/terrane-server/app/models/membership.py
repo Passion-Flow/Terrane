@@ -1,6 +1,6 @@
-"""Membership（用户 × Workspace × 角色）ORM — 平台库 terrane_main（02-database 实体 #3）。
+"""Membership (user × Workspace × role) ORM — platform DB terrane_main (02-database entity #3).
 
-(workspace_id,user_id) UNIQUE；硬删级联自 user/workspace。WS 角色见 ROLES（02-database §8）。
+(workspace_id, user_id) UNIQUE; hard-delete cascades from user/workspace. WS roles: see ROLES (02-database §8).
 """
 
 from __future__ import annotations

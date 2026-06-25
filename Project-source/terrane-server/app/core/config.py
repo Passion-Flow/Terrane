@@ -1,6 +1,6 @@
-"""terrane-api 配置 — 阶段①仅 License gating 所需（DB/Redis 等阶段②扩展）。
+"""terrane-api configuration -- in stage 1 only what License gating needs (DB/Redis etc. are added in stage 2).
 
-环境变量前缀 `TERRANE_`（.agent.md [认证/默认账号] / 项目独立）。
+Environment variable prefix `TERRANE_` (.agent.md [auth/default account] / project-independent).
 """
 
 from __future__ import annotations
@@ -14,96 +14,96 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="", case_sensitive=False, extra="ignore")
 
-    # —— 服务 ——
+    # -- Service --
     terrane_host: str = "0.0.0.0"
     terrane_port: int = 43001
     terrane_log_level: str = "INFO"
 
-    # —— 数据库（平台库 terrane_main；字段化 DSN，禁 connection-string env；信创矩阵见 db/dialects.py）——
+    # -- Database (platform DB terrane_main; field-based DSN, no connection-string env; Xinchuang (domestic) matrix in db/dialects.py) --
     database_type: str = "postgres"
     database_host: str = "postgres"
     database_port: int = 5432
     database_username: str = "terrane_app"
     database_password: str = "change-me"
-    database_name: str = "terrane_main"           # 前台平台库
+    database_name: str = "terrane_main"           # frontend platform DB
     database_ssl_mode: str = "prefer"
     database_pool_size: int = 20
     database_pool_max_overflow: int = 10
     database_pool_timeout: int = 30
     database_echo: bool = False
 
-    # —— 缓存（Redis，逻辑库切分，caching.md §2）——
+    # -- Cache (Redis, logical-DB partitioning, caching.md §2) --
     cache_host: str = "redis"
     cache_port: int = 6379
     cache_password: str = ""
     cache_use_ssl: bool = False
-    cache_db_session: int = 0          # 前台 Session（caching.md：db0=Session）
+    cache_db_session: int = 0          # frontend Session (caching.md: db0=Session)
     cache_db_business: int = 1
-    cache_db_ratelimit: int = 2        # 限流/登录锁定
-    cache_db_tokens: int = 2           # 邮箱验证/重置一次性 token（与限流同库，前缀区分）
+    cache_db_ratelimit: int = 2        # rate limiting / login lockout
+    cache_db_tokens: int = 2           # email-verification/reset one-time tokens (same DB as rate limiting, distinguished by prefix)
     cache_max_connections: int = 50
 
-    # —— Session（服务端不透明记录 + HttpOnly cookie，authentication.md）——
+    # -- Session (opaque server-side record + HttpOnly cookie, authentication.md) --
     session_cookie_name: str = "terrane_session"
-    session_absolute_ttl_seconds: int = 30 * 24 * 3600   # 前台用户绝对 TTL 更长
+    session_absolute_ttl_seconds: int = 30 * 24 * 3600   # frontend users get a longer absolute TTL
     session_idle_ttl_seconds: int = 7 * 24 * 3600
     session_cookie_secure: bool = True
     session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
 
-    # —— 密码策略（前台用户：强制 forbid_identity）——
+    # -- Password policy (frontend users: forbid_identity enforced) --
     password_min_length: int = 10
     password_require_char_classes: int = 2
     password_forbid_identity: bool = True
 
-    # —— 登录限频 / 账号锁定 ——
+    # -- Login rate limiting / account lockout --
     login_max_per_ip_per_min: int = 10
     login_lock_threshold: int = 5
     login_lock_seconds: int = 15 * 60
 
-    # —— 注册 / 邮箱验证 / 密码重置 ——
+    # -- Registration / email verification / password reset --
     register_max_per_ip_per_hour: int = 10
     email_verify_ttl_seconds: int = 24 * 3600
     password_reset_ttl_seconds: int = 2 * 3600
     twofa_issuer: str = "Terrane"
-    # 邮件中验证/重置链接的前台基址（页面化零配置：出厂指向本机前台）。
+    # Frontend base URL for verification/reset links in emails (page-based zero-config: ships pointing at the local frontend).
     frontend_base_url: str = "http://localhost:43000"
 
-    # —— License gating（licensing.md / .agent.md [License gating]）——
-    # 开源版默认关闭门控：license_required=False 时所有受保护接口直接放行、前端不显示激活/徽章。
-    # 商业化部署设 LICENSE_REQUIRED=true 即恢复 Forge 验签门控（代码完整保留，可逆）。
+    # -- License gating (licensing.md / .agent.md [License gating]) --
+    # Open-source edition disables gating by default: when license_required=False all protected endpoints pass through and the frontend shows no activation/badge.
+    # Commercial deployments set LICENSE_REQUIRED=true to restore Forge signature-verification gating (the code is fully retained and reversible).
     license_required: bool = False
-    # install_id 与激活信封同放 licenses/ 共享卷：三组件共享同一部署身份（反克隆双锁）。
+    # install_id and the activation envelope share the licenses/ shared volume: the three components share one deployment identity (dual-lock anti-clone).
     terrane_license_path: str = "licenses/active.forge"
-    terrane_license_state_path: str = "licenses/verifier_state.json"  # 反时钟回拨/CRL 防重放硬化
+    terrane_license_state_path: str = "licenses/verifier_state.json"  # anti-clock-rollback / CRL replay-prevention hardening
     terrane_license_crl_path: str = "licenses/crl.forge"
     terrane_license_recheck_seconds: int = 10
-    terrane_license_crl_max_age_days: int = 0  # 0 = 不强制 CRL 新鲜度（离线气隙环境）
-    terrane_forge_edge_url: str = ""           # 空 = 仅离线激活
+    terrane_license_crl_max_age_days: int = 0  # 0 = do not enforce CRL freshness (offline air-gapped environments)
+    terrane_forge_edge_url: str = ""           # empty = offline activation only
 
-    # —— 对象存储（字段化；provider 由 object_storage_type 选定；.agent.md [Service 使用情况]）——
-    # 8 个 provider：local 双模 + s3 + 4 国产云(aliyun-oss/tencent-cos/volcengine-tos/huawei-obs)
-    # + azure-blob + google-storage。自托管默认 = SeaweedFS（S3 兼容走 boto3）。
+    # -- Object storage (field-based; provider selected by object_storage_type; .agent.md [Service usage]) --
+    # 8 providers: local dual-mode + s3 + 4 domestic clouds (aliyun-oss/tencent-cos/volcengine-tos/huawei-obs)
+    # + azure-blob + google-storage. Self-hosted default = SeaweedFS (S3-compatible via boto3).
     object_storage_type: Literal[
         "local", "s3", "azure-blob", "aliyun-oss",
         "google-storage", "tencent-cos", "volcengine-tos", "huawei-obs",
     ] = "local"
-    # local 双模：filesystem = 纯磁盘（开发默认）；s3 = 委托 SeaweedFS（S3 兼容端点）。
+    # local dual-mode: filesystem = plain disk (development default); s3 = delegate to SeaweedFS (S3-compatible endpoint).
     object_storage_local_mode: Literal["filesystem", "s3"] = "filesystem"
     object_storage_local_path: str = "/var/lib/terrane/uploads"
     object_storage_default_bucket: str = "terrane"
     object_storage_presigned_url_expires: int = 900
     object_storage_max_file_size: int = 104857600
-    # 通用云凭据（S3 / SeaweedFS / 阿里云 OSS / 腾讯 COS / 火山 TOS / 华为 OBS）。
-    # endpoint 出厂留空，由 compose 注入本机 SeaweedFS S3 端点（48333）。
-    object_storage_endpoint: str = ""          # 例 http://seaweedfs:48333 ；空 = provider 默认
+    # Generic cloud credentials (S3 / SeaweedFS / Aliyun OSS / Tencent COS / Volcengine TOS / Huawei OBS).
+    # endpoint ships empty, injected by compose with the local SeaweedFS S3 endpoint (48333).
+    object_storage_endpoint: str = ""          # e.g. http://seaweedfs:48333 ; empty = provider default
     object_storage_region: str = ""
-    object_storage_access_key: str = ""        # SeaweedFS 出厂用户 terrane_app（由 compose 注入）
-    object_storage_secret_key: str = ""        # SeaweedFS 出厂密码 Seaweedfs@!QAZxsw2.（由 compose 注入）
-    object_storage_secure: bool = True         # 端点 TLS
-    # Azure Blob（account/key 模型，而非 access/secret）。
+    object_storage_access_key: str = ""        # SeaweedFS factory user terrane_app (injected by compose)
+    object_storage_secret_key: str = ""        # SeaweedFS factory password Seaweedfs@!QAZxsw2. (injected by compose)
+    object_storage_secure: bool = True         # endpoint TLS
+    # Azure Blob (account/key model, not access/secret).
     object_storage_azure_account: str = ""
     object_storage_azure_key: str = ""
-    # Google Cloud Storage（service-account JSON 路径 + project）。
+    # Google Cloud Storage (service-account JSON path + project).
     object_storage_gcs_credentials_json: str = ""
     object_storage_gcs_project: str = ""
 

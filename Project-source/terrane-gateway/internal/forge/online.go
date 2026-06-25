@@ -9,9 +9,9 @@ import (
 
 // OnlineClient phones home to forge-edge; lease + grace gives network resilience.
 type OnlineClient struct {
-	base     string
-	edgePub  []byte
-	client   *http.Client
+	base      string
+	edgePub   []byte
+	client    *http.Client
 	lastLease map[string]any
 	token     string
 }
@@ -75,7 +75,8 @@ func (c *OnlineClient) accept(resp map[string]any) Verdict {
 
 func (c *OnlineClient) Activate(onlineCode, fingerprint, clusterID, installID, deploymentUID string, signals map[string]string) Verdict {
 	req := map[string]any{"online_code": onlineCode, "fingerprint": fingerprint, "cluster_id": clusterID}
-	// 反克隆身份字段（design 07）：仅在有值时附带；新 edge 先行部署，旧 edge 收不到也不影响。
+	// Anti-clone identity fields (design 07): attach only when present; a newer edge can be
+	// deployed first, and an older edge that doesn't receive them is unaffected.
 	if installID != "" {
 		req["install_id"] = installID
 	}

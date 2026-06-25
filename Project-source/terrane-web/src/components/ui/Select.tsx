@@ -1,5 +1,5 @@
-/** 统一下拉组件（自建,非原生 select)—— 全前台所有下拉都用它。
- *  popover + 键盘导航 + 点击外部关闭 + 单一 accent + 选中态。 */
+/** Unified select component (custom-built, not a native select) — used for every dropdown across the frontend.
+ *  popover + keyboard navigation + click-outside to close + single accent + selected state. */
 
 import { Check, CaretUpDown } from "@phosphor-icons/react";
 import { useEffect, useId, useRef, useState } from "react";
@@ -22,7 +22,7 @@ interface Props<T extends string> {
 }
 
 export function Select<T extends string>({
-  value, options, onChange, placeholder = "选择…", disabled, className = "", size = "md",
+  value, options, onChange, placeholder = "Select…", disabled, className = "", size = "md",
 }: Props<T>) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -66,7 +66,7 @@ export function Select<T extends string>({
       {open && (
         <ul id={id} role="listbox" tabIndex={-1}
           className="absolute z-50 mt-1.5 max-h-64 w-full overflow-auto rounded-(--radius-control) border border-border bg-surface p-1 shadow-lg">
-          {options.length === 0 && <li className="px-2.5 py-2 text-[13px] text-ink-faint">无可选项</li>}
+          {options.length === 0 && <li className="px-2.5 py-2 text-[13px] text-ink-faint">No options</li>}
           {options.map((o, i) => (
             <li key={o.value} role="option" aria-selected={o.value === value}
               onMouseEnter={() => setActive(i)}

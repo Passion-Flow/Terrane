@@ -1,4 +1,4 @@
-"""Azure Blob Storage（原生 azure-storage-blob SDK）。Container == bucket。"""
+"""Azure Blob Storage (native azure-storage-blob SDK). Container == bucket."""
 
 from __future__ import annotations
 
@@ -10,17 +10,18 @@ from app.adapters.object_storage.base import ObjectStat, ObjectStorageAdapter
 
 class AzureBlobStorage(ObjectStorageAdapter):
     def _account_url(self) -> str:
-        # 自定义端点支持 Azurite（模拟器）/ Azure Stack / 主权云；该端点已含账号路径
-        # （例如 http://azurite:10000/devstoreaccount1）。
+        # A custom endpoint supports Azurite (emulator) / Azure Stack / sovereign clouds;
+        # this endpoint already includes the account path
+        # (e.g. http://azurite:10000/devstoreaccount1).
         if self.settings.object_storage_endpoint:
             return self.settings.object_storage_endpoint.rstrip("/")
         scheme = "https" if self.settings.object_storage_secure else "http"
         return f"{scheme}://{self.settings.object_storage_azure_account}.blob.core.windows.net"
 
     def _service(self):
-        from azure.storage.blob import BlobServiceClient  # 惰性 import
-        # 字典凭据显式携带账号名 —— 当账号无法从自定义端点 host 推断时必需
-        # （Azurite / Azure Stack）。
+        from azure.storage.blob import BlobServiceClient  # lazy import
+        # The dict credential carries the account name explicitly -- required when the
+        # account cannot be inferred from the custom endpoint host (Azurite / Azure Stack).
         cred = {"account_name": self.settings.object_storage_azure_account,
                 "account_key": self.settings.object_storage_azure_key}
         return BlobServiceClient(account_url=self._account_url(), credential=cred)

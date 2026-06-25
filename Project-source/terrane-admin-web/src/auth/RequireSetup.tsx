@@ -1,7 +1,7 @@
-/** 初始化向导守卫 —— 控制台之上、RequireAuth 之内：
- *  ① 首登强制改密（must_change_password）→ 改密页；
- *  ② 超管且向导未完成 → 向导页（非超管不拦：wizard 接口对其 403，向导是超管首启职责）。
- *  /change-password 与 /wizard 自身不挂本守卫（否则死循环）。 */
+/** Setup wizard guard — above the console, inside RequireAuth:
+ *  1) Forced first-login password change (must_change_password) → password-change page;
+ *  2) Super admin with an incomplete wizard → wizard page (non-super-admins are not gated: the wizard API returns 403 for them, and the wizard is a super-admin first-run responsibility).
+ *  /change-password and /wizard themselves do not carry this guard (otherwise an infinite loop). */
 
 import { useQuery } from "@tanstack/react-query";
 import { Navigate, Outlet, useParams } from "react-router";
@@ -19,7 +19,7 @@ export function RequireSetup() {
 
   const isSuper = !!user && (user.role === "super_admin" || user.permissions.includes("*"));
   const needPwChange = !!user?.must_change_password;
-  // 仅超管、且已过改密步时查询向导状态（非超管 / 改密未完成不查）。
+  // Query wizard status only for super admins who have passed the password-change step (skip for non-super-admins / when the change is incomplete).
   const { data: wiz, isLoading } = useQuery({
     queryKey: ["wizard"],
     queryFn: getWizard,

@@ -1,8 +1,8 @@
-"""模型渠道管理 API（平台库 terrane_main：model_channels）。挂 /admin-api/v1/channels。
+"""Model channel management API (platform DB terrane_main: model_channels). Mounted at /admin-api/v1/channels.
 
-模型渠道(六路收口渠道侧)存 terrane_main:admin 经 PlatformBase mirror 管理,前台(摄入/检索/RAG/图谱/Agent)
-直读同表消费模型。权限 platform.channel.*。变体范式:GET /providers 给「新建渠道」下拉类型;每类型居中模态。
-api_key = L5:暂明文存(__enc 占位,KEK 落地字段级加密),GET 一律脱敏(只回 has_key)。审计同库 terrane_main。
+Model channels (the channel side of the six-way convergence) are stored in terrane_main:admin and managed via the PlatformBase mirror; the frontend (ingestion/retrieval/RAG/graph/agent)
+reads the same table directly to consume models. Permission: platform.channel.*. Variant pattern: GET /providers feeds the "New channel" type dropdown; each type gets a centered modal.
+api_key = L5: stored in plaintext for now (__enc placeholder, field-level encryption once KEK lands); always redacted on GET (only returns has_key). Audit goes to the same DB terrane_main.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def _out(c: ModelChannel) -> dict:
     return {
         "id": str(c.id), "provider": c.provider, "kind": c.kind, "name": c.name,
         "base_url": c.base_url, "model": c.model, "enabled": c.enabled,
-        "has_key": bool(c.api_key),  # 脱敏:绝不回传 api_key
+        "has_key": bool(c.api_key),  # redacted: never return api_key
         "created_at": c.created_at.isoformat() if c.created_at else None,
     }
 
@@ -58,7 +58,7 @@ async def _get(db: AsyncSession, channel_id: str) -> ModelChannel:
 
 @router.get("/providers")
 async def providers(_=Depends(require_perm(P.CHANNEL_READ))) -> dict:
-    """「新建渠道」下拉的类型预设(变体范式)。"""
+    """Type presets for the "New channel" dropdown (variant pattern)."""
     return {"providers": all_presets()}
 
 
@@ -111,7 +111,7 @@ class UpdateChannelIn(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     name: str | None = Field(default=None, max_length=120)
     base_url: str | None = Field(default=None, max_length=512)
-    api_key: str | None = Field(default=None, max_length=4096)  # 留空/None = 不变
+    api_key: str | None = Field(default=None, max_length=4096)  # empty/None = unchanged
     model: str | None = Field(default=None, max_length=128)
     kind: KindLit | None = None
     enabled: bool | None = None
@@ -134,7 +134,7 @@ async def update_channel(
         ch.kind = body.kind
     if body.enabled is not None:
         ch.enabled = body.enabled
-    if body.api_key:  # 仅非空才覆盖(脱敏回填不覆盖既有 key)
+    if body.api_key:  # only overwrite when non-empty (a redacted echo won't clobber the existing key)
         ch.api_key = body.api_key
     await audit_service.record(
         pdb, action="channel.update", actor_id=user.user_id, actor_name=user.name,
@@ -163,7 +163,7 @@ async def delete_channel(
 
 
 async def _probe(ch: ModelChannel) -> tuple[bool, str]:
-    """真实连通性探测:openai 兼容/通义 → GET /models;anthropic → /v1/models;无 base_url 直接失败。"""
+    """Real connectivity probe: openai-compatible/Tongyi -> GET /models; anthropic -> /v1/models; no base_url fails immediately."""
     if not ch.base_url:
         return False, "no_base_url"
     import httpx

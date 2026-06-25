@@ -1,7 +1,7 @@
-"""一次性 token（邮箱验证 / 密码重置）— Redis 存储，TTL 过期，消费即删（单次有效）。
+"""One-time tokens (email verification / password reset) — stored in Redis, expire by TTL, deleted on consumption (single use).
 
-key：terrane_token:{kind}:{token} → user_id。kind ∈ {email_verify, pwd_reset}。
-token 高熵 url-safe；消费走 GETDEL 语义（原子取出并删除，防重放）。
+key: terrane_token:{kind}:{token} -> user_id. kind in {email_verify, pwd_reset}.
+Tokens are high-entropy url-safe; consumption uses GETDEL semantics (atomic fetch-and-delete to prevent replay).
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ async def issue(kind: str, user_id: str, *, ttl_seconds: int) -> str:
 
 
 async def consume(kind: str, token: str) -> str | None:
-    """取出并删除（单次有效）；不存在/过期返回 None。"""
+    """Fetch and delete (single use); returns None if missing/expired."""
     r = cache.client(get_settings().cache_db_tokens)
     key = _key(kind, token)
     user_id = await r.get(key)

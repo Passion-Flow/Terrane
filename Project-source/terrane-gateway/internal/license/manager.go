@@ -1,5 +1,6 @@
-// Package license — 数据面 License 状态机（多点防绕过的独立校验点：
-// 即使控制面被篡改放行，数据面仍以内嵌公钥独立验签，fail-closed）。
+// Package license — the data-plane License state machine (an independent checkpoint for defense
+// in depth: even if the control plane is tampered with to pass traffic, the data plane still
+// verifies independently with the embedded public key, fail-closed).
 package license
 
 import (
@@ -21,7 +22,8 @@ const (
 	methodOnline  = "online"
 )
 
-// bypassVerdict — 门控关闭（开源版）时的合成解锁裁定（表现为始终已激活）。
+// bypassVerdict — the synthetic unlocked verdict used when gating is disabled (open-source build);
+// appears permanently activated.
 var bypassVerdict = forge.Verdict{Status: forge.StatusActive, Reason: "license_not_required"}
 
 type envelope struct {
@@ -29,18 +31,19 @@ type envelope struct {
 	Credential string `json:"credential"`
 }
 
-// Manager 持有当前 verdict；读多写少，RWMutex 保护。
+// Manager holds the current verdict; read-heavy and write-light, guarded by an RWMutex.
 type Manager struct {
 	cfg           config.Config
 	fv            *forge.ForgeVerifier
 	mu            sync.RWMutex
 	verdict       forge.Verdict
 	ready         bool
-	activatedCode string // 已成功激活的在线码；换码时必须重新激活而非续旧票
+	activatedCode string // the online code that was successfully activated; switching codes must re-activate rather than renew the old ticket
 }
 
 func NewManager(cfg config.Config) *Manager {
-	// install_id 与激活信封同放 licenses/ 共享卷（design 02 反克隆）：与控制面共享同一身份。
+	// install_id lives alongside the activation envelope in the shared licenses/ volume
+	// (design 02 anti-clone): the same identity is shared with the control plane.
 	installPath := filepath.Join(filepath.Dir(cfg.LicensePath), "install_id")
 	return &Manager{
 		cfg:     cfg,
@@ -51,7 +54,7 @@ func NewManager(cfg config.Config) *Manager {
 
 func (m *Manager) Fingerprint() string { return m.fv.Fingerprint }
 
-// Required 门控是否启用（开源版默认 false → 全程放行）。
+// Required reports whether gating is enabled (open-source build defaults to false → always passes through).
 func (m *Manager) Required() bool { return m.cfg.LicenseRequired }
 
 func (m *Manager) Verdict() forge.Verdict {
@@ -72,7 +75,7 @@ func (m *Manager) Unlocked() bool {
 
 func (m *Manager) Ready() bool {
 	if !m.cfg.LicenseRequired {
-		return true // 门控关闭：无需验签即就绪
+		return true // gating disabled: ready without verification
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -93,7 +96,7 @@ func readEnvelope(path string) (envelope, bool) {
 		(env.Method == methodOffline || env.Method == methodOnline) && env.Credential != "" {
 		return env, true
 	}
-	return envelope{Method: methodOffline, Credential: text}, true // 兼容裸 .forge blob
+	return envelope{Method: methodOffline, Credential: text}, true // accept a bare .forge blob
 }
 
 func (m *Manager) loadCRL() (revoked map[string]bool, version *int, generatedAt string) {
@@ -118,7 +121,7 @@ func (m *Manager) loadCRL() (revoked map[string]bool, version *int, generatedAt 
 	return revoked, version, generatedAt
 }
 
-// VerifyNow 执行一次完整验签并更新状态；任何异常一律锁定（fail-closed）。
+// VerifyNow runs one full verification pass and updates the state; any anomaly locks (fail-closed).
 func (m *Manager) VerifyNow() forge.Verdict {
 	env, ok := readEnvelope(m.cfg.LicensePath)
 	var verdict forge.Verdict
@@ -165,14 +168,15 @@ func (m *Manager) verifyOnline(code string) forge.Verdict {
 	sameCode := code == m.activatedCode && m.activatedCode != ""
 	m.mu.RUnlock()
 	if sameCode {
-		// 同一个在线码 → 续期（断网在签名宽限期内放行）
+		// Same online code → renew (when offline, pass within the signed grace window)
 		v, err := m.fv.Revalidate()
 		if err != nil {
 			return forge.Verdict{Status: forge.StatusLocked, Reason: "revalidate_error"}
 		}
 		return v
 	}
-	// 换了新码（如旧票被吊销后重新签发）→ 必须重新激活，绝不拿旧 token 续旧票
+	// A new code (e.g. reissued after the old ticket was revoked) → must re-activate; never renew
+	// the old ticket with the old token
 	v, err := m.fv.ActivateOnline(code, "")
 	if err != nil {
 		return forge.Verdict{Status: forge.StatusLocked, Reason: "activate_error"}
@@ -185,10 +189,10 @@ func (m *Manager) verifyOnline(code string) forge.Verdict {
 	return v
 }
 
-// Run 启动验签一次 + 周期复验，直到 ctx 取消。
+// Run performs one verification at startup plus periodic re-verification until ctx is canceled.
 func (m *Manager) Run(ctx context.Context) {
 	if !m.cfg.LicenseRequired {
-		slog.Info("license.disabled") // 开源版门控关闭：不验签、不起复验循环
+		slog.Info("license.disabled") // open-source build, gating off: no verification, no re-check loop
 		return
 	}
 	v := m.VerifyNow()

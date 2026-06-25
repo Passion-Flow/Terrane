@@ -1,6 +1,7 @@
-"""KnowledgeBase（平台库 terrane_main）— ORM 映射拷贝(admin 平台俯视,只读)。
+"""KnowledgeBase (platform DB terrane_main) — ORM mapping copy (admin platform overview, read-only).
 
-schema 权威在 terrane-server/app/models/knowledge_base.py + 迁移 000004。后台仅看元数据,无内容读取面。
+The authoritative schema lives in terrane-server/app/models/knowledge_base.py + migration 000004.
+The admin console only views metadata; there is no content-read surface.
 """
 
 from __future__ import annotations

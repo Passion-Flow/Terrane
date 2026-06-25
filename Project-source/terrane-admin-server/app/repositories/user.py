@@ -1,4 +1,4 @@
-"""User 仓储（照搬 Forge）。"""
+"""User repository (ported from Forge)."""
 
 from __future__ import annotations
 

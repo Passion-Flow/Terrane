@@ -1,4 +1,4 @@
-"""后台「库总览」—— 平台俯视所有工作区的知识库(只读元数据,无内容读取面)。挂 /admin-api/v1/knowledge-bases。"""
+"""Admin "Knowledge Base Overview" — a platform-wide view of the knowledge bases across all workspaces (read-only metadata, no content access). Mounted at /admin-api/v1/knowledge-bases."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ async def list_knowledge_bases(
     rows = (await pdb.execute(stmt.order_by(KnowledgeBase.created_at.desc())
                              .offset((page - 1) * page_size).limit(page_size))).all()
 
-    # 源数(一次聚合,避免 N+1)
+    # Source counts (aggregated in one query to avoid N+1)
     src_counts = dict((await pdb.execute(text(
         "SELECT kb_id, count(*) FROM raw_sources GROUP BY kb_id"))).all())
 

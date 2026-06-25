@@ -1,4 +1,4 @@
-/** 忘记密码 —— 输入邮箱请求重置链接（防枚举：恒提示已发送）。 */
+/** Forgot password — enter an email to request a reset link (enumeration-resistant: always shows "sent"). */
 
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";

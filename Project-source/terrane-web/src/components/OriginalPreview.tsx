@@ -1,5 +1,5 @@
-/** 知识库源「原文」渲染:PDF(iframe)/ 图片 / Excel(SheetJS→表)/ Word(docx-preview)/
- *  文本 md·txt·csv(原文)/ 其它(下载)。xlsx、docx-preview 懒加载。 */
+/** Renders the original of a knowledge base source: PDF (iframe) / image / Excel (SheetJS → table) / Word (docx-preview) /
+ *  text md·txt·csv (raw) / others (download). xlsx and docx-preview are lazy-loaded. */
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -50,7 +50,7 @@ export function OriginalPreview({ kbId, sourceId, mime, title }: { kbId: string;
     return () => { cancelled = true; if (obj) URL.revokeObjectURL(obj); };
   }, [kbId, sourceId, mime, title]);
 
-  // Word:docx-preview 异步渲染进容器
+  // Word: docx-preview renders asynchronously into the container
   useEffect(() => {
     if (kind !== "docx" || !docxRef.current || !docxBlob.current) return;
     const el = docxRef.current;
@@ -61,7 +61,7 @@ export function OriginalPreview({ kbId, sourceId, mime, title }: { kbId: string;
   }, [kind]);
 
   if (kind === "loading") return <div className="flex h-full items-center justify-center text-xs text-ink-faint">{t("common.loading")}</div>;
-  if (kind === "error") return <div className="flex h-full items-center justify-center text-xs text-ink-faint">{t("kb.previewOriginalFail", { defaultValue: "原文加载失败" })}</div>;
+  if (kind === "error") return <div className="flex h-full items-center justify-center text-xs text-ink-faint">{t("kb.previewOriginalFail", { defaultValue: "Failed to load original" })}</div>;
   if (kind === "pdf") return <iframe src={url} title="original" className="h-full w-full border-0" />;
   if (kind === "image") return <div className="flex min-h-full items-center justify-center p-3"><img src={url} alt={title} className="max-w-full" /></div>;
   if (kind === "text") return <pre className="whitespace-pre-wrap break-words p-4 font-mono text-[12px] leading-relaxed text-ink-secondary">{text}</pre>;

@@ -1,8 +1,8 @@
-"""公开品牌（白标）端点（/admin-api/v1/branding）— 免登录、锁定态可取。
+"""Public branding (white-label) endpoint (/admin-api/v1/branding) — no login required, available even in the locked state.
 
-登录页 / 激活页 / 侧边栏在认证前就要显示部署方品牌（产品名 / 主题色 / 登录副标题），
-故本端点不挂认证、且在 license_gate 白名单内（锁定态仍返回）。只读，缺失返回出厂默认
-（页面化零配置铁律）。写入走 settings/wizard 的 PATCH/POST（鉴权）。
+The login page / activation page / sidebar must show the deployer's branding (product name / accent color / login subtitle) before authentication,
+so this endpoint has no auth and is on the license_gate allowlist (still returns in the locked state). Read-only; falls back to factory defaults when missing
+(page-based zero-config rule). Writes go through the PATCH/POST endpoints of settings/wizard (authenticated).
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
-"""Redis 客户端工厂 — 按逻辑库返回异步连接（替代 Forge 的 cache adapter 层）。
+"""Redis client factory — returns async connections per logical DB (replaces Forge's cache adapter layer).
 
-Terrane 仅 redis 提供方，故简化为单文件工厂；保留 `client(db)` 接口，
-让 session_service / ratelimit 照搬 Forge 实现即可。
+Terrane only has the redis provider, so this is simplified to a single-file factory; the `client(db)`
+interface is preserved so session_service / ratelimit can reuse the Forge implementation directly.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ _clients: dict[int, Any] = {}
 
 
 def client(db: int) -> Any:
-    """返回绑定到指定逻辑库的异步 redis 客户端（连接池缓存）。"""
+    """Return an async redis client bound to the given logical DB (connection pool cached)."""
     if db not in _clients:
         s = get_settings()
         _clients[db] = aioredis.Redis(
@@ -39,5 +39,5 @@ async def health_check() -> bool:
 
 
 def reset() -> None:
-    """清缓存（测试支持）。"""
+    """Clear the cache (test support)."""
     _clients.clear()

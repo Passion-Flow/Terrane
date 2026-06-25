@@ -1,4 +1,4 @@
-/** 审计日志查看 —— 只读、页码分页。可按 action 过滤（末尾点=前缀）。紧凑精致表格。 */
+/** Audit log viewer —— read-only, page-based pagination. Filterable by action (trailing dot = prefix match). Compact, refined table. */
 
 import { MagnifyingGlass } from "@phosphor-icons/react";
 import { useState } from "react";
@@ -34,7 +34,7 @@ export function AuditLogsPage() {
   function renderTarget(r: AuditLogItem): string {
     if (!r.target_type) return "—";
     const typeLabel = t(`audit.targetType.${r.target_type}`, { defaultValue: r.target_type });
-    // 优先用写入时快照的可读名（邮箱/工作区名）；其次设置项的 key 字典；都没有再退到 id 短码。
+    // Prefer the human-readable name snapshotted at write time (email / workspace name); next the setting key dictionary; otherwise fall back to a short id code.
     if (r.target_name) return `${typeLabel} · ${r.target_name}`;
     if (!r.target_id || r.target_id === "singleton") return typeLabel;
     const known = t(`audit.targetId.${r.target_id}`, { defaultValue: "" });

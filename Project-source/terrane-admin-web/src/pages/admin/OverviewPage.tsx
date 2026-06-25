@@ -1,5 +1,5 @@
-/** 概览 —— 后台首页仪表盘:关键计数(工作区/成员/操作员) + License 摘要 + 近期审计。
- *  全只读;按权限渲染卡片(无权读的领域不显示)。数据复用各列表/License 端点。 */
+/** Overview -- admin home dashboard: key counts (workspaces/members/operators) + License summary + recent audit.
+ *  Fully read-only; cards render by permission (domains the user can't read are hidden). Data reuses the list/License endpoints. */
 
 import { Buildings, UserGear, UsersThree, type Icon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
@@ -67,7 +67,7 @@ export function OverviewPage() {
         {t("admin.welcomeDesc", { name: user?.username ?? user?.email ?? "" })}
       </p>
 
-      {/* 计数卡 */}
+      {/* Count cards */}
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {canWs && <StatCard icon={Buildings} label={t("admin.nav.workspaces")} value={num(ws.data?.total)} to={`${base}/workspaces`} />}
         {canUser && <StatCard icon={UsersThree} label={t("admin.nav.members")} value={num(mem.data?.total)} to={`${base}/members`} />}
@@ -75,7 +75,7 @@ export function OverviewPage() {
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {/* License 摘要 —— 开源版（门控关闭）隐藏整块 */}
+        {/* License summary -- hidden entirely in the open-source edition (gating off) */}
         {canLicense && lic.data?.required !== false && (
           <section className="rounded-xl border border-border/70 bg-surface/40 p-5">
             <div className="flex items-center justify-between">
@@ -92,7 +92,7 @@ export function OverviewPage() {
           </section>
         )}
 
-        {/* 近期审计 */}
+        {/* Recent audit */}
         {canAudit && (
           <section className="rounded-xl border border-border/70 bg-surface/40 p-5">
             <div className="flex items-center justify-between">

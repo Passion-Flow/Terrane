@@ -1,6 +1,6 @@
-"""Membership（平台库 terrane_main：memberships）— ORM 映射拷贝（admin 只读管理）。
+"""Membership (platform DB terrane_main: memberships) — ORM mapping copy (admin manages read-only).
 
-schema 权威在 terrane-server/app/models/membership.py + 迁移 000001。
+The authoritative schema lives in terrane-server/app/models/membership.py + migration 000001.
 """
 
 from __future__ import annotations

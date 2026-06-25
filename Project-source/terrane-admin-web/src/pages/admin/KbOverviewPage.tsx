@@ -1,4 +1,4 @@
-/** 后台「库总览」—— 平台俯视所有工作区的知识库(只读元数据)。 */
+/** Admin "Library overview" —— a platform-wide view of every workspace's knowledge bases (read-only metadata). */
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

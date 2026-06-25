@@ -1,5 +1,5 @@
-/** 通用下拉选择器 —— 自定义组件（非原生 select），视觉与表单输入一致。
- *  button 触发 + 点击外部关闭 + 绝对定位面板 + 选中打勾。受控：value/onChange。 */
+/** Generic dropdown selector —— a custom component (not a native select), visually consistent with form inputs.
+ *  Button trigger + click-outside to close + absolutely positioned panel + checkmark on selection. Controlled: value/onChange. */
 
 import { CaretDown, Check } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
@@ -40,7 +40,7 @@ export function Select({ value, onChange, options, placeholder, disabled, ariaLa
 
   function toggle() {
     if (!open && ref.current) {
-      // 触发器在视口下半部 → 向上展开，避免下拉超出弹窗/视口底部。
+      // Trigger sits in the lower part of the viewport → expand upward to avoid the dropdown overflowing the modal/viewport bottom.
       setDropUp(ref.current.getBoundingClientRect().bottom > window.innerHeight * 0.6);
     }
     setOpen((v) => !v);

@@ -1,5 +1,5 @@
-/** 设置 → 操作员（System Users）。后台账号管理:列出/新建/编辑(角色·状态)/重置密码/删除。
- *  权限 platform.user.*（super_admin 写、admin 只读）。护栏:不能对自己/最后一个超管 禁用·降级·删除。 */
+/** Settings → Operators (System Users). Admin account management: list / create / edit (role and status) / reset password / delete.
+ *  Permissions platform.user.* (super_admin can write, admin is read-only). Guardrails: you cannot disable, demote, or delete yourself or the last super admin. */
 
 import { Key, MagnifyingGlass, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -45,22 +45,22 @@ export function SystemUsersPage() {
   const canDelete = has("platform.user.delete");
   const showMenu = canWrite || canDelete;
 
-  // 创建
+  // Create
   const [createOpen, setCreateOpen] = useState(false);
   const [cEmail, setCEmail] = useState("");
   const [cUser, setCUser] = useState("");
   const [cPass, setCPass] = useState("");
   const [cRole, setCRole] = useState<OperatorRole>("admin");
   const [created, setCreated] = useState<{ email: string; password: string | null } | null>(null);
-  // 编辑
+  // Edit
   const [editing, setEditing] = useState<OperatorItem | null>(null);
   const [eUser, setEUser] = useState("");
   const [eRole, setERole] = useState<OperatorRole>("admin");
   const [eStatus, setEStatus] = useState<"active" | "disabled">("active");
-  // 重置密码
+  // Reset password
   const [resetT, setResetT] = useState<OperatorItem | null>(null);
   const [resetPw, setResetPw] = useState<string | null>(null);
-  // 删除
+  // Delete
   const [delT, setDelT] = useState<OperatorItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -189,7 +189,7 @@ export function SystemUsersPage() {
 
       <Pagination page={page} total={total} pageSize={OPERATOR_PAGE_SIZE} onPage={setPage} />
 
-      {/* 创建 */}
+      {/* Create */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={created ? t("operators.createdTitle") : t("operators.createTitle")}
         footer={created ? (
           <button type="button" onClick={() => setCreateOpen(false)} className="rounded-(--radius-control) bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-accent-hover">{t("common.done")}</button>
@@ -219,7 +219,7 @@ export function SystemUsersPage() {
         )}
       </Modal>
 
-      {/* 编辑 */}
+      {/* Edit */}
       <Modal open={!!editing} onClose={() => setEditing(null)} title={t("operators.editTitle")}
         footer={<>
           <button type="button" onClick={() => setEditing(null)} className="rounded-(--radius-control) px-3.5 py-1.5 text-[13px] text-ink-secondary hover:bg-canvas">{t("common.cancel")}</button>
@@ -240,7 +240,7 @@ export function SystemUsersPage() {
         </div>
       </Modal>
 
-      {/* 重置密码 */}
+      {/* Reset password */}
       <Modal open={!!resetT} onClose={() => setResetT(null)} title={t("members.resetTitle")}
         footer={resetPw ? (
           <button type="button" onClick={() => setResetT(null)} className="rounded-(--radius-control) bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-accent-hover">{t("common.done")}</button>
@@ -258,7 +258,7 @@ export function SystemUsersPage() {
         {err && <p className="mt-3 text-[13px] text-danger">{err}</p>}
       </Modal>
 
-      {/* 删除（输入邮箱确认） */}
+      {/* Delete (confirm by typing the email) */}
       <ConfirmDeleteModal open={!!delT} onClose={() => setDelT(null)} title={t("operators.deleteTitle")}
         target={delT?.email ?? ""} desc={t("operators.deleteDesc", { email: delT?.email ?? "" })}
         onConfirm={onDelete} busy={busy} error={err} />

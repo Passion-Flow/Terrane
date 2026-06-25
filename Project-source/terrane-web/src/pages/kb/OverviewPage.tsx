@@ -1,4 +1,4 @@
-/** 库概览子页 —— 统计九宫格 + 健康度 + 待办建议(复用 /lint)。 */
+/** KB overview subpage — stats grid + health score + actionable suggestions (reuses /lint). */
 
 import {
   ArrowsClockwise, ChartBar, FileText, Graph as GraphIcon, Sparkle, TextT, type Icon,

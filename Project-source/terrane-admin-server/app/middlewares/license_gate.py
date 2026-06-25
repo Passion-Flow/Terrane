@@ -1,7 +1,7 @@
-"""License 锁定态网关（多点防绕过的第 1 点；第 2 点为路由级 require_license 依赖）。
+"""License locked-state gateway (point 1 of multi-point bypass protection; point 2 is the route-level require_license dependency).
 
-锁定态行为（licensing.md）：拒绝一切受保护接口，统一 403 + `LICENSE_REQUIRED`；
-仅放行健康探针与 License 状态只读接口（前台无激活能力，激活在后台管理端）。
+Locked-state behavior (licensing.md): reject all protected endpoints with a uniform 403 + `LICENSE_REQUIRED`;
+only allow health probes and read-only License status endpoints (the frontend has no activation capability; activation happens in the admin backend).
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ ALLOWED_PREFIXES: tuple[str, ...] = (
     "/readyz",
     "/healthz",
     "/admin-api/v1/license",
-    "/admin-api/v1/branding",  # 公开品牌：登录/激活页在认证前即需展示部署方白标
+    "/admin-api/v1/branding",  # public branding: the login/activation page must show the deployer's white-label before authentication
 )
 
 
@@ -28,7 +28,7 @@ def _request_id() -> str:
 
 
 class LicenseGateMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, state: LicenseState) -> None:  # noqa: ANN001 — starlette 签名
+    def __init__(self, app, state: LicenseState) -> None:  # noqa: ANN001 — starlette signature
         super().__init__(app)
         self._state = state
 
@@ -51,7 +51,7 @@ class LicenseGateMiddleware(BaseHTTPMiddleware):
 
 
 def require_license(request: Request) -> None:
-    """路由级二次校验（业务路由必须挂载本依赖 — 抗单点 patch 绕过）。"""
+    """Route-level secondary check (business routes must mount this dependency — resistant to single-point patch bypass)."""
     state: LicenseState = request.app.state.license
     if not state.unlocked:
         raise HTTPException(

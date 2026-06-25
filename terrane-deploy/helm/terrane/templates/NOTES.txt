@@ -1,33 +1,33 @@
-Terrane 已部署到 namespace「{{ .Release.Namespace }}」(release: {{ .Release.Name }})。
+Terrane has been deployed to namespace "{{ .Release.Namespace }}" (release: {{ .Release.Name }}).
 
-1) 等待就绪:
+1) Wait for readiness:
    kubectl -n {{ .Release.Namespace }} get pods -w
-   (terrane-admin-server 会自动跑迁移 + 建出厂超管 terrane@navtra.ai)
+   (terrane-admin-server automatically runs migrations + bootstraps the factory super admin terrane@navtra.ai)
 
-2) 访问({{ if not .Values.ingress.enabled }}ingress 默认关 —— 用 kubectl port-forward / 自己的 LB 暴露 Service{{ else }}经 ingress{{ end }}):
-   前台  {{ .Values.global.useTLS | ternary "https" "http" }}://{{ .Values.global.domain }}
-   后台  {{ .Values.global.useTLS | ternary "https" "http" }}://{{ .Values.global.adminDomain }}
+2) Access ({{ if not .Values.ingress.enabled }}ingress is off by default — expose the Services via kubectl port-forward / your own LB{{ else }}via ingress{{ end }}):
+   Front app  {{ .Values.global.useTLS | ternary "https" "http" }}://{{ .Values.global.domain }}
+   Admin      {{ .Values.global.useTLS | ternary "https" "http" }}://{{ .Values.global.adminDomain }}
 {{- if not .Values.global.useTLS }}
-   ⚠ global.useTLS=false:cookie 非 Secure,仅供 HTTP 试用;生产请配 TLS 并设 useTLS=true。
+   ⚠ global.useTLS=false: the cookie is not Secure — for HTTP trials only; for production configure TLS and set useTLS=true.
 {{- end }}
 
-3) 首启三步(后台):
-   ① 激活 License(Forge 激活码)→ ② 超管 terrane@navtra.ai(初始密码=邮箱)首登强制改密 + 向导
-   → ③「模型渠道」填你自己的 API key(出厂零渠道零 key)。
+3) First-run, three steps (admin console):
+   ① Activate the License (Forge activation code) → ② Super admin terrane@navtra.ai (initial password = email), forced password change on first login + wizard
+   → ③ Model Channels: fill in your own API key (ships with zero channels and zero keys).
 
 {{- if or (not .Values.secret.kek) (eq .Values.secret.kek "#REPLACE_ME#") }}
 
-✗ 警告:secret.kek 仍是 #REPLACE_ME#/为空 —— 后端会 fail closed。请 --set secret.kek=$(openssl rand -base64 32) 重装。
+✗ Warning: secret.kek is still #REPLACE_ME#/empty — the backend will fail closed. Reinstall with --set secret.kek=$(openssl rand -base64 32).
 {{- end }}
 {{- if and (not .Values.postgres.enabled) (or (not .Values.externalDatabase.host) (eq .Values.externalDatabase.host "#REPLACE_ME#")) }}
-✗ 警告:用外部数据库(postgres.enabled=false)但 externalDatabase.host 仍是 #REPLACE_ME#/为空,请填(须含 age+vector 扩展)。
+✗ Warning: using an external database (postgres.enabled=false) but externalDatabase.host is still #REPLACE_ME#/empty — fill it in (must provide the age+vector extensions).
 {{- end }}
 {{- if and (not .Values.redis.enabled) (or (not .Values.externalRedis.host) (eq .Values.externalRedis.host "#REPLACE_ME#")) }}
-✗ 警告:用外部缓存(redis.enabled=false)但 externalRedis.host 仍是 #REPLACE_ME#/为空,请填。
+✗ Warning: using an external cache (redis.enabled=false) but externalRedis.host is still #REPLACE_ME#/empty — fill it in.
 {{- end }}
 {{- if and .Values.postgres.enabled (or (not .Values.postgres.password) (eq .Values.postgres.password "#REPLACE_ME#")) }}
-✗ 警告:postgres.enabled=true 但 postgres.password 仍是 #REPLACE_ME#/为空。
+✗ Warning: postgres.enabled=true but postgres.password is still #REPLACE_ME#/empty.
 {{- end }}
 
-提示:release 名必须是「terrane」(前端 nginx 反代写死 terrane-server/terrane-admin-server 服务名)。
-license PVC 为 {{ .Values.license.accessMode }};若控制面多副本/跨节点,需 ReadWriteMany 存储类。
+Note: the release name MUST be "terrane" (the front-end nginx hard-codes the terrane-server/terrane-admin-server service names in its reverse proxy).
+The license PVC is {{ .Values.license.accessMode }}; if the control plane runs multiple replicas / across nodes, it needs a ReadWriteMany storage class.

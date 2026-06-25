@@ -1,4 +1,4 @@
-"""本地开发入口：python main.py（02-Backend/tech-stack.md 启动约定）。"""
+"""Local development entrypoint: python main.py (02-Backend/tech-stack.md launch convention)."""
 
 from __future__ import annotations
 

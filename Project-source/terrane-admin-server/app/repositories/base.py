@@ -1,6 +1,6 @@
-"""通用仓储 — CRUD + 软删感知查询（照搬 Forge app/repositories/base.py）。
+"""Generic repository — CRUD + soft-delete-aware queries (ported from Forge app/repositories/base.py).
 
-此处不放业务规则、不做外部调用。默认查询排除软删行。
+No business rules and no external calls here. Queries exclude soft-deleted rows by default.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
-"""后台成员（前台知识库用户）列表 API（平台库 terrane_main：users + workspaces + memberships）。
+"""Admin members (front-end knowledge-base users) listing API (platform DB terrane_main: users + workspaces + memberships).
 
-挂 /admin-api/v1/members。权限 USER_READ（super_admin + admin）。页码分页 + 邮箱/用户名搜索 + 状态过滤。
-只读：列出注册用户、所属工作区、角色、状态、最近登录。敏感列（password_hash 等）不暴露。
+Mounted at /admin-api/v1/members. Permission USER_READ (super_admin + admin). Page-number pagination + email/username search + status filter.
+Read-only: lists registered users, their workspace, role, status, and last login. Sensitive columns (password_hash, etc.) are not exposed.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ class CreateMemberIn(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     email: EmailStr
     username: str | None = Field(default=None, max_length=64)
-    password: str = Field(default="", max_length=256)  # 留空 = 自动生成强密码
+    password: str = Field(default="", max_length=256)  # leave blank = auto-generate a strong password
     workspace_id: str
     role: Literal["Owner", "Admin", "Editor", "Member", "Reader"] = "Member"
 
@@ -52,9 +52,9 @@ async def create_member(
     user: CurrentUser = Depends(require_perm(P.USER_WRITE)),
     db: AsyncSession = Depends(get_platform_db),
 ) -> dict:
-    """管理员建前台用户（可信：直接 active + 邮箱已验证，免邮验即可登录）。
+    """Admin creates a front-end user (trusted: directly active + email pre-verified, so they can log in without email verification).
 
-    归属选定工作区为 home + 该工作区 membership(role)。密码留空则自动生成强密码、一次性返回。
+    The selected workspace becomes their home + a membership(role) in that workspace. If the password is left blank, a strong password is auto-generated and returned once.
     """
     settings = get_settings()
     email = str(body.email).lower()
@@ -70,14 +70,14 @@ async def create_member(
 
     generated: str | None = None
     if body.password:
-        pol = await get_security_policy(db)  # 平台安全策略（后台「设置→安全」可改）
+        pol = await get_security_policy(db)  # platform security policy (editable in admin "Settings -> Security")
         security.validate_password_policy(
             body.password, min_length=pol["password_min_length"], email=email,
             username=body.username or "",
             require_char_classes=pol["password_require_char_classes"], forbid_identity=True)
         pw = body.password
     else:
-        pw = generated = security.new_token(9)  # url-safe，含字母数字，满足登录所需
+        pw = generated = security.new_token(9)  # url-safe, alphanumeric, sufficient for login
 
     now = datetime.datetime.now(datetime.timezone.utc)
     fu = FrontUser(workspace_id=ws.id, email=email, username=body.username,
@@ -142,7 +142,7 @@ async def reset_member_password(
     user: CurrentUser = Depends(require_perm(P.USER_WRITE)),
     db: AsyncSession = Depends(get_platform_db),
 ) -> dict:
-    """管理员重置成员密码 → 生成新强密码、一次性返回（旧密码立即失效）。"""
+    """Admin resets a member's password -> generate a new strong password, returned once (the old password is invalidated immediately)."""
     fu = await _get_member(db, member_id)
     pw = security.new_token(9)
     fu.password_hash = security.hash_password(pw)
@@ -160,7 +160,7 @@ async def delete_member(
     user: CurrentUser = Depends(require_perm(P.USER_DELETE)),
     db: AsyncSession = Depends(get_platform_db),
 ) -> dict:
-    """硬删除成员（铁律：真删 + FK 级联）。个人工作区随之删除；团队工作区仅移除该成员。"""
+    """Hard-delete a member (iron rule: real deletion + FK cascade). A personal workspace is deleted along with them; for a team workspace only this member is removed."""
     fu = await _get_member(db, member_id)
     ws = await db.get(Workspace, fu.workspace_id)
     await audit_service.record(
@@ -168,9 +168,9 @@ async def delete_member(
         target_type="user", target_id=str(fu.id),
         before={"email": fu.email, "workspace": ws.name if ws else None}, **audit_ctx(request))
     if ws is not None and ws.kind == "personal":
-        await db.delete(ws)   # 级联删 user + membership
+        await db.delete(ws)   # cascade-deletes user + membership
     else:
-        await db.delete(fu)   # 级联删 membership
+        await db.delete(fu)   # cascade-deletes membership
     await db.commit()
     log.info("member_deleted", user_id=member_id, actor_id=user.user_id)
     return {"ok": True}
@@ -179,9 +179,9 @@ async def delete_member(
 @router.get("/members")
 async def list_members(
     _=Depends(require_perm(P.USER_READ)),
-    q: str | None = Query(default=None, description="按邮箱/用户名模糊搜索"),
+    q: str | None = Query(default=None, description="Fuzzy search by email/username"),
     status: str | None = Query(default=None),
-    workspace_id: str | None = Query(default=None, description="仅该工作区的成员"),
+    workspace_id: str | None = Query(default=None, description="Members of this workspace only"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_platform_db),
@@ -201,7 +201,7 @@ async def list_members(
     total = int((await db.execute(
         select(func.count()).select_from(FrontUser).where(*conds))).scalar_one())
 
-    # users + 所属工作区名 + 在该工作区的角色（home workspace 的 membership）。
+    # users + their workspace name + role in that workspace (the home workspace membership).
     stmt = (
         select(FrontUser, Workspace.name, Workspace.slug, Membership.role)
         .join(Workspace, Workspace.id == FrontUser.workspace_id)

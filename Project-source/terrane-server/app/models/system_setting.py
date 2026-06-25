@@ -1,7 +1,8 @@
-"""SystemSetting（通用键值设置）ORM — 平台库 terrane_main（02-database 实体 #36）。
+"""SystemSetting (generic key-value setting) ORM — platform DB terrane_main (02-database entity #36).
 
-通用配置仓：邮件 / 对象存储 / 登录策略 / 密码策略 / 数据保留 / 向导状态等。
-value=JSONB（敏感字段密文 + __enc 标记）；uq(key, scope, scope_id)；upsert 覆盖，审计走 audit_logs。
+A general-purpose config store: email / object storage / login policy / password policy / data retention /
+wizard state, etc. value=JSONB (sensitive fields are ciphertext + an __enc marker); uq(key, scope, scope_id);
+upsert overwrites, auditing goes through audit_logs.
 """
 
 from __future__ import annotations

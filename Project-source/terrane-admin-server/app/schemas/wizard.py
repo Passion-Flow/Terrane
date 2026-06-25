@@ -1,4 +1,4 @@
-"""初始化向导 API schema（Pydantic v2 strict）。"""
+"""Setup wizard API schema (Pydantic v2 strict)."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ class EmailConfigIn(BaseModel):
     password: str = Field(default="", max_length=512)
     from_address: EmailStr
     from_name: str = Field(default="Terrane", max_length=120)
-    allow_insecure: bool = False  # 内网自签证书放行（默认严格校验）
+    allow_insecure: bool = False  # allow self-signed certs on internal networks (strict validation by default)
 
 
 class EmailTestIn(BaseModel):
@@ -41,9 +41,9 @@ class EmailPresetOut(BaseModel):
 class BrandingIn(BaseModel):
     model_config = _strict
     product_name: str = Field(min_length=1, max_length=120)
-    logo_data: str | None = Field(default=None, max_length=1_000_000)   # 控制台/工作区 Logo（data URI/URL）
-    login_logo: str | None = Field(default=None, max_length=1_000_000)  # 登录页 Logo
-    favicon: str | None = Field(default=None, max_length=1_000_000)     # 站点 favicon
+    logo_data: str | None = Field(default=None, max_length=1_000_000)   # console/workspace logo (data URI/URL)
+    login_logo: str | None = Field(default=None, max_length=1_000_000)  # login page logo
+    favicon: str | None = Field(default=None, max_length=1_000_000)     # site favicon
     accent_color: str = Field(min_length=4, max_length=16)
     login_subtitle: str | None = Field(default=None, max_length=255)
     support_url: str | None = Field(default=None, max_length=512)

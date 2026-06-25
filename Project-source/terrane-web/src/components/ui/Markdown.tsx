@@ -1,5 +1,5 @@
-/** 美观 Markdown 渲染:GFM 表格 + KaTeX 公式 + 代码/列表/引用,贴合 taste 主题。
- *  用于知识库源解析预览、Studio 文本类产物、Wiki 等。 */
+/** Polished Markdown rendering: GFM tables + KaTeX formulas + code / lists / blockquotes, aligned with the taste theme.
+ *  Used for knowledge base source parsing previews, Studio text outputs, Wiki, etc. */
 import "katex/dist/katex.min.css";
 
 import ReactMarkdown, { type Components } from "react-markdown";

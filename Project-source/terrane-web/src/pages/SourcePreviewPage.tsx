@@ -1,7 +1,7 @@
-/** 源「整页」预览(非弹窗)。常驻解析对比:
- *  左 = 原文版面(逐页 WebP 懒加载 / 回退 OriginalPreview),右 = 解析结果(Markdown)。
- *  右下角问答浮球 → 打开可拖拽 + 可缩放的问答浮窗(内嵌 DocumentSourceChat)。
- *  版面图渐进消费:render_status 为 pending/rendering 时每 ~2s 轮询 /pages。 */
+/** Full-page source preview (not a modal). Persistent parse comparison:
+ *  left = original layout (per-page WebP lazy loading / falls back to OriginalPreview), right = parsed result (Markdown).
+ *  Bottom-right Q&A bubble → opens a draggable + resizable Q&A floating window (embeds DocumentSourceChat).
+ *  Progressive layout-image consumption: while render_status is pending/rendering, poll /pages every ~2s. */
 import { ArrowLeft, ChatCircleText, DownloadSimple, Minus, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -18,7 +18,7 @@ import {
   type KbSourceDetail, type SourcePage,
 } from "@/lib/kb";
 
-// 浮窗尺寸/位置约束
+// Floating window size/position constraints
 const MIN_W = 300;
 const MIN_H = 320;
 const MARGIN = 16;
@@ -54,7 +54,7 @@ export function SourcePreviewPage() {
       } else {
         stopPoll();
       }
-    } catch { /* ignore — 回退到 OriginalPreview */ }
+    } catch { /* ignore — fall back to OriginalPreview */ }
   }, [kb, sid]);
 
   useEffect(() => {
@@ -98,7 +98,7 @@ export function SourcePreviewPage() {
 
   return (
     <div className="relative flex h-screen min-h-0 flex-col bg-canvas">
-      {/* 顶栏 */}
+      {/* Top bar */}
       <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border/60 bg-surface/30 px-5 py-3">
         <button onClick={goBack} title={t("kb.back")}
           className="flex shrink-0 items-center gap-1 rounded-(--radius-control) px-2 py-1 text-sm text-ink-secondary transition hover:bg-canvas hover:text-ink">
@@ -121,9 +121,9 @@ export function SourcePreviewPage() {
         )}
       </header>
 
-      {/* 主体:常驻解析对比 */}
+      {/* Body: persistent parse comparison */}
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
-        {/* 左:原文版面 */}
+        {/* Left: original layout */}
         <section className="flex min-h-0 flex-col border-b border-border/60 lg:border-b-0 lg:border-e">
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/40 px-4 py-1.5 text-[11px] font-medium text-ink-faint">
             <span>{t("source.originalLayout")}</span>
@@ -154,7 +154,7 @@ export function SourcePreviewPage() {
           </div>
         </section>
 
-        {/* 右:解析结果 */}
+        {/* Right: parsed result */}
         <section className="flex min-h-0 flex-col">
           <div className="shrink-0 border-b border-border/40 px-4 py-1.5 text-[11px] font-medium text-ink-faint">{t("source.parsedResult")}</div>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -171,19 +171,19 @@ export function SourcePreviewPage() {
         </section>
       </div>
 
-      {/* 问答浮窗(浮球 + 可拖拽可缩放) */}
+      {/* Q&A floating window (bubble + draggable & resizable) */}
       <AskFloat kbId={kb} sourceId={sid} />
     </div>
   );
 }
 
-/** 右下角问答浮球 → 可拖拽 + 可缩放的浮窗。纯前端鼠标事件实现,不加重依赖。 */
+/** Bottom-right Q&A bubble → a draggable + resizable floating window. Implemented purely with front-end mouse events, no heavy dependencies. */
 function AskFloat({ kbId, sourceId }: { kbId: string; sourceId: string }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
 
-  // 默认右下定位 + 尺寸。位置以 left/top 像素表示(初次打开时根据视口算出右下角)。
+  // Default bottom-right placement + size. Position expressed in left/top pixels (computed from the viewport's bottom-right corner on first open).
   const [box, setBox] = useState({ x: 0, y: 0, w: 400, h: 520, placed: false });
   const dragRef = useRef<{ mode: "move" | "resize"; px: number; py: number; bx: number; by: number; bw: number; bh: number } | null>(null);
 
@@ -196,7 +196,7 @@ function AskFloat({ kbId, sourceId }: { kbId: string; sourceId: string }) {
     return { x, y, w, h };
   }, []);
 
-  // 打开时若尚未定位,放到右下角。
+  // On open, if not yet placed, position it at the bottom-right corner.
   useEffect(() => {
     if (open && !box.placed) {
       const w = 400, h = 520;
@@ -254,7 +254,7 @@ function AskFloat({ kbId, sourceId }: { kbId: string; sourceId: string }) {
   return (
     <div className="fixed z-40 flex flex-col overflow-hidden rounded-(--radius-card) border border-border bg-surface shadow-2xl"
       style={{ left: box.x, top: box.y, width: box.w, height: box.h }}>
-      {/* 标题栏:可拖动定位 */}
+      {/* Title bar: draggable to reposition */}
       <div onMouseDown={startMove}
         className="flex shrink-0 cursor-move items-center justify-between gap-2 border-b border-border/60 bg-surface/80 px-3 py-2">
         <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-ink">
@@ -269,12 +269,12 @@ function AskFloat({ kbId, sourceId }: { kbId: string; sourceId: string }) {
         </div>
       </div>
 
-      {/* 内容:文档问答 */}
+      {/* Content: document Q&A */}
       <div className="min-h-0 flex-1">
         <DocumentSourceChat kbId={kbId} sourceId={sourceId} />
       </div>
 
-      {/* 右下角缩放手柄 */}
+      {/* Bottom-right resize handle */}
       <div onMouseDown={startResize} title={t("source.resize")}
         className="absolute bottom-0 end-0 size-4 cursor-nwse-resize">
         <span className="absolute bottom-1 end-1 size-0 border-b-[7px] border-s-[7px] border-b-border border-s-transparent" />

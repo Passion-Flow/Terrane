@@ -1,5 +1,5 @@
-// Package config — terrane-gateway 配置（阶段①：License gating + 服务监听）。
-// 环境变量前缀 TERRANE_；licenses/ 为与控制面共享的卷。
+// Package config — terrane-gateway configuration (stage 1: License gating + service listener).
+// Environment variables are prefixed TERRANE_; licenses/ is a volume shared with the control plane.
 package config
 
 import (
@@ -13,15 +13,17 @@ type Config struct {
 	Port     int
 	LogLevel string
 
-	// LicenseRequired 门控总开关：开源版默认 false → 数据面全程放行（表现为始终已激活）；
-	// 商业化部署设 LICENSE_REQUIRED=true 即恢复 Forge 验签门控（验签代码完整保留，可逆）。
+	// LicenseRequired is the master gating switch: the open-source build defaults to false, so the
+	// data plane always passes traffic through (appears permanently activated). A commercial
+	// deployment sets LICENSE_REQUIRED=true to restore Forge signature gating (the verification
+	// code is fully retained and reversible).
 	LicenseRequired bool
 
-	LicensePath         string // 激活信封（后台管理端写入；多容器共享卷）
-	LicenseStatePath    string // 验签防回拨水位（本组件独立持有，与控制面分开防互相污染）
+	LicensePath         string // activation envelope (written by the admin backend; shared across containers)
+	LicenseStatePath    string // anti-rollback watermark (held independently by this component, separate from the control plane to avoid cross-contamination)
 	LicenseCRLPath      string
 	LicenseRecheckSecs  int
-	LicenseCRLMaxAgeDay int // 0 = 不强制 CRL 新鲜度
+	LicenseCRLMaxAgeDay int // 0 = do not enforce CRL freshness
 	ForgeEdgeURL        string
 }
 

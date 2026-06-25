@@ -1,4 +1,4 @@
-/** Wiki 子页 —— 复用 KbWiki。 */
+/** Wiki sub-page — reuses KbWiki. */
 
 import { KbWiki } from "@/components/KbWiki";
 import { useKb } from "@/components/KbLayout";

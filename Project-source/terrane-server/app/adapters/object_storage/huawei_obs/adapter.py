@@ -1,4 +1,4 @@
-"""华为 OBS 经其 S3 兼容端点（obs.<region>.myhuaweicloud.com）。"""
+"""Huawei OBS via its S3-compatible endpoint (obs.<region>.myhuaweicloud.com)."""
 
 from __future__ import annotations
 

@@ -1,5 +1,6 @@
-/** 基于「单份文档」的 RAG 问答面板 —— 流式答案 + 引用来源。
- *  与 KbChat 同构,但调 streamChat(kbId, q, ..., sourceId) 仅在该文档范围内检索问答。 */
+/** Single-document RAG Q&A panel — streamed answers + cited sources.
+ *  Structurally identical to KbChat, but calls streamChat(kbId, q, ..., sourceId) to retrieve and answer
+ *  only within the scope of this one document. */
 
 import { ChatCircleText, FileText, PaperPlaneRight } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
@@ -14,7 +15,7 @@ export function DocumentSourceChat({
 }: {
   kbId: string;
   sourceId: string;
-  /** 点击引用 badge 的回调(可用于切到「解析对比」并滚动)。可选。 */
+  /** Callback for clicking a citation badge (e.g. switch to "parse comparison" and scroll). Optional. */
   onCite?: (s: ChatSource) => void;
 }) {
   const { t } = useTranslation();

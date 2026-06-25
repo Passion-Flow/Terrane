@@ -1,12 +1,12 @@
 <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Terrane">
   <rect width="64" height="64" rx="15" fill="#0b1012"/>
-  <!-- 后卡（描边，轻微旋转，露在后方） -->
+  <!-- Back card (outlined, slightly rotated, peeking out behind) -->
   <g transform="rotate(-6 32 32)">
     <rect x="15" y="17" width="34" height="27" rx="6" fill="none" stroke="#ffffff" stroke-width="1.7"/>
   </g>
-  <!-- 前卡（实白）：主体 + 左上文件夹凸标 -->
+  <!-- Front card (solid white): main body + folder tab at top-left -->
   <rect x="14" y="24" width="36" height="25" rx="6" fill="#ffffff"/>
   <path d="M16 26 a3 3 0 0 1 3 -3 h7 a2.5 2.5 0 0 1 2.2 1.4 l1.2 2.2 h2 v3 h-17.6 z" fill="#ffffff"/>
-  <!-- T 字：完整居中在白卡内，四周留白（不触黑底） -->
+  <!-- "T" letter: fully centered within the white card, with margins all around (not touching the black background) -->
   <text x="32" y="42.3" text-anchor="middle" font-family="Geist, system-ui, sans-serif" font-size="19" font-weight="800" fill="#0a0a0a">T</text>
 </svg>

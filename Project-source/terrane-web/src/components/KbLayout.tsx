@@ -1,6 +1,6 @@
-/** 知识库外壳（Dify 式 IA）—— 进入某个库后,左侧变为「该库的功能导航」,
- *  取代全局工作台侧栏。顶部库图标+名称+描述 + 返回知识库；下方功能子页导航。
- *  KbLayout 拉一次 kb,通过 useOutletContext 把 kb + reload 共享给各子页,避免重复请求。 */
+/** Knowledge base shell (Dify-style IA) — once inside a base, the left side becomes "that base's feature navigation",
+ *  replacing the global workspace sidebar. Top: base icon + name + description + back-to-knowledge-bases; below: feature sub-page navigation.
+ *  KbLayout fetches the kb once and shares kb + reload to each sub-page via useOutletContext, avoiding duplicate requests. */
 
 import {
   ArrowLeft, Books, ChartBar, ChatCircleText, FileText, Gear, MagnifyingGlass,
@@ -24,7 +24,7 @@ export interface KbContext {
   seg: string;
 }
 
-/** 子页通过 useKb() 取共享 kb 信息。 */
+/** Sub-pages read the shared kb info via useKb(). */
 export function useKb() {
   return useOutletContext<KbContext>();
 }

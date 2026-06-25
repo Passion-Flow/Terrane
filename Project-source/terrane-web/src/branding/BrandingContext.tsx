@@ -1,6 +1,8 @@
-/** 品牌上下文（前台）—— 启动即拉公开 branding，全局提供产品名 / 主题色 / 登录副标题 / Logo。
- *  副作用：产品名 → document.title；主题色 → 覆写 --color-accent；自定义 Logo → favicon。
- *  缺省回退出厂值（页面化零配置），失败不阻塞渲染。 */
+/** Branding context (frontend) — fetches public branding on startup, globally providing
+ *  product name / theme color / login subtitle / logo.
+ *  Side effects: product name → document.title; theme color → overrides --color-accent;
+ *  custom logo → favicon.
+ *  Falls back to factory defaults when absent (page-based zero-config); failures do not block rendering. */
 
 import { useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, type ReactNode } from "react";
@@ -21,12 +23,12 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   });
   const branding = data ?? DEFAULT_BRANDING;
 
-  // 产品名 → 标签页标题。
+  // Product name → tab title.
   useEffect(() => {
     document.title = branding.product_name;
   }, [branding.product_name]);
 
-  // 主题色 → 覆写 accent CSS 变量（hex 优先；hover 跟随同色）。
+  // Theme color → overrides the accent CSS variable (hex takes priority; hover follows the same color).
   useEffect(() => {
     const root = document.documentElement;
     const c = branding.accent_color;
@@ -39,7 +41,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     }
   }, [branding.accent_color]);
 
-  // favicon：专用 favicon 优先，缺省回退控制台 Logo，再缺省保留出厂 favicon.svg。
+  // favicon: a dedicated favicon takes priority, falling back to the console logo, then keeping the factory favicon.svg.
   useEffect(() => {
     const icon = branding.favicon ?? branding.logo_data;
     if (!icon) return;

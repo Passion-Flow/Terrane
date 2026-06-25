@@ -1,4 +1,4 @@
-/** 重置密码 —— 从邮件链接 ?token= 进入，设置新密码。成功 → 去登录。 */
+/** Reset password —— entered via the ?token= email link to set a new password. On success → go to login. */
 
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";

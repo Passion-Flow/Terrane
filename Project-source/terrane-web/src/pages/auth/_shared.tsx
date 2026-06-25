@@ -1,4 +1,4 @@
-/** 前台认证页共享脚手架 —— 顶栏（Logo + 语言/主题）+ 居中窄列 + 右上 toast。 */
+/** Shared scaffold for frontend auth pages — top bar (Logo + language/theme) + centered narrow column + top-right toast. */
 
 import { CheckCircle, XCircle } from "@phosphor-icons/react";
 import { useEffect, useState, type ReactNode } from "react";

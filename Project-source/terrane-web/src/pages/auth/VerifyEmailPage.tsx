@@ -1,4 +1,4 @@
-/** 邮箱验证 —— 从邮件链接 ?token= 进入，自动校验并提示结果。成功 → 去登录。 */
+/** Email verification — entered via the ?token= link from the email; auto-verifies and shows the result. On success → go to login. */
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";

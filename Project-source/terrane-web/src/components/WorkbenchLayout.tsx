@@ -1,5 +1,5 @@
-/** 前台工作台外壳（SaaS)—— 可折叠左侧栏(概览/知识库/知识图谱/记忆/Chat/设置展开组)
- *  + 顶栏(激活徽章 + 浅暗切换 + 头像下拉菜单) + 侧栏底部头像名字→资料弹窗。 */
+/** Frontend workbench shell (SaaS) —— collapsible left sidebar (Overview / Knowledge Bases / Knowledge Graph / Memory / Chat / expandable Settings group)
+ *  + top bar (activation badge + light/dark toggle + avatar dropdown menu) + avatar/name at the bottom of the sidebar → profile modal. */
 
 import {
   Books, Brain, CaretRight, ChatCircleText, Cpu, Gear, Graph, Key, type Icon,
@@ -65,7 +65,7 @@ export function WorkbenchLayout() {
 
   const W = collapsed ? "w-[4.25rem]" : "w-60";
   const active = (lic?.status === "active" || lic?.status === "expiring");
-  // 开源版（门控关闭）隐藏激活徽章；仅门控开启（required!==false）时展示。
+  // Open-source build (gating disabled) hides the activation badge; only shown when gating is enabled (required !== false).
   const showLicenseBadge = lic != null && lic.required !== false;
 
   return (
@@ -86,7 +86,7 @@ export function WorkbenchLayout() {
             </NavLink>
           ))}
 
-          {/* 设置（可展开分组）*/}
+          {/* Settings (expandable group) */}
           <button type="button" onClick={() => { if (collapsed) { setCollapsed(false); setSettingsOpen(true); } else setSettingsOpen((v) => !v); }}
             className={`flex w-full items-center gap-3 rounded-(--radius-control) px-3 py-2 text-sm font-medium text-ink-secondary transition hover:bg-canvas hover:text-ink ${collapsed ? "justify-center" : ""}`} title={collapsed ? t("nav.settings") : undefined}>
             <Gear className="size-[18px] shrink-0" />
@@ -107,7 +107,7 @@ export function WorkbenchLayout() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-end gap-2.5 border-b border-border/70 bg-surface/30 px-6">
-          {/* 激活徽章 —— 仅门控开启时展示 */}
+          {/* Activation badge —— only shown when gating is enabled */}
           {showLicenseBadge && (
             <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${active ? "bg-success/10 text-success" : "bg-danger-soft text-danger"}`}>
               <span className={`size-1.5 rounded-full ${active ? "bg-success" : "bg-danger"}`} />
@@ -115,7 +115,7 @@ export function WorkbenchLayout() {
             </span>
           )}
           <ThemeToggle />
-          {/* 头像下拉菜单 */}
+          {/* Avatar dropdown menu */}
           <div ref={menuRef} className="relative">
             <button type="button" onClick={() => setMenuOpen((v) => !v)} className="rounded-full ring-2 ring-transparent transition hover:ring-border">
               <Avatar src={user?.avatar} name={user?.username} email={user?.email} size={32} />

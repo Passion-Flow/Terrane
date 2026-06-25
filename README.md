@@ -2,7 +2,7 @@
 
 **A flagship, private-deployment AI knowledge base** — knowledge bases, a knowledge graph, hybrid
 retrieval, a personal Chat assistant, a NotebookLM-style Studio, and long-term memory. Runs fully on
-**CPU (no GPU)**, ships for **on-prem / air-gapped / 信创 (domestic)** environments.
+**CPU (no GPU)**, ships for **on-prem / air-gapped / Xinchuang (domestic secure-controllable)** environments.
 
 English | [中文](README-CN.md)
 
@@ -36,7 +36,7 @@ ships with **zero keys**).
   admin console with your own keys (DashScope / OpenAI-compatible).
 - **MCP server** — expose knowledge bases as MCP tools for external agents.
 - **Enterprise** — workspaces & RBAC, SSO (OIDC), 2FA, field-level encryption (KEK), audit logging,
-  observability, backup & migration, and license-gated activation.
+  observability, backup & migration, and optional license-gated activation.
 
 ## Architecture
 
@@ -74,9 +74,7 @@ Terrane/
 │   ├── terrane-web/           # front SPA (React)
 │   └── terrane-admin-web/     # admin SPA (React)
 ├── terrane-deploy/        # delivery: docker-compose / helm / gitlab / migration
-├── terrane-shared/        # shared specs (data classification, error codes, webhooks)
-├── Project-design/        # PRD, design docs, specs, PoC
-└── ops/                   # ops scripts (multi-arch build, backup, 信创 notes)
+└── ops/                   # ops scripts (multi-arch build, backup, Xinchuang notes)
 ```
 
 ## Deployment
@@ -86,7 +84,7 @@ Pick a path from [`terrane-deploy/`](terrane-deploy/README.md):
 | Path | Use when |
 |---|---|
 | **docker-compose** | single host / appliance / air-gapped (bundled PostgreSQL + Redis by default) |
-| **Helm** | Kubernetes incl. 信创 K8s (external datastores by default) |
+| **Helm** | Kubernetes incl. Xinchuang (domestic) K8s (external datastores by default) |
 | **GitLab CI/CD** | build multi-arch images → manual push → manual Helm deploy |
 
 ### Single-host quick start
@@ -97,12 +95,16 @@ cp .env.example .env        # fill TERRANE_KEK + DB/Redis passwords
 docker compose up -d        # brings up the full stack incl. PG18+AGE+pgvector & Redis
 ```
 
-Then in the admin console: **activate the license → change the factory super-admin password → run the
-setup wizard → configure your model channels (your own API keys)**. The front app is then fully usable.
+Then in the admin console: **change the factory super-admin password → run the setup wizard →
+configure your model channels (your own API keys)**. The front app is then fully usable. (License
+activation is optional and off by default.)
 
 > The bundled PostgreSQL image ships Apache AGE + pgvector. CPU-only, no GPU required.
 
-## Licensing
+## License
 
-Terrane is a commercial, private-deployment product. Each deployment is activated with a license
-issued for that deployment; field-level secrets are encrypted with a per-deployment KEK.
+Terrane is open-source software released under the **MIT License** — see [LICENSE](LICENSE).
+
+It also ships an optional, self-hostable license-gating mechanism (disabled by default) for
+organizations that want per-deployment activation; field-level secrets are encrypted with a
+per-deployment KEK.

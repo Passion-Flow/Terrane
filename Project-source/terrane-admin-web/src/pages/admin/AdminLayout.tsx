@@ -1,6 +1,6 @@
-/** 管理控制台外壳 —— 侧栏导航 + 顶栏（语言/主题/用户/登出）+ 内容区 Outlet。
- *  导航 label 走 i18n。已实现：概览 / 审计日志；其余模块占位（soon），随阶段填充。
- *  响应式：lg 固定侧栏，小屏抽屉。 */
+/** Admin console shell -- sidebar nav + top bar (language/theme/user/logout) + content Outlet.
+ *  Nav labels come from i18n. Implemented: overview / audit logs; the remaining modules are placeholders (soon), filled in over time.
+ *  Responsive: fixed sidebar at lg, drawer on small screens. */
 
 import {
   Books,
@@ -54,7 +54,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "branding", labelKey: "admin.nav.branding", icon: Palette },
 ];
 
-// 可展开分组——子项各自独立成页（对齐 Dify）。会长子功能的领域都成组,随阶段增加子项。
+// Expandable groups -- each child is its own page (aligned with Dify). Domains that will grow sub-features become groups, with children added over time.
 interface NavGroupDef { basePath: string; labelKey: string; icon: Icon; children: NavItem[] }
 
 const NAV_GROUPS: NavGroupDef[] = [
@@ -76,7 +76,7 @@ const NAV_GROUPS: NavGroupDef[] = [
   },
 ];
 
-/** 可展开导航分组:父项点击展开/收起;进入任一子页自动展开 + 父项高亮。 */
+/** Expandable nav group: clicking the parent expands/collapses; entering any child page auto-expands and highlights the parent. */
 function NavGroup({ navBase, group, onNavigate }: { navBase: string; group: NavGroupDef; onNavigate: () => void }) {
   const { t } = useTranslation();
   const { pathname } = useLocation();
@@ -114,7 +114,7 @@ function NavGroup({ navBase, group, onNavigate }: { navBase: string; group: NavG
   );
 }
 
-/** 底部可折叠用户菜单 —— 头像首字母 + 邮箱/角色，点击向上展开角色 + 退出登录；点击外部收起。 */
+/** Collapsible user menu at the bottom -- avatar initial + email/role; clicking expands upward to show role + logout; clicking outside collapses it. */
 function SidebarUser({ email, role, onLogout, logoutLabel }: {
   email: string; role: string; onLogout: () => void; logoutLabel: string;
 }) {
@@ -168,7 +168,7 @@ export function AdminLayout() {
   const [drawer, setDrawer] = useState(false);
   const navBase = `/${seg}/admin`;
 
-  // 开源版（门控关闭）隐藏 License 设置导航项（页面 URL 仍可达）。
+  // Open-source edition (gating off) hides the License settings nav item (the page URL is still reachable).
   const { data: licenseCard } = useQuery({ queryKey: ["license"], queryFn: getLicenseCard });
   const licenseOff = licenseCard?.required === false;
   const navGroups: NavGroupDef[] = licenseOff

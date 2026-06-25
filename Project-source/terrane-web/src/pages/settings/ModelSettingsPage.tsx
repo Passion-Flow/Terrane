@@ -1,4 +1,4 @@
-/** 模型设置 —— 前台为每个用途(对话/多模态/嵌入/重排)选后台配置的模型(同步后台「模型渠道」)。 */
+/** Model settings —— the frontend picks, for each purpose (chat / multimodal / embedding / rerank), a model configured in the admin panel (synced from the admin "Model Channels"). */
 import { ChatCircleText, Cpu, Image, MagnifyingGlass, Sparkle, type Icon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";

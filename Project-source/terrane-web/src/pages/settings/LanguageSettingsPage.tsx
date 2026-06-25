@@ -1,4 +1,4 @@
-/** 语言设置。 */
+/** Language settings. */
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useLocation } from "react-router";
 import { PageHeader } from "@/components/ui/PageHeader";

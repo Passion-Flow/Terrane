@@ -1,8 +1,8 @@
-"""Studio 生成器（NotebookLM 式)——从知识库源用 LLM 生成多种产物。
+"""Studio generator (NotebookLM-style) — generates various artifacts from knowledge-base sources via LLM.
 
-文本类(qwen3.7-plus):study_guide / faq / briefing / timeline(Markdown);
-结构类(JSON):mind_map(节点/边)/ flashcards(问答)/ quiz(选择题)/ data_table(表)。
-音频/幻灯/视频类在 studio_media(TTS/渲染)。
+Text types (qwen3.7-plus): study_guide / faq / briefing / timeline (Markdown);
+structured types (JSON): mind_map (nodes/edges) / flashcards (Q&A) / quiz (multiple choice) / data_table (table).
+Audio/slide/video types live in studio_media (TTS/rendering).
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ log = structlog.get_logger("terrane.studio")
 
 _MAX = 12000
 
-# kind → (是否JSON, 提示词)
+# kind -> (is_json, prompt)
 _PROMPTS: dict[str, tuple[bool, str]] = {
     "study_guide": (False,
         "把下面资料整理成一份结构化「学习指南」(Markdown):## 概述、## 关键概念(要点)、## 重点难点、## 复习问题。只基于资料,简洁准确。"),
@@ -55,7 +55,7 @@ def _extract_json(raw: str):
 
 
 async def generate(db: AsyncSession, *, kind: str, sources: list[tuple[str, str]]) -> dict:
-    """生成某类 Studio 产物。返回 {kind, format, content}。"""
+    """Generate a given type of Studio artifact. Returns {kind, format, content}."""
     if kind not in _PROMPTS:
         raise ValueError(f"unknown studio kind: {kind}")
     is_json, instruction = _PROMPTS[kind]
@@ -78,10 +78,10 @@ async def generate(db: AsyncSession, *, kind: str, sources: list[tuple[str, str]
     return {"kind": kind, "format": "markdown", "content": raw.strip()}
 
 
-# ---- 媒体类:幻灯片(PPTX)/ 播客音频(TTS)----
+# ---- Media types: slides (PPTX) / podcast audio (TTS) ----
 
 def build_pptx(deck: dict) -> bytes:
-    """从 slide_deck JSON 生成 .pptx 字节。"""
+    """Generate .pptx bytes from slide_deck JSON."""
     import io
 
     from pptx import Presentation
@@ -89,7 +89,7 @@ def build_pptx(deck: dict) -> bytes:
 
     prs = Presentation()
     title_slide = prs.slides.add_slide(prs.slide_layouts[0])
-    title_slide.shapes.title.text = str(deck.get("title") or "演示文稿")
+    title_slide.shapes.title.text = str(deck.get("title") or "Presentation")
     if deck.get("subtitle") and len(title_slide.placeholders) > 1:
         title_slide.placeholders[1].text = str(deck["subtitle"])
     for sl in (deck.get("slides") or [])[:30]:
@@ -108,7 +108,7 @@ def build_pptx(deck: dict) -> bytes:
 
 
 def _concat_wav(segs: list[bytes]) -> bytes:
-    """拼接多段 wav 为一段(同采样参数)。非 PCM wav 则原样首段返回。"""
+    """Concatenate multiple wav segments into one (same sampling params). For non-PCM wav, returns the first segment as-is."""
     import io
     import wave
 
@@ -135,7 +135,7 @@ def _concat_wav(segs: list[bytes]) -> bytes:
 
 
 async def generate_podcast(db: AsyncSession, *, sources: list[tuple[str, str]]) -> dict:
-    """双人播客:生成对话脚本 + TTS 合成,返回 {script, audio(data url)}。无 TTS 渠道→error。"""
+    """Two-person podcast: generate a dialogue script + TTS synthesis, returns {script, audio(data url)}. No TTS channel -> error."""
     corpus = "\n\n".join(f"## {t}\n{x}" for t, x in sources if x and x.strip())[:_MAX]
     if not corpus.strip():
         return {"kind": "audio_overview", "format": "empty", "content": None}
@@ -161,7 +161,7 @@ async def generate_podcast(db: AsyncSession, *, sources: list[tuple[str, str]]) 
         if not text:
             continue
         if i:
-            await asyncio.sleep(0.8)  # 节流,避开 qwen-tts QPS 限流
+            await asyncio.sleep(0.8)  # throttle to avoid qwen-tts QPS rate limiting
         audio = await model_client.tts(db, text, voice=voices.get(str(ln.get("speaker")), "Cherry"))
         if audio is None:
             raise ModelError("no_tts_channel")

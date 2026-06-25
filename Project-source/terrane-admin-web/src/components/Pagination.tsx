@@ -1,9 +1,9 @@
-/** 通用页码分页 —— 「显示 X–Y / 共 Z 条」+ 上一页/页码(带省略号)/下一页。紧凑精致。 */
+/** Generic page-number pagination —— "Showing X–Y / of Z" + prev / page numbers (with ellipsis) / next. Compact and refined. */
 
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
 
-/** 页码列表（带省略号）：1 … cur-1 cur cur+1 … total。 */
+/** Page-number list (with ellipsis): 1 … cur-1 cur cur+1 … total. */
 function pageList(cur: number, total: number): (number | "…")[] {
   const out: (number | "…")[] = [];
   for (let i = 1; i <= total; i++) {

@@ -1,4 +1,4 @@
-/** 账号设置 —— 个人资料 + 修改密码入口。 */
+/** Account settings — profile + change-password entry point. */
 
 import { Envelope, Key, UserCircle } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";

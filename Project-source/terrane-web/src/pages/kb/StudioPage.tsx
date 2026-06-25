@@ -1,4 +1,4 @@
-/** Studio 子页 —— 复用 StudioPanel。 */
+/** Studio subpage — reuses StudioPanel. */
 
 import { StudioPanel } from "@/components/StudioPanel";
 import { useKb } from "@/components/KbLayout";

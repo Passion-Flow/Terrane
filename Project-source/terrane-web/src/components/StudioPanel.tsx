@@ -1,5 +1,5 @@
-/** Studio 面板（NotebookLM 式）—— 8 种产物一键生成 + 分型渲染。
- *  taste-skill:单一 accent、卡片仅真层级、骨架屏(非转圈)、空态、:active 微位移、label 在上。 */
+/** Studio panel (NotebookLM-style) — one-click generation of 8 artifact types + per-type rendering.
+ *  taste-skill: single accent color, cards with real hierarchy only, skeleton screens (not spinners), empty states, :active micro-shift, label on top. */
 
 import {
   ArrowLeft, Cards, ClockCounterClockwise, DownloadSimple, FileText, GraduationCap,

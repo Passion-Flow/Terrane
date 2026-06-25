@@ -1,4 +1,4 @@
-/** 登录页 —— 邮箱 + 密码（+2FA 条件位）。成功 → refresh() → /<lang>/。 */
+/** Login page — email + password (+ conditional 2FA field). On success → refresh() → /<lang>/. */
 
 import { Eye, EyeSlash } from "@phosphor-icons/react";
 import { useEffect, useState, type FormEvent } from "react";

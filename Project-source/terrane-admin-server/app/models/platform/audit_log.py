@@ -1,7 +1,8 @@
-"""AuditLog（平台库 terrane_main：audit_logs，append-only 分区）— ORM 映射拷贝。
+"""AuditLog (platform DB terrane_main: audit_logs, append-only partitioned) — ORM mapping copy.
 
-schema 权威在 terrane-server/app/models/audit_log.py + 迁移 000002（按月 RANGE 分区 + append-only
-触发器）。admin 仅 INSERT（写审计）/ SELECT（审计查询页）；UPDATE/DELETE 被 DB 触发器一律拒绝。
+The authoritative schema lives in terrane-server/app/models/audit_log.py + migration 000002
+(monthly RANGE partitions + append-only trigger). admin only performs INSERT (write audit) /
+SELECT (audit query page); UPDATE/DELETE are unconditionally rejected by the DB trigger.
 """
 
 from __future__ import annotations

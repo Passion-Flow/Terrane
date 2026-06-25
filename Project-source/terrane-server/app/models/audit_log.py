@@ -1,8 +1,10 @@
-"""AuditLog（审计日志，append-only）ORM — 平台库 terrane_main（02-database 实体 #33）。
+"""AuditLog (audit log, append-only) ORM — platform DB terrane_main (02-database entity #33).
 
-合规 HARD RULE：append-only（迁移层 REVOKE UPDATE,DELETE；硬删除铁律的唯二例外之一）。
-按月 RANGE 分区（PG）；复合主键 (id, created_at)（分区键必入 PK）。无 updated_at（不可变行）。
-before/after 为脱敏 JSON 快照（绝不含明文密钥/密码/用户内容，仅元数据）。
+Compliance HARD RULE: append-only (REVOKE UPDATE, DELETE at the migration layer; one of the only
+two exceptions to the hard-delete rule). Monthly RANGE partitioning (PG); composite primary key
+(id, created_at) (the partition key must be part of the PK). No updated_at (immutable rows).
+before/after are redacted JSON snapshots (never contain plaintext secrets/passwords/user content,
+metadata only).
 """
 
 from __future__ import annotations
@@ -22,9 +24,9 @@ ACTOR_TYPES = ("admin", "user", "system")
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
-    # 复合主键 (id, created_at)：分区键 created_at 必入 PK（PG 分区规则）。
+    # Composite primary key (id, created_at): the partition key created_at must be part of the PK (PG partitioning rule).
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
-    # 平台级事件无 workspace → NULL。
+    # Platform-level events have no workspace → NULL.
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     actor_type: Mapped[str] = mapped_column(String(16), nullable=False)
     actor_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)

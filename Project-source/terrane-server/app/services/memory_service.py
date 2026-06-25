@@ -1,6 +1,6 @@
-"""记忆系统（平台库 terrane_main）——per-user 记忆的写入 / 语义唤回 / LLM 抽取。
+"""Memory system (platform DB terrane_main) — per-user memory write / semantic recall / LLM extraction.
 
-铁律:一切查询都按 user_id 过滤,**永不跨用户**。embedding 走原始 SQL(::halfvec)。
+Hard rule: every query is filtered by user_id and **never crosses users**. Embeddings use raw SQL (::halfvec).
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ async def remember(db: AsyncSession, user_id: uuid.UUID, content: str, *,
 
 
 async def recall(db: AsyncSession, user_id: uuid.UUID, query: str, limit: int = 5) -> list[dict]:
-    """语义唤回当前用户的记忆(向量优先,降级 trgm)。严格 user_id 过滤。"""
+    """Semantically recall the current user's memories (vector first, falling back to trgm). Strictly filtered by user_id."""
     q = query.strip()
     if not q:
         return []
@@ -118,7 +118,7 @@ _CONSOLIDATE_PROMPT = (
 
 async def consolidate(db: AsyncSession, user_id: uuid.UUID, source_text: str, *,
                       source: str = "chat") -> dict:
-    """智能抽取个人记忆 + 与已有记忆合并(Mem0 式 ADD/UPDATE/去重/纠突)。返回 {added, updated}。"""
+    """Intelligently extract personal memories and merge them with existing ones (Mem0-style ADD/UPDATE/dedup/conflict resolution). Returns {added, updated}."""
     txt = (source_text or "").strip()
     if not txt:
         return {"added": 0, "updated": 0}
@@ -147,12 +147,12 @@ async def consolidate(db: AsyncSession, user_id: uuid.UUID, source_text: str, *,
 
 
 async def extract(db: AsyncSession, user_id: uuid.UUID, source_text: str) -> int:
-    """用户主动从一段文本抽取记忆(/memories/extract)。走智能合并,返回新增+更新条数。"""
+    """User-initiated memory extraction from a block of text (/memories/extract). Runs intelligent merge; returns count of added + updated."""
     r = await consolidate(db, user_id, source_text, source="manual")
     return r["added"] + r["updated"]
 
 
-# ---- 自动记忆开关(per-user,默认开)+ 后台 fire-and-forget 合并 ----
+# ---- Auto-memory toggle (per-user, on by default) + background fire-and-forget merge ----
 
 _MEM_PREF_KEY = "memory_prefs"
 
@@ -179,7 +179,7 @@ async def set_auto(db: AsyncSession, user_id: uuid.UUID, enabled: bool) -> None:
 
 
 async def consolidate_bg(user_id: uuid.UUID, source_text: str, source: str) -> None:
-    """后台 fire-and-forget:自带 session,尊重 auto 开关,失败仅日志。供 chat/上传调用。"""
+    """Background fire-and-forget: opens its own session, respects the auto toggle, logs on failure only. Called from chat/upload."""
     from app.db.session import get_sessionmaker
     try:
         async with get_sessionmaker()() as db:

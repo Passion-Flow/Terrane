@@ -1,8 +1,9 @@
-"""健康探针（observability.md：三探针）—— License 锁定态白名单内（运维需在锁定态也能探活）。
+"""Health probes (observability.md: three probes) — whitelisted under License lockdown
+(operations must still be able to probe liveness while locked down).
 
-- /livez  进程存活（启动即 UP）
-- /readyz  就绪：License 首次验签已完成（install_id 已写入共享卷）
-- /healthz  聚合
+- /livez   process liveness (UP as soon as it starts)
+- /readyz  readiness: the first License signature verification has completed (install_id written to the shared volume)
+- /healthz aggregate
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
-"""轻量可观测(零依赖,Prometheus 文本格式,可被 Prometheus 直接抓取)。
+"""Lightweight observability (zero dependencies, Prometheus text format, directly scrapable by Prometheus).
 
-请求计数中间件(按 method+status)+ 时延累计 + in-flight gauge。/metrics 暴露。
-低基数:只按 method/status 标签,不按路径(避免 ID 爆炸)。OTel trace 后续按需接。
+Request-counting middleware (by method+status) + latency totals + in-flight gauge, exposed at /metrics.
+Low cardinality: labels by method/status only, never by path (avoids ID explosion). OTel tracing can be wired in later as needed.
 """
 
 from __future__ import annotations

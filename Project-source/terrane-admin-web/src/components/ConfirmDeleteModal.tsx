@@ -1,6 +1,6 @@
-/** 输入确认删除模态（GitHub 式防误删）——全项目删除统一走这里:
- *  必须在输入框**精确键入目标标识(名称/邮箱)**,与 target 完全一致才能点「删除」。
- *  约定:任何不可撤销的删除动作都用本组件,不再用普通确认弹窗。 */
+/** Type-to-confirm delete modal (GitHub-style misclick guard) —— all deletions across the project go through here:
+ *  the user must **type the exact target identifier (name/email)** into the field; only an exact match with target enables the "Delete" button.
+ *  Convention: every irreversible delete action uses this component instead of a plain confirmation dialog. */
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,12 +16,12 @@ export function ConfirmDeleteModal({
   onClose: () => void;
   title: string;
   desc: ReactNode;
-  /** 用户必须逐字键入的目标标识(名称/邮箱),完全一致才放行。 */
+  /** Target identifier (name/email) the user must type verbatim; only an exact match is allowed through. */
   target: string;
   onConfirm: () => void;
   busy?: boolean;
   error?: string;
-  /** 删除按钮文案,默认 common.delete。 */
+  /** Label for the delete button; defaults to common.delete. */
   confirmLabel?: string;
 }) {
   const { t } = useTranslation();

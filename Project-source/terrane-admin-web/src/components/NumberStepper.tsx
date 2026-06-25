@@ -1,5 +1,5 @@
-/** 数字步进器 —— 平时是干净的输入框（无原生 spin 箭头）；鼠标悬停 / 聚焦时右侧淡入 −/+ 微调。
- *  范围 clamp 到 [min,max]；可直接键入也可点按。通用件,各设置页复用。 */
+/** Number stepper —— normally a clean input field (no native spin arrows); −/+ steppers fade in on the right on hover/focus.
+ *  Value is clamped to [min,max]; supports both direct typing and clicking. Shared component reused across settings pages. */
 
 import { Minus, Plus } from "@phosphor-icons/react";
 

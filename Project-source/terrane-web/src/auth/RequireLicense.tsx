@@ -1,5 +1,7 @@
-/** License 守卫 —— 锁定态渲染 LockedPage（引导去后台激活），激活态放行子树。
- *  持续轮询：后端检测吊销/删除会重新锁定，前端轮询到 !unlocked 即落回锁定页。 */
+/** License guard — renders LockedPage when locked (directing users to activate in the admin console),
+ *  and renders the child subtree when active.
+ *  Continuous polling: when the backend detects revocation/deletion it re-locks, and once the frontend
+ *  polls !unlocked it falls back to the lock page. */
 
 import { useQuery } from "@tanstack/react-query";
 import { Outlet } from "react-router";
@@ -11,14 +13,14 @@ export function RequireLicense() {
   const { data: status } = useQuery({
     queryKey: ["license"],
     queryFn: getLicenseStatus,
-    // 开源版（required===false）旁路门控：不再需要轮询吊销/删除。
+    // Open-source build (required===false) bypasses gating: no need to poll for revocation/deletion.
     refetchInterval: (query) => (query.state.data?.required === false ? false : 8_000),
   });
-  // 开源版：门控关闭 → 立即放行，永不触达 LockedPage。
+  // Open-source build: gating disabled → pass through immediately, never reaching LockedPage.
   if (status?.required === false) {
     return <Outlet />;
   }
-  // 商业版（required 为 true 或加载中未定义）：保持原守卫——确认未解锁 → 锁定页。
+  // Commercial build (required is true, or undefined while loading): keep the original guard — once confirmed not unlocked → lock page.
   if (status && !status.unlocked) {
     return <LockedPage />;
   }

@@ -1,4 +1,4 @@
-/** 通用模态框 —— 居中卡片 + 遮罩，点击遮罩/Esc 关闭。紧凑精致。 */
+/** Generic modal —— centered card + backdrop, closes on backdrop click / Esc. Compact and refined. */
 
 import { X } from "@phosphor-icons/react";
 import { useEffect, type ReactNode } from "react";
@@ -8,7 +8,7 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
-  /** 底部操作区（按钮）。 */
+  /** Footer action area (buttons). */
   footer?: ReactNode;
 }
 

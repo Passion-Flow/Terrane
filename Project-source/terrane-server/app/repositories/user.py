@@ -1,6 +1,7 @@
-"""User 仓储（平台库 terrane_main：users，硬删除无 deleted_at）。
+"""User repository (platform DB terrane_main: users, hard-delete, no deleted_at).
 
-邮箱在部署内全局唯一（应用层强制，跨 workspace 校验），故 get_by_email 不带 workspace 维度。
+Email is globally unique within a deployment (enforced at the application layer, validated
+across workspaces), so get_by_email does not take a workspace dimension.
 """
 
 from __future__ import annotations

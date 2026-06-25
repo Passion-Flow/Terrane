@@ -1,13 +1,13 @@
-/** 公开品牌（白标）API（/api/v1/branding）— 免登录、锁定态可取。
- *  供前台 Logo / 标签页标题 / 登录页副标题在认证前展示部署方品牌。 */
+/** Public branding (white-label) API (/api/v1/branding) — no login required, accessible while locked.
+ *  Lets the frontend show the deployer's branding (logo / tab title / login subtitle) before authentication. */
 
 import { request } from "@/lib/api";
 
 export interface Branding {
   product_name: string;
-  logo_data: string | null;     // 控制台/工作区 Logo
-  login_logo: string | null;    // 登录页 Logo
-  favicon: string | null;       // 站点 favicon
+  logo_data: string | null;     // Console / workspace logo
+  login_logo: string | null;    // Login page logo
+  favicon: string | null;       // Site favicon
   accent_color: string;
   login_subtitle: string | null;
   support_url: string | null;

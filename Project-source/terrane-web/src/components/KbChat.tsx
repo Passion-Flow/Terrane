@@ -1,4 +1,4 @@
-/** 知识库 RAG 问答面板 —— 流式答案 + 可点引用来源 + typing 动画 + 清空历史。 */
+/** Knowledge base RAG Q&A panel — streaming answers + clickable cited sources + typing animation + clear history. */
 
 import { ArrowClockwise, ChatCircleText, FileText, PaperPlaneRight, Trash } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";

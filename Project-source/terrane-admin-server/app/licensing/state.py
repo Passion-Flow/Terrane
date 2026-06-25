@@ -1,9 +1,9 @@
-"""License 运行时状态 — fail-closed 多点验签（licensing.md）。
+"""License runtime state — fail-closed multi-point signature verification (licensing.md).
 
-激活凭据由后台管理端写入 `licenses/active.forge`（JSON 信封：
-`{"method": "offline"|"online", "credential": "<blob 或短码>"}`；兼容裸 offline blob）。
-本服务只读该文件：启动验一次 + 每 TERRANE_LICENSE_RECHECK_SECONDS 复验
-（过期 / CRL 吊销 / 时钟回拨 / 在线租约续期），任何异常一律转入锁定态。
+Activation credentials are written by the admin backend to `licenses/active.forge` (JSON envelope:
+`{"method": "offline"|"online", "credential": "<blob or short code>"}`; also accepts a bare offline blob).
+This service only reads that file: verify once on startup + re-verify every TERRANE_LICENSE_RECHECK_SECONDS
+(expiry / CRL revocation / clock rollback / online lease renewal); any exception transitions to the locked state.
 """
 
 from __future__ import annotations
@@ -26,11 +26,11 @@ log = structlog.get_logger("terrane.license")
 METHOD_OFFLINE = "offline"
 METHOD_ONLINE = "online"
 _NOT_ACTIVATED = Verdict("locked", "not_activated")
-_BYPASS = Verdict("active", "license_not_required")  # 门控关闭（开源版）时的合成解锁裁定
+_BYPASS = Verdict("active", "license_not_required")  # synthetic unlock verdict when gating is disabled (open-source edition)
 
 
 def read_envelope(path: Path) -> tuple[str, str] | None:
-    """读取激活信封，返回 (method, credential)；文件缺失/无法解析返回 None（= 未激活）。"""
+    """Read the activation envelope, returning (method, credential); returns None if the file is missing/unparseable (= not activated)."""
     try:
         raw = path.read_text(encoding="utf-8").strip()
     except OSError:
@@ -44,16 +44,16 @@ def read_envelope(path: Path) -> tuple[str, str] | None:
             return method, credential
         return None
     except ValueError:
-        return METHOD_OFFLINE, raw  # 兼容直接投放的裸 .forge blob
+        return METHOD_OFFLINE, raw  # accept a bare .forge blob dropped in directly
 
 
 class LicenseState:
-    """单实例 License 状态机。verdict 读取是原子的（属性替换），写入仅在本类内发生。"""
+    """Single-instance License state machine. verdict reads are atomic (attribute replacement); writes happen only within this class."""
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        # install_id 与激活信封同放 licenses/ 共享卷：三组件共享同一 install_id = 同一部署身份，
-        # 容器重启/迁库后仍稳定（design 02 §反克隆）。
+        # install_id is co-located with the activation envelope on the licenses/ shared volume: the three components share the same install_id = the same deployment identity,
+        # stable across container restarts/database migrations (design 02 §anti-clone).
         _iid = os.path.join(os.path.dirname(settings.terrane_license_path) or ".", "install_id")
         self._verifier = ForgeVerifier(edge_url=settings.terrane_forge_edge_url or None,
                                        install_id_path=_iid)
@@ -61,12 +61,12 @@ class LicenseState:
         self._recheck_task: asyncio.Task | None = None
         self._last_verify_mono = 0.0
         self._activated_code: str | None = None
-        self._verify_lock = threading.Lock()  # 串行验签：禁并发重入打 edge（防限流）
-        self.initial_checked = False  # readyz 就绪信号：首次验签已完成
+        self._verify_lock = threading.Lock()  # serialize verification: prevent concurrent re-entrant hits to edge (avoid rate limiting)
+        self.initial_checked = False  # readyz readiness signal: the first verification has completed
 
     @property
     def required(self) -> bool:
-        """门控是否启用（开源版默认 False → 全程放行）。"""
+        """Whether gating is enabled (open-source edition defaults to False → always pass through)."""
         return self._settings.license_required
 
     @property
@@ -86,7 +86,7 @@ class LicenseState:
         return self._verdict.unlocked
 
     def _load_crl(self) -> tuple[set[str], int | None, str | None]:
-        """读取并验签 CRL 文件；不可信/缺失 → 空集（License 自身有效期仍兜底）。"""
+        """Read and verify the CRL file; untrusted/missing → empty set (the License's own validity period still provides a fallback)."""
         path = Path(self._settings.terrane_license_crl_path)
         try:
             blob = path.read_text(encoding="utf-8").strip()
@@ -99,12 +99,12 @@ class LicenseState:
             valid, payload = parse_and_verify(blob, self._verifier.master_pub)
             if valid and payload.get("kind") == "crl":
                 return revoked, payload.get("crl_version"), payload.get("generated_at")
-        except Exception:  # noqa: BLE001 — CRL 异常不致命，License 有效期仍兜底
+        except Exception:  # noqa: BLE001 — a CRL exception is not fatal, the License validity period still provides a fallback
             pass
         return revoked, None, None
 
     def verify_now(self) -> Verdict:
-        """同步执行一次完整验签并更新状态；任何异常 → 锁定（fail-closed）。串行锁防并发重入打 edge。"""
+        """Synchronously run one full verification and update state; any exception → locked (fail-closed). The serial lock prevents concurrent re-entrant hits to edge."""
         with self._verify_lock:
             return self._verify_now_locked()
 
@@ -116,7 +116,7 @@ class LicenseState:
             method, credential = envelope
             try:
                 verdict = self._verify(method, credential)
-            except Exception:  # noqa: BLE001 — 验签内部细节不外泄（零泄露要求）
+            except Exception:  # noqa: BLE001 — internal verification details are not leaked (zero-leakage requirement)
                 log.error("license.verify_error")
                 verdict = Verdict("locked", "verify_error")
         changed = verdict.status != self._verdict.status
@@ -127,19 +127,19 @@ class LicenseState:
         return verdict
 
     def verify_if_stale(self, max_age_seconds: float) -> None:
-        """按需重验，但节流：距上次验签超过 max_age_seconds 才真验，否则吃缓存。
-        用于状态接口让吊销/删除在 active 态也能近即时反映，同时限制在线模式打 edge 的频率。"""
+        """Re-verify on demand, but throttled: only really verify if more than max_age_seconds has elapsed since the last verification, otherwise use the cache.
+        Used by the status endpoint so that revocation/deletion is reflected near-instantly even in the active state, while limiting how often online mode hits edge."""
         if not self._settings.license_required:
-            return  # 门控关闭：不验签
+            return  # gating disabled: no verification
         with self._verify_lock:
             if time.monotonic() - self._last_verify_mono >= max_age_seconds:
                 self._verify_now_locked()
 
     def try_credential(self, method: str, credential: str) -> Verdict:
-        """验证一份候选凭据（不落盘、不改变当前 verdict）——激活的前置校验。"""
+        """Verify a candidate credential (without persisting or changing the current verdict) — the pre-check for activation."""
         try:
             return self._verify(method, credential)
-        except Exception:  # noqa: BLE001 — fail-closed，细节不外泄
+        except Exception:  # noqa: BLE001 — fail-closed, details not leaked
             log.error("license.try_credential_error")
             return Verdict("locked", "verify_error")
 
@@ -147,8 +147,8 @@ class LicenseState:
         if method == METHOD_ONLINE:
             if self._verifier.online is None:
                 return Verdict("locked", "edge_url_not_configured")
-            # 同一个在线码且已持有租约 → 续期（断网在签名宽限期内放行）；
-            # 换了新码（如旧票被吊销后重新签发）→ 必须重新激活，绝不拿旧 token 续旧票。
+            # Same online code and an existing lease → renew (passes during the signature grace period while offline);
+            # a new code (e.g. re-issued after the old ticket was revoked) → must re-activate, never renew the old ticket with the old token.
             same_code = credential == self._activated_code
             if same_code and self._verifier.online._validation_token:  # noqa: SLF001
                 return self._verifier.revalidate()
@@ -171,7 +171,7 @@ class LicenseState:
     async def start(self) -> None:
         if not self._settings.license_required:
             self.initial_checked = True
-            log.info("license.disabled")  # 开源版门控关闭：不验签、不起复验循环
+            log.info("license.disabled")  # open-source edition gating disabled: no verification, no recheck loop started
             return
         await asyncio.to_thread(self.verify_now)
         self.initial_checked = True

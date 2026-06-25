@@ -4,11 +4,11 @@
       <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e8efee"/>
     </linearGradient>
   </defs>
-  <!-- 堆叠卡片：后卡（描边，轻微旋转，露在后方） -->
+  <!-- Stacked cards: back card (outlined, slightly rotated, peeking out behind) -->
   <g transform="rotate(-5 300 250)">
     <rect x="168" y="150" width="264" height="188" rx="34" fill="none" stroke="#ffffff" stroke-width="9"/>
   </g>
-  <!-- 前卡（实白）+ 顶部文件夹凸标 -->
+  <!-- Front card (solid white) + folder tab at top -->
   <path d="M196 196
            h128
            a18 18 0 0 1 17 12
@@ -21,9 +21,9 @@
            v-98
            a30 30 0 0 1 30 -30 z"
         fill="#ffffff"/>
-  <!-- T 字（前卡内挖空黑） -->
+  <!-- "T" letter (knocked out in black within the front card) -->
   <text x="300" y="312" text-anchor="middle" font-family="Geist, system-ui, sans-serif" font-size="150" font-weight="800" fill="#0a0a0a">T</text>
-  <!-- 字标 -->
+  <!-- Wordmark -->
   <text x="300" y="470" text-anchor="middle" font-family="Geist, system-ui, sans-serif" font-size="104" font-weight="800" letter-spacing="10" fill="url(#word)">TERRANE</text>
   <text x="300" y="530" text-anchor="middle" font-family="Geist, system-ui, sans-serif" font-size="32" font-weight="600" letter-spacing="24" fill="#cfd8d6">SINCE 2026</text>
 </svg>

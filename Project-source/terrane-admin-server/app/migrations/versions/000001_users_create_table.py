@@ -41,7 +41,7 @@ def upgrade() -> None:
         sa.CheckConstraint("role IN ('super_admin','admin','auditor')", name="ck_users_role"),
     )
     op.create_index("idx_users_deleted_at", "users", ["deleted_at"])
-    # postgres 用部分唯一索引（软删后邮箱可复用）；其他方言回退普通唯一。
+    # postgres uses a partial unique index (email can be reused after soft delete); other dialects fall back to a plain unique index.
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         op.create_index("uq_users_email", "users", ["email"], unique=True,

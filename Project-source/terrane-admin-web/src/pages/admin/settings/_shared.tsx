@@ -1,5 +1,5 @@
-/** 设置子页共享件 —— Toast / Card / 输入框样式 / 错误码翻译。
- *  设置已拆分为独立子页（邮件 / 品牌 …），随阶段持续增加；公共件集中此处避免重复。 */
+/** Shared pieces for the settings sub-pages — Toast / Card / input field styles / error-code translation.
+ *  Settings is split into independent sub-pages (Email / Branding …) and keeps growing over time; common pieces live here to avoid duplication. */
 
 import { CheckCircle, XCircle } from "@phosphor-icons/react";
 import { useEffect } from "react";
@@ -30,7 +30,7 @@ export function Toast({ toast, onDone }: { toast: ToastMsg | null; onDone: () =>
 
 export const field = "w-full rounded-(--radius-control) border border-border bg-canvas px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink-faint focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50";
 
-/** 子页外壳：标题 + 描述 + 内容。各设置子页统一窄列居中。 */
+/** Sub-page shell: title + description + content. Every settings sub-page uses the same narrow, centered column. */
 export function SettingsShell({ title, desc, children }: {
   title: string; desc: string; children: React.ReactNode;
 }) {
@@ -43,7 +43,7 @@ export function SettingsShell({ title, desc, children }: {
   );
 }
 
-/** API 错误 → 文案（邮件类带 hint 优先用精准提示）。 */
+/** API error → message text (for email errors with a hint, prefer the precise hint message). */
 export function toErrText(e: unknown, t: TFunction): string {
   if (e instanceof ApiError) {
     const hint = (e.details as { hint?: string } | undefined)?.hint;

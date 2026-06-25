@@ -1,8 +1,9 @@
-"""公开品牌（白标）端点（/api/v1/branding）— 免登录、锁定态可取。
+"""Public branding (white-label) endpoint (/api/v1/branding) — no login required, available even when locked.
 
-前台 Logo / 标签页标题 / 登录页副标题在认证前即需展示部署方品牌，故本端点不挂认证、
-且在 license_gate 白名单内（锁定态仍返回）。只读，缺失返回出厂默认（页面化零配置铁律）。
-品牌写入在后台管理端（terrane-admin-api 的 settings/wizard）。
+The frontend logo / tab title / login-page subtitle must show the deployer's branding before authentication,
+so this endpoint requires no auth and is on the license_gate allowlist (still returns when locked). Read-only;
+when absent it returns the factory defaults (page-based zero-config rule).
+Branding is written from the admin console (settings/wizard in terrane-admin-api).
 """
 
 from __future__ import annotations

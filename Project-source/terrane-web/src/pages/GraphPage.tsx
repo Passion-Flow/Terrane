@@ -1,4 +1,4 @@
-/** 知识图谱（顶级页)—— 选库 → 展示图谱。 */
+/** Knowledge graph (top-level page) — select a KB → render its graph. */
 import { Graph } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";

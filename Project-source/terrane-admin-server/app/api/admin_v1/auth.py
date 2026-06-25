@@ -1,6 +1,6 @@
-"""后台认证 API — login / logout / me（照搬 Forge auth.py + me.py，挂 /admin-api/v1）。
+"""Admin auth API — login / logout / me (ported from Forge auth.py + me.py, mounted at /admin-api/v1).
 
-审计：阶段②先用 structlog 记登录成功/失败（TODO 阶段③接 audit_logs 表，同事务）。
+Auditing: stage 2 logs login success/failure via structlog for now (TODO stage 3: write to the audit_logs table in the same transaction).
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ async def login(body: LoginRequest, request: Request, response: Response,
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent", "")
     request_id = getattr(request.state, "request_id", "")
-    pol = await get_security_policy(pdb)  # 平台安全策略（后台「设置→安全」可改）
+    pol = await get_security_policy(pdb)  # platform security policy (editable in admin "Settings -> Security")
     await RateLimiter().hit(f"login_ip:{ip}", limit=get_settings().login_max_per_ip_per_min,
                             window=60, code="RATE_LIMIT_LOGIN_BLOCKED")
     try:
@@ -52,7 +52,7 @@ async def login(body: LoginRequest, request: Request, response: Response,
                                        lock_threshold=pol["login_lock_threshold"],
                                        lock_seconds=pol["login_lock_seconds"])
     except Exception as exc:
-        # TODO 阶段③：审计写 audit_logs 表（同事务）。当前先记结构化日志。
+        # TODO stage 3: write the audit record to the audit_logs table (same transaction). For now, log structured events.
         log.warning("login_failure", actor_name=body.email,
                     reason=getattr(exc, "code", "AUTH_INVALID_CREDENTIALS"),
                     ip=ip, request_id=request_id)
@@ -98,15 +98,15 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
                           user: CurrentUser = Depends(get_current_user),
                           db: AsyncSession = Depends(get_db_session),
                           pdb: AsyncSession = Depends(get_platform_db)) -> MeOut:
-    """改密（首登强制改密入口）：校验旧密→策略校验→落库→踢全部旧会话并签发新会话。
+    """Change password (also the entry point for forced first-login password change): verify old password -> policy check -> persist -> kill all old sessions and issue a new one.
 
-    会话轮换（destroy_all + 新 sid）= 改密后会话固定攻击防御；当前请求即换发新 cookie，无需重登。
+    Session rotation (destroy_all + new sid) defends against session-fixation after a password change; the current request gets a fresh cookie, so no re-login is needed.
     """
     auth = AuthService(db)
     db_user = await UserRepository(db).get(uuid.UUID(user.user_id))
     if not db_user:
         raise BizError("AUTH_REQUIRED")
-    pol = await get_security_policy(pdb)  # 平台安全策略（后台「设置→安全」可改）
+    pol = await get_security_policy(pdb)  # platform security policy (editable in admin "Settings -> Security")
     await auth.change_password(db_user, body.current_password, body.new_password,
                               min_length=pol["password_min_length"],
                               require_char_classes=pol["password_require_char_classes"])
@@ -115,7 +115,7 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
     ua = request.headers.get("user-agent", "")
     perms = auth.permissions_for(db_user)
     sessions = SessionService()
-    await sessions.destroy_all_for_user(str(db_user.id))  # 踢全部旧会话（含本次）
+    await sessions.destroy_all_for_user(str(db_user.id))  # kill all old sessions (including the current one)
     sid = await sessions.create(user_id=str(db_user.id), role=db_user.role, ip=ip or "", ua=ua,
                                 twofa_verified=db_user.twofa_enabled, permissions=perms,
                                 name=db_user.username or db_user.email,

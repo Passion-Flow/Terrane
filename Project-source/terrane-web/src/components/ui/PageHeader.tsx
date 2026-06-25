@@ -1,4 +1,4 @@
-/** 页面头 —— 可选返回键 + 标题 + 副标题 + 右侧操作位。全前台页统一。 */
+/** Page header — optional back button + title + subtitle + right-side action slot. Consistent across all frontend pages. */
 
 import { ArrowLeft } from "@phosphor-icons/react";
 import type { ReactNode } from "react";

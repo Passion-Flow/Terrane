@@ -1,5 +1,5 @@
-/** 审计日志 API（/admin-api/v1/audit-logs）—— 只读、页码分页。
- *  append-only 表：无写端点。action 末尾点 = 前缀匹配（如 'wizard.'）。 */
+/** Audit log API (/admin-api/v1/audit-logs) — read-only, page-number pagination.
+ *  Append-only table: no write endpoints. A trailing dot on action = prefix match (e.g. 'wizard.'). */
 
 import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query";
 
@@ -67,6 +67,6 @@ export function useAuditLogs(
   return useQuery({
     queryKey: ["audit-logs", filters, page, pageSize],
     queryFn: () => fetchAuditLogs(filters, page, pageSize),
-    placeholderData: keepPreviousData, // 翻页时保留上页数据，避免闪烁
+    placeholderData: keepPreviousData, // Keep the previous page's data while paging to avoid flicker
   });
 }

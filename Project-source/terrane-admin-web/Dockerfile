@@ -1,4 +1,4 @@
-# 多阶段:node 构建静态 → nginx 托管(SPA + 反代后端)。纯静态,无 GPU。
+# Multi-stage: node builds the static assets → nginx serves them (SPA + reverse proxy to the backend). Pure static, no GPU.
 FROM node:24-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./

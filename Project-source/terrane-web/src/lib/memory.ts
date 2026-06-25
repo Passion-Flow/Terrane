@@ -1,4 +1,4 @@
-/** 记忆 API（前台 /api/v1/memories，per-user）。 */
+/** Memory API (frontend /api/v1/memories, per-user). */
 
 import { request } from "@/lib/api";
 

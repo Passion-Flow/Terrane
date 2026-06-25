@@ -1,4 +1,4 @@
-/** 库设置子页 —— 管理共享(成员增删) + 重命名库 + 删除库(type-to-confirm)。 */
+/** Knowledge base settings subpage —— manage sharing (add/remove members) + rename the base + delete the base (type-to-confirm). */
 
 import { CircleNotch, Trash, UserPlus, X } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
@@ -79,7 +79,7 @@ export function SettingsPage() {
           <p className="mt-1 text-sm text-ink-secondary">{t("kbPages.settingsSubtitle")}</p>
         </div>
 
-        {/* 基本信息 / 重命名 */}
+        {/* Basic info / rename */}
         <section className="rounded-(--radius-card) border border-border/70 bg-surface/40 p-5">
           <h2 className="text-sm font-semibold text-ink">{t("kbSettings.basics")}</h2>
           <div className="mt-4 space-y-3.5">
@@ -99,7 +99,7 @@ export function SettingsPage() {
           </div>
         </section>
 
-        {/* 共享 */}
+        {/* Sharing */}
         {isOwner && (
           <section className="rounded-(--radius-card) border border-border/70 bg-surface/40 p-5">
             <h2 className="text-sm font-semibold text-ink">{t("kb.shareTitle")}</h2>
@@ -136,7 +136,7 @@ export function SettingsPage() {
           </section>
         )}
 
-        {/* 危险区 — 删除库 */}
+        {/* Danger zone — delete base */}
         {isOwner && (
           <section className="rounded-(--radius-card) border border-danger/40 bg-danger-soft/30 p-5">
             <h2 className="text-sm font-semibold text-danger">{t("kbSettings.dangerZone")}</h2>
@@ -151,7 +151,7 @@ export function SettingsPage() {
         )}
       </div>
 
-      {/* 删除库 — type-to-confirm */}
+      {/* Delete base — type-to-confirm */}
       <Modal open={delKbOpen} onClose={() => { setDelKbOpen(false); setDelKbInput(""); }} title={t("kb.deleteKb")}
         desc={kb ? t("kb.confirmDelete", { name: kb.name }) : ""}
         footer={

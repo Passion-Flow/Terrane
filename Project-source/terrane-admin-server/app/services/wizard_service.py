@@ -1,11 +1,11 @@
-"""初始化向导状态机（PRD 4.12.1：License→超管→邮件→Branding→完成）。
+"""Setup wizard state machine (PRD 4.12.1: License -> Super admin -> Email -> Branding -> Done).
 
-步骤完成态来源：
-  license     —— 由 License gate 保证（能到达本接口即已激活）→ 恒 done。
-  super_admin —— 当前超管 must_change_password=False（首登改密完成）。
-  email       —— system_settings['email'].configured 或向导标记 email_done。
-  branding    —— 向导标记 branding_done（branding 有出厂默认，确认/跳过即 done）。
-completed —— system_settings['wizard'].completed（POST /wizard/complete 置位）。
+Sources of each step's completion state:
+  license     —— Guaranteed by the License gate (reaching this endpoint means it is already activated) -> always done.
+  super_admin —— The current super admin has must_change_password=False (the first-login password change is complete).
+  email       —— system_settings['email'].configured, or the wizard flag email_done.
+  branding    —— The wizard flag branding_done (branding has a factory default; confirming/skipping marks it done).
+completed —— system_settings['wizard'].completed (set by POST /wizard/complete).
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ STEPS = ("license", "super_admin", "email", "branding")
 
 
 def _mask_email(cfg: dict[str, Any]) -> dict[str, Any]:
-    """脱敏邮件配置（绝不回传密码明文）。"""
+    """Redact the email configuration (never return the plaintext password)."""
     return {
         "host": cfg.get("host", ""),
         "port": cfg.get("port", 465),
@@ -35,7 +35,7 @@ def _mask_email(cfg: dict[str, Any]) -> dict[str, Any]:
 
 
 async def get_state(db: AsyncSession, *, super_admin_done: bool) -> dict[str, Any]:
-    """汇总向导状态（license 步由 gate 保证，恒 done）。"""
+    """Aggregate the wizard state (the license step is guaranteed by the gate, always done)."""
     wiz = await get_setting(db, WIZARD_KEY) or {}
     email_cfg = await get_setting(db, EMAIL_KEY) or {}
     branding = await get_branding(db)

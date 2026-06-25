@@ -1,5 +1,5 @@
-/** 鉴权上下文 —— 挂载即 refresh()（GET /me 被动恢复登录态）；
- *  logout 调后端清 cookie 并清本地态。包在 RouterProvider 外层（见 App.tsx）。 */
+/** Auth context — calls refresh() on mount (GET /me passively restores the session);
+ *  logout calls the backend to clear the cookie and clears local state. Wraps RouterProvider (see App.tsx). */
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 
@@ -7,13 +7,13 @@ import { type AdminUser, fetchMe, logout as apiLogout } from "@/lib/auth";
 
 interface AuthState {
   user: AdminUser | null;
-  /** 首屏 /me 拉取中（用于 RequireAuth 显示 loading，避免闪重定向）。 */
+  /** Initial /me fetch in progress (used by RequireAuth to show loading and avoid a redirect flash). */
   loading: boolean;
-  /** 重新拉取 /me（登录成功后调用以落地用户态）。 */
+  /** Re-fetch /me (called after a successful login to commit the user state). */
   refresh: () => Promise<void>;
-  /** 登出（后端清 cookie + 本地清态）。 */
+  /** Logout (backend clears the cookie + local state is cleared). */
   logout: () => Promise<void>;
-  /** 权限判定（通配 "*" 或精确命中）。 */
+  /** Permission check (wildcard "*" or an exact match). */
   has: (perm: string) => boolean;
 }
 
@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setUser(await fetchMe());
     } catch {
-      // 401 AUTH_REQUIRED / 403 LICENSE_REQUIRED 等 → 视为未登录，交给守卫处置。
+      // 401 AUTH_REQUIRED / 403 LICENSE_REQUIRED etc. → treat as not logged in and let the guards handle it.
       setUser(null);
     } finally {
       setLoading(false);

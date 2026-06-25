@@ -1,8 +1,8 @@
-/** 接入子页 —— 把这个知识库接入任意外部应用:
- *  · MCP(Claude Code / Cursor)
- *  · Dify 外部知识库(/api/v1/external 兼容端点)
- *  · 通用 REST / OpenAPI(Coze 插件 · GPTs Actions · n8n · FastGPT · 自研直连)
- *  一个密钥(trn_ 令牌)通用于全部接入方式。所有复制走 CopyButton(兼容 HTTP 非安全上下文)。 */
+/** Connect subpage —— integrate this knowledge base with any external application:
+ *  · MCP (Claude Code / Cursor)
+ *  · Dify external knowledge base (/api/v1/external compatible endpoint)
+ *  · Generic REST / OpenAPI (Coze plugins · GPTs Actions · n8n · FastGPT · custom direct integration)
+ *  A single key (trn_ token) works across all integration methods. All copy actions go through CopyButton (works in non-secure HTTP contexts). */
 
 import { Plus, Trash } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
@@ -26,7 +26,7 @@ export function McpPage() {
   const load = useCallback(async () => { try { setKeys((await listMcpKeys(id)).items); } catch { /* */ } }, [id]);
   useEffect(() => { void load(); }, [load]);
 
-  // 按实际部署自动切换 scheme/host/port —— origin 已含 http(s) + IP/localhost/域名 + 非默认端口
+  // Automatically adapt scheme/host/port to the actual deployment —— origin already includes http(s) + IP/localhost/domain + non-default port
   const origin = window.location.origin;
   const mcpUrl = origin + "/mcp";
   const extBase = origin + "/api/v1/external";
@@ -50,7 +50,7 @@ export function McpPage() {
   const card = "rounded-(--radius-card) border border-border/70 bg-surface/40 p-5";
   const field = "w-full rounded-(--radius-control) border border-border bg-canvas px-3 py-2 text-sm text-ink outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30";
 
-  /** 单行「标签 + 可复制代码」。 */
+  /** Single row: "label + copyable code". */
   const Row = ({ label, hint, value }: { label: string; hint?: string; value: string }) => (
     <div>
       <p className="text-[13px] font-medium text-ink">{label}</p>
@@ -62,7 +62,7 @@ export function McpPage() {
     </div>
   );
 
-  /** 代码块 + 右上角复制。 */
+  /** Code block + copy button in the top-right corner. */
   const Block = ({ value }: { value: string }) => (
     <div className="relative">
       <pre className="max-h-60 overflow-auto rounded-(--radius-control) bg-canvas p-3 pe-10 text-[11px] leading-relaxed text-ink-secondary">{value}</pre>
@@ -85,7 +85,7 @@ export function McpPage() {
         <h1 className="text-2xl font-bold tracking-tight text-ink">{t("kb.connTitle")}</h1>
         <p className="mt-1 text-sm text-ink-secondary">{t("kb.connDesc")}</p>
 
-        {/* 接入密钥 */}
+        {/* Access keys */}
         <div className={`mt-6 ${card}`}>
           <p className="text-[13px] font-medium text-ink">{t("kb.connKeySection")}</p>
           <p className="mt-0.5 text-[12px] text-ink-faint">{t("kb.connKeyHint")}</p>
@@ -117,7 +117,7 @@ export function McpPage() {
           </div>
         </div>
 
-        {/* 接入方式 Tabs */}
+        {/* Integration method tabs */}
         <div className="mt-5 flex gap-1.5 overflow-x-auto">
           <TabBtn k="mcp" label={t("kb.connTabMcp")} />
           <TabBtn k="dify" label={t("kb.connTabDify")} />

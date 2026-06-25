@@ -1,5 +1,5 @@
-/** 后台操作员（System Users）API（/admin-api/v1/operators，管理库 terrane_admin）。
- *  权限 platform.user.*（super_admin 写、admin 只读）。页码分页 + 邮箱/用户名搜索 + 状态过滤。 */
+/** Admin operators (System Users) API (/admin-api/v1/operators, admin database terrane_admin).
+ *  Permission platform.user.* (super_admin writes, admin is read-only). Page-number pagination + email/username search + status filter. */
 
 import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query";
 

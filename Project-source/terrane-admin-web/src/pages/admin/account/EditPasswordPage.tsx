@@ -1,5 +1,5 @@
-/** 账号安全 → 修改密码（个人,自助改自己的后台密码）。
- *  复用 /auth/change-password(校验旧密→策略校验→落库→会话轮换换发新 cookie,无需重登)。 */
+/** Account security → Change password (personal; self-service change of your own admin password).
+ *  Reuses /auth/change-password (verify old password → policy check → persist → rotate session and issue a new cookie, no re-login required). */
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -30,7 +30,7 @@ export function EditPasswordPage() {
       setCurrent(""); setNext(""); setConfirm("");
       setToast({ kind: "success", text: t("account.password.saved") });
     } catch (e) {
-      // 两次不一致由前端拦;此处主要是旧密码错/策略不过。
+      // The "passwords don't match" case is caught on the front-end; here the main errors are a wrong old password or a policy violation.
       setToast({ kind: "error", text: e instanceof ApiError ? t(`errors.${e.code}`) : toErrText(e, t) });
     } finally { setBusy(false); }
   }

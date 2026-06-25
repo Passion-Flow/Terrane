@@ -1,4 +1,4 @@
-/** 召回测试子页 —— 向量语义 + 词法混合检索,带分数条。 */
+/** Recall test subpage —— hybrid vector-semantic + lexical retrieval, with score bars. */
 
 import { FileText, MagnifyingGlass } from "@phosphor-icons/react";
 import { useState } from "react";

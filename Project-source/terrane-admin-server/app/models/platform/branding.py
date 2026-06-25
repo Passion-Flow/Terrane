@@ -1,6 +1,7 @@
-"""Branding（平台库 terrane_main：branding 单行）— ORM 映射拷贝。
+"""Branding (platform DB terrane_main: single-row branding) — ORM mapping copy.
 
-schema 权威在 terrane-server/app/models/branding.py + 迁移 000002。admin（初始化向导）写入。
+The authoritative schema lives in terrane-server/app/models/branding.py + migration 000002.
+Written by admin (the setup wizard).
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.ids import uuid7
 from app.models.platform import PlatformBase, PlatformTimestampMixin
 
-# 单例行固定主键（与 terrane-server 一致）。
+# Fixed primary key for the singleton row (matches terrane-server).
 SINGLETON_ID = uuid.UUID("00000000-0000-0000-0000-0000000b5a0d")
 
 
@@ -22,9 +23,9 @@ class Branding(PlatformTimestampMixin, PlatformBase):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
     product_name: Mapped[str] = mapped_column(String(120), nullable=False, default="Terrane")
-    logo_data: Mapped[str | None] = mapped_column(Text, nullable=True)   # 控制台/工作区 Logo
-    login_logo: Mapped[str | None] = mapped_column(Text, nullable=True)  # 登录页 Logo
-    favicon: Mapped[str | None] = mapped_column(Text, nullable=True)     # 站点 favicon
+    logo_data: Mapped[str | None] = mapped_column(Text, nullable=True)   # console/workspace logo
+    login_logo: Mapped[str | None] = mapped_column(Text, nullable=True)  # login page logo
+    favicon: Mapped[str | None] = mapped_column(Text, nullable=True)     # site favicon
     accent_color: Mapped[str] = mapped_column(String(16), nullable=False, default="#0f9b8e")
     login_subtitle: Mapped[str | None] = mapped_column(String(255), nullable=True)
     support_url: Mapped[str | None] = mapped_column(String(512), nullable=True)

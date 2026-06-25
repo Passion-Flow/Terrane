@@ -1,6 +1,6 @@
-"""平台库设置读取（terrane_main：system_settings）— 前台读邮件配置等。
+"""Platform DB settings reads (terrane_main: system_settings) — the frontend reads email config, etc.
 
-邮件配置由后台初始化向导写入（key='email' scope='global'）；前台读取用于发验证/重置邮件。
+Email config is written by the admin initialization wizard (key='email' scope='global'); the frontend reads it to send verification/reset emails.
 """
 
 from __future__ import annotations
@@ -27,9 +27,9 @@ async def get_setting(db: AsyncSession, key: str, *, scope: str = "global",
 
 
 async def get_security_policy(db: AsyncSession) -> dict[str, int]:
-    """安全策略（密码规则）—— system_settings['security'] 覆盖于出厂 config 默认之上。
+    """Security policy (password rules) — system_settings['security'] overrides the factory config defaults.
 
-    后台「设置→安全」改一处，前台注册/重置/改密同步生效（与后台同一平台库 terrane_main）。
+    Changing it once under Admin "Settings -> Security" takes effect across frontend registration/reset/password-change (same platform DB terrane_main as the admin side).
     """
     cfg = get_settings()
     stored = await get_setting(db, SECURITY_KEY) or {}
