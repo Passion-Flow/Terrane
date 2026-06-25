@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from app.api.v1 import assistant as assistant_api
 from app.api.v1 import auth as auth_api
 from app.api.v1 import branding as branding_api
+from app.api.v1 import external as external_api
 from app.api.v1 import knowledge_bases as kb_api
 from app.api.v1 import license as license_api
 from app.api.v1 import mcp as mcp_api
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_api.router)  # 阶段②：前台用户认证（register/login/verify/reset）
     app.include_router(kb_api.router)  # 阶段④：知识库 CRUD（平台库 terrane_main）
     app.include_router(mcp_api.router)  # MCP Server：知识库暴露为 MCP 工具（Bearer 鉴权）
+    app.include_router(external_api.router)  # External Knowledge API：Dify/Coze/n8n 等外部应用接入（Bearer 鉴权）
     app.include_router(memories_api.router)  # 记忆系统：per-user 记忆（抽取/唤回）
     app.include_router(models_api.router)  # 可用模型：前台「模型设置」下拉选（同步后台渠道）
     app.include_router(assistant_api.router)  # 个人 AI 助手：跨库检索+记忆+持久化对话
