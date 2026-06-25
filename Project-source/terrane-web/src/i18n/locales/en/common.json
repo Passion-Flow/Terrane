@@ -293,7 +293,11 @@
     "graphNoNode": "Node not found",
     "showSources": "Sources",
     "hideSources": "Hide",
-    "typeToConfirm": "Type \"{name}\" to confirm deletion"
+    "typeToConfirm": "Type \"{name}\" to confirm deletion",
+    "modeAuto": "Auto",
+    "modeFast": "Fast",
+    "modeDeep": "Deep",
+    "modeHint": "Fast = millisecond vector+lexical hybrid; Deep = tree-reasoning + graph multi-hop + RRF fusion with section/page citations; Auto = picks per query."
   },
   "nav": {
     "kbs": "Knowledge",

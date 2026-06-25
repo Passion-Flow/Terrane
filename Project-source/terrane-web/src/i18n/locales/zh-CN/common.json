@@ -293,7 +293,11 @@
     "graphNoNode": "未找到该节点",
     "showSources": "数据源",
     "hideSources": "收起",
-    "typeToConfirm": "请输入「{name}」以确认删除"
+    "typeToConfirm": "请输入「{name}」以确认删除",
+    "modeAuto": "智能",
+    "modeFast": "快速",
+    "modeDeep": "深度",
+    "modeHint": "快速=毫秒级向量+词法混合检索;深度=结构树推理+图谱多跳+RRF 融合,带章节/页码来源;智能=按问题自动选档。"
   },
   "nav": {
     "kbs": "知识库",

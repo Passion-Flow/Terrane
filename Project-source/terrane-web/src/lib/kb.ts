@@ -47,7 +47,15 @@ export interface SearchHit {
   source_title: string;
   source_id: string;
   score: number;
+  // Retrieval 2.0: explainable section/page citation (Deep mode)
+  citation_path?: string[] | null;
+  page_start?: number | null;
+  page_end?: number | null;
+  node_no?: string | null;
+  mode?: string;
 }
+
+export type RetrievalMode = "auto" | "fast" | "deep";
 
 const opt = (method: string, body?: unknown): RequestInit => ({
   method, credentials: "include",
@@ -147,12 +155,12 @@ export async function fetchSourceOriginal(kbId: string, sourceId: string): Promi
 export const deleteSource = (kbId: string, sourceId: string) =>
   request<{ ok: boolean }>(`/api/v1/knowledge-bases/${kbId}/sources/${sourceId}`, opt("DELETE"));
 
-export const searchKb = (kbId: string, q: string, sourceId?: string) => {
-  const qs = new URLSearchParams({ q });
+export const searchKb = (kbId: string, q: string, sourceId?: string, mode: RetrievalMode = "auto") => {
+  const qs = new URLSearchParams({ q, mode });
   if (getModelPref("embed")) qs.set("embed_model", getModelPref("embed"));
   if (getModelPref("rerank")) qs.set("rerank_model", getModelPref("rerank"));
   if (sourceId) qs.set("source_id", sourceId);
-  return request<{ query: string; hits: SearchHit[]; total: number }>(
+  return request<{ query: string; hits: SearchHit[]; total: number; mode: string }>(
     `/api/v1/knowledge-bases/${kbId}/search?${qs}`, { credentials: "include" });
 };
 
@@ -214,7 +222,8 @@ export interface KbLint { score: number; stats: KbStats; issues: KbLintIssue[] }
 export const lintKb = (kbId: string) =>
   request<KbLint>(`/api/v1/knowledge-bases/${kbId}/lint`, { credentials: "include" });
 
-export interface ChatSource { n: number; source_title: string; source_id: string; content: string; score: number }
+export interface ChatSource { n: number; source_title: string; source_id: string; content: string; score: number;
+  citation_path?: string[] | null; page_start?: number | null; page_end?: number | null }
 
 export interface ChatHandlers {
   onSources?: (hits: ChatSource[]) => void;
@@ -225,11 +234,11 @@ export interface ChatHandlers {
 
 /** RAG streaming Q&A: consumes SSE (event: sources / delta / error / done).
  *  Pass sourceId → retrieve and answer based only on that document (document-level Q&A). */
-export async function streamChat(kbId: string, query: string, h: ChatHandlers, signal?: AbortSignal, sourceId?: string): Promise<void> {
+export async function streamChat(kbId: string, query: string, h: ChatHandlers, signal?: AbortSignal, sourceId?: string, mode: RetrievalMode = "auto"): Promise<void> {
   const resp = await fetch(`${apiBase()}/api/v1/knowledge-bases/${kbId}/chat`, {
     method: "POST", credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, model: getChatModelPref() || undefined, ...(sourceId ? { source_id: sourceId } : {}) }), signal,
+    body: JSON.stringify({ query, mode, model: getChatModelPref() || undefined, ...(sourceId ? { source_id: sourceId } : {}) }), signal,
   });
   if (!resp.ok || !resp.body) { h.onError?.({ code: "HTTP_" + resp.status }); return; }
   const reader = resp.body.getReader();

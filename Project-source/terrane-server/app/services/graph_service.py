@@ -11,6 +11,7 @@ import re
 import uuid
 
 import structlog
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import model_client
@@ -127,6 +128,67 @@ async def build_graph(db: AsyncSession, kb_id: uuid.UUID, sources: list[tuple[st
     await db.commit()
     log.info("graph_built", kb_id=str(kb_id), entities=total_e, relations=total_r)
     return {"entities_added": total_e, "relations_added": total_r}
+
+
+_ENTITY_PROMPT = (
+    "从下面问题中抽取出最关键的实体名(人名/机构/产品/概念等),只输出 JSON 数组,"
+    "如 [\"实体A\",\"实体B\"];没有就返回 []。\n\n问题:"
+)
+
+
+async def multihop(db: AsyncSession, kb_id: uuid.UUID, query: str, *, hops: int = 2, limit: int = 12) -> list[dict]:
+    """Graph multi-hop recall (Retrieval 2.0 R4): extract entities from the query -> expand 1-2 hops in the
+    KB's AGE graph -> map neighbour entity names back to chunks (lexical). Returns ranked chunk dicts.
+    Best-effort: no graph / no chat channel / no matches -> []. PageIndex has no equivalent."""
+    g = graph_name(kb_id)
+    try:
+        ac = await _ac(db)
+        if not await ac.fetchval("SELECT count(*) FROM ag_catalog.ag_graph WHERE name = $1", g):
+            return []
+        raw = await model_client.chat_complete(
+            db, [{"role": "user", "content": _ENTITY_PROMPT + query[:400]}], temperature=0.0, max_tokens=200)
+    except (ModelError, Exception) as e:  # noqa: BLE001
+        log.warning("multihop_entity_failed", error=str(e))
+        return []
+    m = re.search(r"\[.*\]", raw.strip(), re.S)
+    if not m:
+        return []
+    try:
+        seeds = [_san(x) for x in json.loads(m.group(0)) if str(x).strip()]
+    except ValueError:
+        return []
+    if not seeds:
+        return []
+    # expand neighbours up to `hops`
+    names: set[str] = set(seeds)
+    try:
+        for seed in seeds[:6]:
+            rows = await ac.fetch(
+                f"SELECT b FROM cypher('{g}', $$ MATCH (a:Entity {{name:'{seed}'}})-[*1..{max(1, hops)}]-(b:Entity) "
+                f"RETURN DISTINCT b.name $$) AS (b agtype) LIMIT 40")
+            for r in rows:
+                try:
+                    names.add(_san(json.loads(str(r["b"]))))
+                except (ValueError, TypeError):
+                    continue
+    except Exception as e:  # noqa: BLE001
+        log.warning("multihop_expand_failed", error=str(e))
+    names = {n for n in names if n}
+    if not names:
+        return []
+    # map entity names back to chunks (rank by number of distinct matched entities)
+    name_list = list(names)[:40]
+    conds = " OR ".join(f"c.content ILIKE :p{i}" for i in range(len(name_list)))
+    params = {f"p{i}": f"%{n}%" for i, n in enumerate(name_list)}
+    score_expr = " + ".join(f"(c.content ILIKE :p{i})::int" for i in range(len(name_list)))
+    rows = (await db.execute(text(f"""
+        SELECT c.id, c.content, c.ord, r.title AS src, r.id AS sid, ({score_expr}) AS hits
+        FROM chunks c JOIN raw_sources r ON r.id = c.raw_source_id
+        WHERE c.kb_id = :kb AND ({conds})
+        ORDER BY hits DESC LIMIT :n
+    """), {"kb": str(kb_id), "n": limit, **params})).mappings().all()
+    return [{"chunk_id": str(r["id"]), "content": r["content"], "ord": r["ord"],
+             "source_title": r["src"], "source_id": str(r["sid"]), "score": float(r["hits"] or 0)} for r in rows]
 
 
 async def graph_data(db: AsyncSession, kb_id: uuid.UUID, limit: int = 300) -> dict:

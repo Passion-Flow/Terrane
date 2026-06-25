@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db_session
 from app.api.v1.auth import _public_base_url
 from app.models.api_key import ApiKey
-from app.services import ingest_service
+from app.services import retrieval_service
 
 log = structlog.get_logger("terrane.external")
 
@@ -56,7 +56,8 @@ async def _auth_key(request: Request, db: AsyncSession) -> ApiKey | JSONResponse
 
 
 def _to_records(hits: list[dict]) -> list[dict]:
-    """Reshape into Dify records format. score is clamped to [0,1]; metadata must be an object (never null)."""
+    """Reshape into Dify records format. score is clamped to [0,1]; metadata must be an object (never null).
+    Retrieval 2.0 adds an explainable citation path / page range to metadata when available."""
     out = []
     for h in hits:
         try:
@@ -64,20 +65,26 @@ def _to_records(hits: list[dict]) -> list[dict]:
         except (TypeError, ValueError):
             score = 0.0
         sid = str(h.get("source_id") or "")
+        meta = {"source_id": sid, "document_id": sid, "knowledge_base": "terrane"}
+        if h.get("citation_path"):
+            meta["section_path"] = h["citation_path"]
+        if h.get("page_start"):
+            meta["page_start"] = h["page_start"]
+            meta["page_end"] = h.get("page_end")
         out.append({
             "content": h.get("content", ""),
             "score": score,
             "title": h.get("source_title") or "untitled",
-            "metadata": {"source_id": sid, "document_id": sid, "knowledge_base": "terrane"},
+            "metadata": meta,
         })
     return out
 
 
-async def _retrieve(db: AsyncSession, kb_id, query: str, top_k: int, threshold: float) -> list[dict]:
+async def _retrieve(db: AsyncSession, kb_id, query: str, top_k: int, threshold: float, mode: str = "auto") -> list[dict]:
     if not query.strip():
         return []
     limit = max(1, min(int(top_k or 5), _MAX_TOP_K))
-    hits = await ingest_service.search_chunks(db, kb_id=kb_id, query=query, limit=limit)
+    hits = await retrieval_service.retrieve(db, kb_id=kb_id, query=query, mode=mode, limit=limit)
     records = _to_records(hits)
     # Don't hard-filter by score_threshold: Terrane's "vector + lexical hybrid (optional rerank)" scores
     # don't necessarily fall on the caller's 0-1 scale (often <0.5), so hard filtering would make apps
@@ -126,7 +133,8 @@ async def generic_search(request: Request, db: AsyncSession = Depends(get_db_ses
     query = str(body.get("query") or body.get("question") or "")
     records = await _retrieve(db, key.kb_id, query,
                               body.get("top_k", body.get("limit", 5)),
-                              float(body.get("score_threshold") or 0.0))
+                              float(body.get("score_threshold") or 0.0),
+                              str(body.get("mode") or "auto"))
     return JSONResponse({"records": records, "query": query.strip(), "count": len(records)})
 
 

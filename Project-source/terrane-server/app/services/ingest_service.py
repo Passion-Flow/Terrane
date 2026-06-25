@@ -26,24 +26,31 @@ _RECALL = 20  # Per-path recall cap
 
 
 def chunk_text(body: str, size: int = _CHUNK_CHARS) -> list[str]:
-    """Aggregate paragraphs into chunks of ~size characters (with light overlap to preserve context)."""
-    paras = [p.strip() for p in re.split(r"\n\s*\n", body) if p.strip()]
+    """Aggregate paragraphs into ~size-char chunks (light overlap). Heading-aware: a chunk never crosses a
+    Markdown heading boundary, so each chunk falls within one section — this gives Retrieval 2.0 clean
+    chunk→tree-node (document > section > page) attribution."""
+    # Split at Markdown headings first (keeps the heading at the start of its segment).
+    segments = [s for s in re.split(r"(?=^#{1,6}\s)", body, flags=re.M) if s.strip()]
+    if not segments:
+        segments = [body]
     chunks: list[str] = []
-    buf = ""
-    for p in paras:
-        if len(buf) + len(p) + 1 <= size:
-            buf = f"{buf}\n{p}" if buf else p
-        else:
-            if buf:
-                chunks.append(buf)
-            if len(p) > size:
-                for i in range(0, len(p), size - _OVERLAP):
-                    chunks.append(p[i:i + size])
-                buf = ""
+    for seg in segments:
+        paras = [p.strip() for p in re.split(r"\n\s*\n", seg) if p.strip()]
+        buf = ""
+        for p in paras:
+            if len(buf) + len(p) + 1 <= size:
+                buf = f"{buf}\n{p}" if buf else p
             else:
-                buf = p
-    if buf:
-        chunks.append(buf)
+                if buf:
+                    chunks.append(buf)
+                if len(p) > size:
+                    for i in range(0, len(p), size - _OVERLAP):
+                        chunks.append(p[i:i + size])
+                    buf = ""
+                else:
+                    buf = p
+        if buf:
+            chunks.append(buf)
     return chunks or ([body.strip()] if body.strip() else [])
 
 
@@ -84,8 +91,18 @@ async def add_text_source(db: AsyncSession, *, kb_id: uuid.UUID, workspace_id: u
     embedded = await _embed_chunks(db, [c.id for c in objs], pieces)
     await db.commit()
     await db.refresh(raw)
+    await _build_tree_safe(db, raw)
     log.info("text_source_ingested", kb_id=str(kb_id), raw_id=str(raw.id), chunks=len(pieces), embedded=embedded)
     return raw, len(pieces)
+
+
+async def _build_tree_safe(db: AsyncSession, raw: RawSource) -> None:
+    """Build the Retrieval 2.0 structural tree for a source (best-effort; isolated import to avoid cycles)."""
+    try:
+        from app.services import tree_service
+        await tree_service.build_tree(db, raw)
+    except Exception as e:  # noqa: BLE001
+        log.warning("build_tree_skipped", raw_id=str(raw.id), error=str(e))
 
 
 async def create_pending_source(db: AsyncSession, *, kb_id: uuid.UUID, workspace_id: uuid.UUID,
@@ -114,8 +131,58 @@ async def reingest(db: AsyncSession, raw: RawSource, body: str) -> int:
     await db.flush()
     embedded = await _embed_chunks(db, [c.id for c in objs], pieces)
     await db.commit()
+    await _build_tree_safe(db, raw)
     log.info("source_reingested", raw_id=str(raw.id), chunks=len(pieces), embedded=embedded)
     return len(pieces)
+
+
+def _src_clause(source_ids: list[uuid.UUID] | None) -> tuple[str, dict]:
+    """Build an optional 'limit to these documents' SQL clause for recall (cross-doc routing)."""
+    if source_ids:
+        return " AND c.raw_source_id = ANY(:srcs)", {"srcs": [str(s) for s in source_ids]}
+    return "", {}
+
+
+async def recall_lexical(db: AsyncSession, *, kb_id: uuid.UUID, query: str, limit: int = _RECALL,
+                         source_ids: list[uuid.UUID] | None = None) -> list[dict]:
+    """Lexical recall (pg_trgm), ranked. Used by both Fast path and the Deep RRF fusion (R2)."""
+    q = query.strip()
+    if not q:
+        return []
+    clause, extra = _src_clause(source_ids)
+    rows = (await db.execute(text(f"""
+        SELECT c.id, c.content, c.ord, r.title AS src, r.id AS sid, similarity(c.content, :q) AS sc
+        FROM chunks c JOIN raw_sources r ON r.id = c.raw_source_id
+        WHERE c.kb_id = :kb AND (c.content ILIKE :like OR similarity(c.content, :q) > 0.05){clause}
+        ORDER BY sc DESC LIMIT :n
+    """), {"kb": str(kb_id), "q": q, "like": f"%{q}%", "n": limit, **extra})).mappings().all()
+    return [{"chunk_id": str(r["id"]), "content": r["content"], "ord": r["ord"],
+             "source_title": r["src"], "source_id": str(r["sid"]), "score": float(r["sc"] or 0)} for r in rows]
+
+
+async def recall_vector(db: AsyncSession, *, kb_id: uuid.UUID, query: str, limit: int = _RECALL,
+                        source_ids: list[uuid.UUID] | None = None, embed_model: str | None = None) -> list[dict]:
+    """Vector recall (HNSW cosine), ranked. Empty if there is no embed channel. (R1)"""
+    q = query.strip()
+    if not q:
+        return []
+    try:
+        qvec = await model_client.embed_query(db, q, model=embed_model)
+    except ModelError as e:
+        log.warning("query_embed_failed", error=str(e))
+        return []
+    if not qvec:
+        return []
+    clause, extra = _src_clause(source_ids)
+    rows = (await db.execute(text(f"""
+        SELECT c.id, c.content, c.ord, r.title AS src, r.id AS sid,
+               1 - (c.embedding <=> (:v)::halfvec) AS sc
+        FROM chunks c JOIN raw_sources r ON r.id = c.raw_source_id
+        WHERE c.kb_id = :kb AND c.embedding IS NOT NULL{clause}
+        ORDER BY c.embedding <=> (:v)::halfvec LIMIT :n
+    """), {"kb": str(kb_id), "v": _vec_literal(qvec), "n": limit, **extra})).mappings().all()
+    return [{"chunk_id": str(r["id"]), "content": r["content"], "ord": r["ord"],
+             "source_title": r["src"], "source_id": str(r["sid"]), "score": float(r["sc"] or 0)} for r in rows]
 
 
 async def search_chunks(db: AsyncSession, *, kb_id: uuid.UUID, query: str, limit: int = 10,

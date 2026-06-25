@@ -94,12 +94,17 @@ export function KbChat({ kbId }: { kbId: string }) {
                       <div className="mb-2 border-b border-border/40 pb-2">
                         <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-ink-faint">{t("kb.citedSources")}</p>
                         <div className="flex flex-wrap gap-1.5">
-                          {m.sources.map((s) => (
-                            <button key={s.n} title={`${t("kb.openSource")} · ${s.content.slice(0, 120)}`} onClick={() => openSource(s)}
-                              className="inline-flex max-w-full items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] text-accent transition hover:bg-accent hover:text-white">
-                              <FileText className="size-3 shrink-0" /> <span className="truncate">[{s.n}] {s.source_title}</span>
-                            </button>
-                          ))}
+                          {m.sources.map((s) => {
+                            const path = (s.citation_path || []).filter(Boolean);
+                            const pages = s.page_start ? (s.page_end && s.page_end !== s.page_start ? ` p.${s.page_start}–${s.page_end}` : ` p.${s.page_start}`) : "";
+                            const label = path.length > 1 ? path.slice(1).join(" › ") + pages : s.source_title + pages;
+                            return (
+                              <button key={s.n} title={`${t("kb.openSource")} · ${path.join(" › ") || s.source_title}${pages}\n${s.content.slice(0, 120)}`} onClick={() => openSource(s)}
+                                className="inline-flex max-w-full items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] text-accent transition hover:bg-accent hover:text-white">
+                                <FileText className="size-3 shrink-0" /> <span className="truncate">[{s.n}] {label}</span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     )}

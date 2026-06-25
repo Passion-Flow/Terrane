@@ -37,7 +37,8 @@ from app.models.kb_content import Chunk, IngestJob, RawSource, RawSourceOriginal
 from app.models.knowledge_base import VISIBILITY, KbMember, KnowledgeBase
 from app.models.user import User
 from app.services import (
-    graph_service, ingest_service, memory_service, render_service, storage, studio_service, wiki_service,
+    graph_service, ingest_service, memory_service, render_service, retrieval_service, storage,
+    studio_service, wiki_service,
 )
 from app.services.parse import engine as parse_engine
 from app.services.parse import video as video_parser
@@ -612,19 +613,22 @@ async def delete_source(kb_id: str = Path(...), source_id: str = Path(...),
 
 
 @router.get("/{kb_id}/search")
-async def search_kb(kb_id: str = Path(...), q: str = "", limit: int = 10,
+async def search_kb(kb_id: str = Path(...), q: str = "", limit: int = 10, mode: str = "auto",
                     embed_model: str = "", rerank_model: str = "", source_id: str = "",
                     user: CurrentUser = Depends(get_current_user),
                     db: AsyncSession = Depends(get_db_session)) -> dict:
+    """Retrieval 2.0 unified search. mode: fast | deep | auto. Deep results carry a section/page citation path."""
     kb, _ = await _load(db, kb_id, user)
     try:
         sid = uuid.UUID(source_id) if source_id else None
     except ValueError:
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
-    hits = await ingest_service.search_chunks(db, kb_id=kb.id, query=q, limit=min(max(limit, 1), 50),
-                                              embed_model=embed_model or None, rerank_model=rerank_model or None,
-                                              raw_source_id=sid)
-    return {"query": q, "hits": hits, "total": len(hits)}
+    mode = mode if mode in ("fast", "deep", "auto") else "auto"
+    hits = await retrieval_service.retrieve(db, kb_id=kb.id, query=q, mode=mode,
+                                            limit=min(max(limit, 1), 50), source_id=sid,
+                                            embed_model=embed_model or None, rerank_model=rerank_model or None)
+    eff = hits[0]["mode"] if hits else (retrieval_service.classify(q) if mode == "auto" else mode)
+    return {"query": q, "hits": hits, "total": len(hits), "mode": eff}
 
 
 async def _graph_build_bg(kb_id: uuid.UUID, job_id: uuid.UUID, sources: list[tuple[str, str]]) -> None:
@@ -642,6 +646,11 @@ async def _graph_build_bg(kb_id: uuid.UUID, job_id: uuid.UUID, sources: list[tup
                 await db.commit()
                 if txt and txt.strip():
                     await graph_service.build_from_text(db, kb_id, txt)
+            # Retrieval 2.0: (re)build the RAPTOR semantic summary tree alongside the graph (KB-wide, bounded).
+            try:
+                await retrieval_service.build_semantic_tree(db, kb_id)
+            except Exception as se:  # noqa: BLE001
+                log.warning("semantic_tree_skipped", kb_id=str(kb_id), error=str(se))
             await db.execute(text("UPDATE ingest_jobs SET status='done', progress=100 WHERE id=:id"), {"id": str(job_id)})
             await db.commit()
     except Exception as e:  # noqa: BLE001
@@ -959,6 +968,7 @@ class ChatIn(BaseModel):
     top_k: int = Field(default=5, ge=1, le=12)
     model: str | None = Field(default=None, max_length=128)  # Model selected in the frontend "Model settings" (optional)
     source_id: str | None = Field(default=None)  # If set -> answer based only on this document (document-level Q&A)
+    mode: str = Field(default="auto")  # Retrieval 2.0: fast | deep | auto
 
 
 @router.post("/{kb_id}/chat")
@@ -972,13 +982,16 @@ async def chat_kb(body: ChatIn, kb_id: str = Path(...),
         ssid = uuid.UUID(body.source_id) if body.source_id else None
     except ValueError:
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
-    hits = await ingest_service.search_chunks(db, kb_id=kb.id, query=body.query, limit=body.top_k,
-                                              raw_source_id=ssid)
+    mode = body.mode if body.mode in ("fast", "deep", "auto") else "auto"
+    hits = await retrieval_service.retrieve(db, kb_id=kb.id, query=body.query, mode=mode,
+                                            limit=body.top_k, source_id=ssid)
     ch = (await get_channel_by_model(db, "chat", body.model)) if body.model else None
     if ch is None:
         ch = await get_channel(db, "chat")
     src = [{"n": i + 1, "source_title": h["source_title"], "source_id": h["source_id"],
-            "content": h["content"], "score": h["score"]} for i, h in enumerate(hits)]
+            "content": h["content"], "score": h["score"],
+            "citation_path": h.get("citation_path"), "page_start": h.get("page_start"),
+            "page_end": h.get("page_end")} for i, h in enumerate(hits)]
 
     if ch is None or not ch.base_url or not ch.api_key:
         async def no_model():

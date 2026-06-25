@@ -79,6 +79,34 @@ class RawSourceRender(Base):
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
 
+class DocTreeNode(Base):
+    """Retrieval 2.0 hierarchical index node. kind='structural' = a document's table-of-contents tree
+    (title/summary/page range, built from VL-parsed Markdown headings); kind='semantic' = a RAPTOR-style
+    cluster summary node. embedding (halfvec) is written via raw SQL like chunks and is not mapped here.
+    Adjacency list via parent_id (self-FK, cascade). Hard-deleted by cascade from the source/KB."""
+
+    __tablename__ = "doc_tree_nodes"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    kb_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    raw_source_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="structural")
+    node_no: Mapped[str] = mapped_column(String(24), nullable=False, default="")
+    depth: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ord: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    title: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    page_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    page_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    char_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    char_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    token_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    path_titles: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    meta: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 class WikiPage(UUIDMixin, HardTimestampMixin, Base):
     __tablename__ = "wiki_pages"
 
