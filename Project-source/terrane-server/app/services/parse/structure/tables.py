@@ -51,43 +51,76 @@ def _row_bands(boxes: list[Box], tol: float) -> list[list[Box]]:
 
 
 def reconstruct_table(boxes: list[Box]) -> str:
-    """Reconstruct an HTML table from the text boxes inside one table region."""
+    """Reconstruct an HTML table from the text boxes inside one table region.
+
+    Handles BOTH spans, purely geometrically: colspan = how many column anchors fall inside a cell's x-range;
+    rowspan = how many row-band anchors fall inside a cell's y-range (a vertically-merged cell crosses several
+    bands). A spanned-over (row, col) position is recorded as occupied so the lower row does NOT emit a phantom
+    ``<td>`` for it — mirroring the colspan padding/anchor-count approach on the vertical axis."""
     boxes = [b for b in boxes if b.text.strip()]
     if len(boxes) < 2:
         return ""
     med_h = statistics.median([b.h for b in boxes if b.h > 0] or [10.0])
-    rows = _row_bands(boxes, tol=med_h * 0.7)
     # column boundaries = clusters of left edges across the whole table
     col_centers = _cluster_1d([b.x0 for b in boxes], tol=med_h * 1.2)
-    if len(col_centers) < 2 or len(rows) < 2:
+    # Row bands from TOP edges (y0), not centers: a tall vertically-merged cell shares its row's TOP but has a
+    # much lower center, so center-clustering would invent a phantom band for it (over-counting rowspan). Its top
+    # aligns with the row it begins in, so y0-clustering yields the true band count + clean per-row anchors.
+    band_tops = _cluster_1d([b.y0 for b in boxes], tol=med_h * 0.7)
+    if len(col_centers) < 2 or len(band_tops) < 2:
         return ""
     pad = med_h * 0.4
+    # Anchor used for the "is this band inside the cell's y-range" test = each band's top edge.
+    band_centers = band_tops
+    nrows = len(band_centers)
 
     def start_col(b: Box) -> int:
         return min(range(len(col_centers)), key=lambda i: abs(col_centers[i] - b.x0))
+
+    def start_row(b: Box) -> int:
+        # The band a cell BEGINS in = the one whose anchor is nearest the cell's TOP edge. A tall vertically-
+        # merged cell must be emitted in its top band (its center sits lower and would mis-cluster otherwise).
+        return min(range(nrows), key=lambda i: abs(band_centers[i] - b.y0))
 
     def colspan(b: Box) -> int:
         # span = number of column anchors that fall inside the cell's x-range (NOT the right-edge column,
         # which over-counts whenever a normal cell is simply wider than the column pitch).
         return max(1, sum(1 for c in col_centers if b.x0 - pad <= c <= b.x1 + pad))
 
+    def rowspan(b: Box, ri: int) -> int:
+        # span = number of row-band anchors (from this cell's start band downward) inside the cell's y-range.
+        # Same padding approach as colspan; counting only bands at/below ri keeps it a forward (downward) extent.
+        return max(1, sum(1 for j in range(ri, nrows) if b.y0 - pad <= band_centers[j] <= b.y1 + pad))
+
     ncols = len(col_centers)
+    # Re-bucket every box into the band it VISUALLY begins in (by top edge), so a tall merged cell is emitted in
+    # its top row even though its center clustered lower — then rowspan covers the bands below it.
+    band_cells: list[dict[int, list[Box]]] = [{} for _ in range(nrows)]
+    for b in boxes:
+        band_cells[start_row(b)].setdefault(start_col(b), []).append(b)
+
+    occupied: set[tuple[int, int]] = set()   # (row_index, col_index) covered by a span started in a higher row
     out = ["<table>"]
-    for row in rows:
-        # one cell per starting column (merge boxes that share a start column)
-        cells: dict[int, list[Box]] = {}
-        for b in row:
-            cells.setdefault(start_col(b), []).append(b)
+    for ri in range(nrows):
+        cells = band_cells[ri]
         out.append("<tr>")
         c = 0
         while c < ncols:
+            if (ri, c) in occupied:        # a rowspan from an earlier row covers this cell -> emit nothing
+                c += 1
+                continue
             if c in cells:
                 cb = sorted(cells[c], key=lambda x: x.x0)
                 txt = " ".join(b.text.strip() for b in cb)
-                span = max(1, min(colspan(cb[0]), ncols - c))
-                attr = f' colspan="{span}"' if span > 1 else ""
-                out.append(f"<td{attr}>{_html.escape(txt)}</td>")
-                c += span
+                cspan = max(1, min(colspan(cb[0]), ncols - c))
+                rspan = max(1, min(rowspan(cb[0], ri), nrows - ri))
+                attrs = (f' colspan="{cspan}"' if cspan > 1 else "") + (f' rowspan="{rspan}"' if rspan > 1 else "")
+                out.append(f"<td{attrs}>{_html.escape(txt)}</td>")
+                if rspan > 1:   # reserve the covered cells in the rows below so they emit no duplicate <td>
+                    for dr in range(1, rspan):
+                        for dc in range(cspan):
+                            occupied.add((ri + dr, c + dc))
+                c += cspan
             else:
                 out.append("<td></td>")
                 c += 1

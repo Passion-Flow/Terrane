@@ -27,6 +27,102 @@ _RECALL = 20  # Per-path recall cap
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 
+# A self-contained HTML table; [\s\S] so the rows may span newlines. Greedy is fine — one table per match here.
+_HTML_TABLE = re.compile(r"<table\b[^>]*>[\s\S]*?</table>", re.I)
+_MD_PIPE_ROW = re.compile(r"^\s*\|.*\|\s*$")            # a markdown pipe-table row line: | a | b |
+_MD_PIPE_SEP = re.compile(r"^\s*\|?[\s:|-]+\|?\s*$")    # the |---|:--:|---| separator row (only -, :, |, space)
+
+
+def _is_table_block(p: str) -> bool:
+    """True if a paragraph is (or contains) a table that must stay structurally intact during chunking."""
+    s = p.strip()
+    if _HTML_TABLE.search(s):
+        return True
+    lines = [ln for ln in s.splitlines() if ln.strip()]
+    return len(lines) >= 2 and all(_MD_PIPE_ROW.match(ln) for ln in lines)
+
+
+def _split_html_table(table_html: str, budget: int) -> list[str]:
+    """Split one ``<table>…</table>`` into chunks that are EACH a valid, self-describing table fragment.
+
+    A table is atomic: it is never cut mid-tag. Rule:
+      • whole table fits the budget -> one chunk;
+      • otherwise pack consecutive ``</tr>`` rows into ``<table>…</table>`` fragments, repeating the
+        ``<table>`` open + every header row (``<tr>`` containing ``<th>``, else the first ``<tr>``) on each
+        fragment so each chunk parses standalone;
+      • a single row larger than the budget is emitted as its own (oversized) fragment — we still never split
+        inside a tag, so the fragment stays valid HTML (honest limit: one chunk may exceed ``size``)."""
+    m = re.match(r"\s*(<table\b[^>]*>)([\s\S]*?)(</table>)\s*$", table_html, re.I)
+    if not m:
+        return [table_html]
+    open_tag, inner, close_tag = m.group(1), m.group(2), m.group(3)
+    rows = re.findall(r"<tr\b[^>]*>[\s\S]*?</tr>", inner, re.I)
+    if not rows or len("".join((open_tag, inner, close_tag))) <= budget:
+        return [open_tag + inner + close_tag]
+    # Header rows repeated on every fragment: all leading rows that carry <th>, else the first row.
+    header_rows: list[str] = [r for r in rows if re.search(r"<th\b", r, re.I)]
+    if not header_rows:
+        header_rows = rows[:1]
+    body_rows = rows[len(header_rows):] if header_rows == rows[:len(header_rows)] else rows
+    head = open_tag + "".join(header_rows)
+    base_len = len(head) + len(close_tag)
+    out: list[str] = []
+    cur: list[str] = []
+
+    def flush():
+        if cur:
+            out.append(head + "".join(cur) + close_tag)
+            cur.clear()
+
+    for r in body_rows:
+        if cur and base_len + sum(len(x) for x in cur) + len(r) > budget:
+            flush()
+        cur.append(r)
+        if base_len + len(r) > budget:   # single row alone already over budget -> emit it on its own
+            flush()
+    flush()
+    return out or [open_tag + inner + close_tag]
+
+
+def _split_md_table(table_md: str, budget: int) -> list[str]:
+    """Split a Markdown pipe-table at row (`|`-line) boundaries, repeating the header + separator row on each
+    fragment so every chunk is a valid, self-describing pipe-table. A single row over budget is emitted alone."""
+    lines = [ln for ln in table_md.splitlines() if ln.strip()]
+    if len(lines) <= 2 or len("\n".join(lines)) <= budget:
+        return ["\n".join(lines)]
+    header = [lines[0]]
+    body_start = 1
+    if len(lines) > 1 and _MD_PIPE_SEP.match(lines[1]):
+        header.append(lines[1])
+        body_start = 2
+    head = "\n".join(header)
+    base_len = len(head) + 1
+    out: list[str] = []
+    cur: list[str] = []
+
+    def flush():
+        if cur:
+            out.append(head + "\n" + "\n".join(cur))
+            cur.clear()
+
+    for ln in lines[body_start:]:
+        if cur and base_len + sum(len(x) + 1 for x in cur) + len(ln) > budget:
+            flush()
+        cur.append(ln)
+        if base_len + len(ln) + 1 > budget:
+            flush()
+    flush()
+    return out or ["\n".join(lines)]
+
+
+def _split_table_block(p: str, budget: int) -> list[str]:
+    """Split an oversized table paragraph atomically (never mid-tag). HTML and Markdown pipe-tables both keep
+    their header context on every fragment so each emitted chunk is a self-describing, parseable table."""
+    s = p.strip()
+    if _HTML_TABLE.search(s):
+        return _split_html_table(s, budget)
+    return _split_md_table(s, budget)
+
 
 def chunk_text(body: str, size: int = _CHUNK_CHARS) -> list[str]:
     """Aggregate paragraphs into ~size-char chunks (light overlap). Heading-aware: a chunk never crosses a
@@ -60,6 +156,14 @@ def chunk_text(body: str, size: int = _CHUNK_CHARS) -> list[str]:
         for p in paras:
             if len(buf) + len(p) + 1 <= budget:
                 buf = f"{buf}\n{p}" if buf else p
+            elif _is_table_block(p):
+                # A table is ATOMIC: never merge it with prose (would risk a mid-tag cut) and never window-split
+                # it. Flush prose, then emit the table as one whole chunk, or as row-boundary fragments that each
+                # repeat the header context, so every table chunk is valid, self-describing HTML/markdown.
+                flush(buf)
+                buf = ""
+                for frag in _split_table_block(p, budget):
+                    chunks.append(prefix + frag)
             else:
                 flush(buf)
                 if len(p) > budget:
