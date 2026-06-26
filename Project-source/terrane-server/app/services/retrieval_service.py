@@ -294,11 +294,15 @@ async def retrieve(db: AsyncSession, *, kb_id: uuid.UUID, query: str, mode: str 
         return hits
 
     # Deep path: cross-doc routing → R1..R5 → RRF → rerank → citations.
-    source_ids = [source_id] if source_id else await cross_doc_select(db, kb_id, q, _CAND_DOCS)
+    # Flat recall (R1 vector+PRF, R2 lexical) must scan the WHOLE KB so deep is a SUPERSET of fast and never
+    # loses recall; the cross-doc candidate set only scopes the expensive per-document TREE walk (R3). When a
+    # specific source is requested, everything is confined to it.
+    explicit = [source_id] if source_id else None
+    tree_docs = explicit or await cross_doc_select(db, kb_id, q, _CAND_DOCS)
     # R1 = vector recall with Rocchio pseudo-relevance feedback (self-developed, zero-LLM recall boost)
-    r1 = await recall_vector_prf(db, kb_id, q, limit=20, source_ids=source_ids or None, embed_model=embed_model)
-    r2 = await ingest_service.recall_lexical(db, kb_id=kb_id, query=q, limit=20, source_ids=source_ids or None)
-    r3 = await tree_service.tree_search(db, kb_id=kb_id, query=q, source_ids=source_ids) if source_ids else []
+    r1 = await recall_vector_prf(db, kb_id, q, limit=20, source_ids=explicit, embed_model=embed_model)
+    r2 = await ingest_service.recall_lexical(db, kb_id=kb_id, query=q, limit=20, source_ids=explicit)
+    r3 = await tree_service.tree_search(db, kb_id=kb_id, query=q, source_ids=tree_docs) if tree_docs else []
     r4 = await graph_service.multihop(db, kb_id, q)
     r5 = await recall_semantic(db, kb_id, q)
 
