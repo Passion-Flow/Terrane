@@ -41,6 +41,7 @@ from app.services import (
     studio_service, wiki_service,
 )
 from app.services.parse import engine as parse_engine
+from app.services.parse import router as parse_router
 from app.services.parse import scanned_table as parse_scanned_table
 from app.services.parse import video as video_parser
 from app.services.parse import vl as parse_vl
@@ -359,59 +360,162 @@ async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tie
         finally:
             os.unlink(tmp)
     if mime in parse_engine.SUPPORTED:
-        text = None
-        if mime == "application/pdf" and tier == "high":  # High fidelity: full-page VL layout parsing
-            try:
-                text = await parse_vl.parse_pdf_fullvl(db, data)
-            except Exception as e:  # noqa: BLE001
-                log.warning("vl_fullparse_failed", error=str(e))
-        if not text and mime == "application/pdf":
-            # Self-developed structure engine: digital PDFs -> exact native text + XY-Cut++ reading order
-            # + font/numbering hierarchy (no model, no API, no OCR error). None for scanned PDFs.
-            try:
-                text = await run_in_threadpool(structure_engine.structure_markdown, data)
-            except Exception as e:  # noqa: BLE001
-                log.warning("structure_parse_failed", error=str(e))
-                text = None
-            if text and tier != "fast":  # Standard: VL still adds embedded-image / scanned-page descriptions
-                try:
-                    text = await parse_vl.enhance_pdf(db, data, text)
-                except Exception as e:  # noqa: BLE001
-                    log.warning("vl_enhance_failed", error=str(e))
-        if not text and mime == "application/pdf" and tier != "fast":
-            # Scanned (no text layer) PDF dominated by a BORDERED TABLE: per-page OCR flattens cells into
-            # headings and detaches page-spanning rows, and whole-page VL guesses/garbles the grid AND is
-            # non-deterministic. AUTHORITATIVE path: derive the grid from the ruling lines with OpenCV and OCR
-            # each cell region with RapidOCR, so every word lands in the cell that geometrically contains it
-            # (rectangular table, fixed column schema, no cross-disease bleed, cross-page rows stitched,
-            # byte-deterministic). It NEVER falls back to the VL stitch: if no grid is found it returns
-            # deterministic plain per-page OCR itself, so this whole branch is byte-stable run-to-run.
-            try:
-                if await run_in_threadpool(parse_vl.looks_like_scanned_table, data):
-                    text = await run_in_threadpool(parse_scanned_table.parse_scanned_bordered_table, data)
-            except Exception as e:  # noqa: BLE001
-                log.warning("scanned_table_failed", error=str(e))
-        if not text:  # non-PDF, scanned PDF, or structure failed -> lexical
-            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
-                tf.write(data)
-                tmp = tf.name
-            try:
-                text = await run_in_threadpool(parse_engine.parse, tmp, mime)
-            except Exception as e:  # noqa: BLE001
-                log.warning("parse_failed", error=str(e))
-                text = None
-            finally:
-                os.unlink(tmp)
-            if text and mime == "application/pdf" and tier != "fast":  # Standard: + VL image/scan enhancement
-                try:
-                    text = await parse_vl.enhance_pdf(db, data, text)
-                except Exception as e:  # noqa: BLE001
-                    log.warning("vl_enhance_failed", error=str(e))
-        return text
+        if mime == "application/pdf":
+            return await _parse_pdf_by_tier(db, data, ext, tier)
+        # Office (docx/xlsx/pptx): native structure -> 0-error lexical engine (no PDF page routing).
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
+            tf.write(data)
+            tmp = tf.name
+        try:
+            return await run_in_threadpool(parse_engine.parse, tmp, mime)
+        except Exception as e:  # noqa: BLE001
+            log.warning("parse_failed", error=str(e))
+            return None
+        finally:
+            os.unlink(tmp)
     try:
         return data.decode("utf-8")
     except UnicodeDecodeError:
         return None
+
+
+async def _parse_pdf_by_tier(db: AsyncSession, data: bytes, ext: str, tier: str) -> str | None:
+    """PER-PAGE routed PDF parse. Each page is classified (parse.router) and sent to the precise handler for
+    its class, then the per-page outputs are assembled in page order:
+
+      * DIGITAL page (text layer)   -> self-developed structure engine = EXACT native text + XY-Cut++ reading
+                                        order + font/numbering hierarchy (no model, no OCR error). EVERY tier
+                                        routes digital pages here; high/standard NEVER re-OCR a text layer
+                                        (measured VL text acc ~0.78 vs ~1.0 native). This is the #1 precision fix.
+      * SCANNED ruled-table page    -> parse_scanned_table.parse_scanned_bordered_table (deterministic CV grid +
+                                        per-cell OCR), only on tier != fast.
+      * SCANNED prose page          -> parse_vl.parse_pdf_fullvl (whole-page VL layout OCR), only on tier != fast.
+
+    tier=fast = model-free (digital pages via the structure engine; scanned pages get deterministic plain OCR
+    via the scanned-table path's gridless fallback, never a VL call). high/standard may ENRICH digital pages
+    with embedded-image descriptions (enhance_pdf) but never replace their native text. Falls back to the old
+    whole-document behavior if routing can't open the PDF, so no PDF regresses.
+    """
+    route = parse_router.route_pdf(data)
+    if not route.pages:
+        return await _parse_pdf_legacy(db, data, ext, tier)
+
+    # FULLY-SCANNED PDF WITH A RULED TABLE: keep the hardened whole-document scanned handling intact. The CV
+    # scanned-table path stitches rows ACROSS pages (incl. a continuation page whose grid is faint and would
+    # route to "prose" if split off), so the doc must stay whole and use the ORIGINAL bytes (a re-saved page
+    # subset would re-render differently and break byte-stability — commit 26cba6a). The per-page router must
+    # not fragment a scanned table document. (Pure-prose scans, no table, fall through to per-page below so a
+    # gridless scan still reaches VL at standard tier, matching what high tier always did.)
+    if not route.any_digital and route.scanned_table_pages:
+        return await _parse_pdf_legacy(db, data, ext, tier)
+
+    # FULLY-DIGITAL PDF: structure engine over every page (exact native text). No subsetting needed.
+    if not route.any_scanned:
+        try:
+            text = await run_in_threadpool(structure_engine.structure_markdown_pages, data, route.digital_pages)
+        except Exception as e:  # noqa: BLE001
+            log.warning("structure_parse_failed", error=str(e))
+            text = None
+        if text and tier == "high":  # enrich: embedded-image descriptions (does NOT replace native text)
+            try:
+                text = await parse_vl.enhance_pdf(db, data, text)
+            except Exception as e:  # noqa: BLE001
+                log.warning("vl_enhance_failed", error=str(e))
+        return text or await _parse_pdf_legacy(db, data, ext, tier)
+
+    # MIXED PDF: route each page class to its handler and assemble in page order.
+    parts: list[tuple[int, str]] = []  # (first_page_no, markdown)
+
+    # DIGITAL pages -> structure engine (exact native text). One call over ALL digital pages so cross-page
+    # heading hierarchy is preserved; the emitted page markers keep them in their original positions.
+    try:
+        dtext = await run_in_threadpool(
+            structure_engine.structure_markdown_pages, data, route.digital_pages)
+    except Exception as e:  # noqa: BLE001
+        log.warning("structure_parse_failed", error=str(e))
+        dtext = None
+    if dtext:
+        if tier == "high":  # enrich: embedded-image descriptions on digital pages (does NOT touch native text)
+            try:
+                dsub = parse_router.subset_pdf(data, route.digital_pages)
+                if dsub:
+                    dtext = await parse_vl.enhance_pdf(db, dsub, dtext)
+            except Exception as e:  # noqa: BLE001
+                log.warning("vl_enhance_failed", error=str(e))
+        parts.append((min(route.digital_pages), dtext))
+
+    # SCANNED ruled-table pages -> deterministic CV scanned-table path. Subset to just those pages so the
+    # mixed PDF's digital pages are never rasterized/OCR'd here.
+    if route.scanned_table_pages and tier != "fast":
+        sub = parse_router.subset_pdf(data, route.scanned_table_pages)
+        if sub:
+            try:
+                ttext = await run_in_threadpool(parse_scanned_table.parse_scanned_bordered_table, sub)
+            except Exception as e:  # noqa: BLE001
+                log.warning("scanned_table_failed", error=str(e))
+                ttext = None
+            if ttext:
+                parts.append((min(route.scanned_table_pages), ttext))
+
+    # SCANNED prose pages -> whole-page VL layout OCR.
+    if route.scanned_prose_pages and tier != "fast":
+        sub = parse_router.subset_pdf(data, route.scanned_prose_pages)
+        if sub:
+            try:
+                ptext = await parse_vl.parse_pdf_fullvl(db, sub)
+            except Exception as e:  # noqa: BLE001
+                log.warning("vl_fullparse_failed", error=str(e))
+                ptext = None
+            if ptext:
+                parts.append((min(route.scanned_prose_pages), ptext))
+
+    if parts:
+        parts.sort(key=lambda x: x[0])
+        return "\n\n".join(p for _, p in parts).strip() or None
+
+    # Nothing produced (fast tier over the scanned pages, handlers unavailable) -> legacy whole-doc path.
+    return await _parse_pdf_legacy(db, data, ext, tier)
+
+
+async def _parse_pdf_legacy(db: AsyncSession, data: bytes, ext: str, tier: str) -> str | None:
+    """Whole-document fallback used only when per-page routing can't open the PDF or produced nothing.
+
+    Mirrors the prior behavior: structure engine over the whole doc (+ VL enhance on non-fast), then the
+    deterministic scanned-bordered-table path, then the lexical engine (+ VL enhance)."""
+    text = None
+    try:
+        text = await run_in_threadpool(structure_engine.structure_markdown, data)
+    except Exception as e:  # noqa: BLE001
+        log.warning("structure_parse_failed", error=str(e))
+        text = None
+    if text and tier != "fast":
+        try:
+            text = await parse_vl.enhance_pdf(db, data, text)
+        except Exception as e:  # noqa: BLE001
+            log.warning("vl_enhance_failed", error=str(e))
+    if not text and tier != "fast":
+        try:
+            if await run_in_threadpool(parse_vl.looks_like_scanned_table, data):
+                text = await run_in_threadpool(parse_scanned_table.parse_scanned_bordered_table, data)
+        except Exception as e:  # noqa: BLE001
+            log.warning("scanned_table_failed", error=str(e))
+    if not text:
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
+            tf.write(data)
+            tmp = tf.name
+        try:
+            text = await run_in_threadpool(parse_engine.parse, tmp, mime="application/pdf")
+        except Exception as e:  # noqa: BLE001
+            log.warning("parse_failed", error=str(e))
+            text = None
+        finally:
+            os.unlink(tmp)
+        if text and tier != "fast":
+            try:
+                text = await parse_vl.enhance_pdf(db, data, text)
+            except Exception as e:  # noqa: BLE001
+                log.warning("vl_enhance_failed", error=str(e))
+    return text
 
 
 async def _ingest_bg(rid: uuid.UUID, user_id: uuid.UUID, data: bytes, mime: str, ext: str, tier: str) -> None:

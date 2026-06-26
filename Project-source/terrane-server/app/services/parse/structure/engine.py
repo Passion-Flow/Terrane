@@ -40,8 +40,13 @@ def _fold_tables(boxes: list[Box]) -> list[Box]:
 log = structlog.get_logger("terrane.structure")
 
 
-def structure_tree(pdf_bytes: bytes) -> tuple[Node, dict[int, int]] | None:
-    """Build the section tree from a digital PDF. Returns (root, page_of_box_id) or None if no text."""
+def structure_tree(pdf_bytes: bytes, only_pages: set[int] | None = None) -> tuple[Node, dict[int, int]] | None:
+    """Build the section tree from a digital PDF. Returns (root, page_of_box_id) or None if no text.
+
+    `only_pages` (1-indexed page numbers) restricts the tree to a subset of pages; None = all pages. The
+    per-page router passes the digital pages here so a MIXED PDF's scanned pages are handled separately and
+    only the text-layer pages go through the (0-error native-text) structure engine.
+    """
     try:
         import pdfplumber
         doc = pdfplumber.open(io.BytesIO(pdf_bytes))
@@ -53,6 +58,8 @@ def structure_tree(pdf_bytes: bytes) -> tuple[Node, dict[int, int]] | None:
     gid = 0
     try:
         for pno, page in enumerate(doc.pages, start=1):
+            if only_pages is not None and pno not in only_pages:
+                continue
             ordered = reading_order(_fold_tables(extract_page_boxes(page)))
             for b in ordered:
                 b.id = gid
@@ -96,4 +103,24 @@ def structure_markdown(pdf_bytes: bytes) -> str | None:
     _emit(root, page_of, out, seen_page=[0])
     md = "\n".join(s for s in out if s is not None).strip()
     log.info("structure_markdown_built", chars=len(md))
+    return md or None
+
+
+def structure_markdown_pages(pdf_bytes: bytes, pages: set[int]) -> str | None:
+    """Structure engine on a SUBSET of pages -> structured Markdown (exact native text + page markers).
+
+    Used by the per-page router: only the digital (text-layer) pages of a (possibly mixed) PDF are routed
+    here, so their exact native text never gets re-OCR'd. Returns None when the subset has no usable text.
+    The emitted Markdown carries `<!-- Page N -->` markers for the pages it covers (N = original page no.),
+    so the router can interleave scanned-page output in page order.
+    """
+    if not pages:
+        return None
+    res = structure_tree(pdf_bytes, only_pages=pages)
+    if res is None:
+        return None
+    root, page_of = res
+    out: list[str] = []
+    _emit(root, page_of, out, seen_page=[0])
+    md = "\n".join(s for s in out if s is not None).strip()
     return md or None
