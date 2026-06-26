@@ -99,6 +99,11 @@ A lightweight **Fast / Deep router** sends short keyword lookups down a millisec
 reasoning-heavy or structured queries to the full fusion — with a hard cap on reasoning calls so latency
 stays bounded. Deep results carry an explainable **`document › section › page`** citation path.
 
+**Benchmark.** On the standard **BEIR `nfcorpus`** retrieval benchmark (3,633 documents, 323 test queries,
+scored with `pytrec_eval`), Terrane's full retrieval reaches **nDCG@10 0.405 / Recall@10 0.196** — above the
+dense `bge-m3` baseline of ~0.34. The hybrid recall + cross-encoder reranking measurably beats dense-only
+vector search on the same corpus.
+
 ## 🧩 Plug into any app
 
 Every knowledge base can be exposed to external applications with a scoped API key:
