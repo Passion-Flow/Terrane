@@ -303,20 +303,132 @@ def _parse_docx(path: str) -> str:
     return "\n\n".join(out).strip()
 
 
+# Cached spreadsheet error strings (openpyxl returns these verbatim with data_only=True). Suppressed from output
+# so raw `#REF!`/`#DIV/0!` etc. never leak into chunks/embeddings.
+_XLSX_ERRORS = frozenset({
+    "#REF!", "#NAME?", "#VALUE!", "#DIV/0!", "#N/A", "#NULL!", "#NUM!", "#SPILL!", "#CALC!", "#GETTING_DATA",
+})
+
+
+def _cell_str(v) -> str:
+    """Normalise a cell value to a string; spreadsheet error codes -> empty (don't leak `#REF!`)."""
+    if v is None:
+        return ""
+    s = str(v).strip()
+    return "" if s in _XLSX_ERRORS else s
+
+
+def _collapse_merged(ws) -> dict[tuple[int, int], str]:
+    """Build a {(row, col): text} grid where each merged range contributes ONE logical cell at its top-left.
+
+    Prevents the merged-cell explosion (a title block merged across dozens of columns turning into dozens of
+    empty columns). Non-anchor cells of a merge are skipped entirely.
+    """
+    # Non-anchor cells of every merged range -> suppressed; anchor keeps the value.
+    covered: set[tuple[int, int]] = set()
+    for rng in ws.merged_cells.ranges:
+        for r in range(rng.min_row, rng.max_row + 1):
+            for c in range(rng.min_col, rng.max_col + 1):
+                if (r, c) != (rng.min_row, rng.min_col):
+                    covered.add((r, c))
+    grid: dict[tuple[int, int], str] = {}
+    for row in ws.iter_rows():
+        for cell in row:
+            key = (cell.row, cell.column)
+            if key in covered:
+                continue
+            txt = _cell_str(cell.value)
+            if txt:
+                grid[key] = txt
+    return grid
+
+
+def _grid_to_rows(grid: dict[tuple[int, int], str]) -> list[list[str]]:
+    """Turn a sparse {(row,col): text} grid into dense rows, dropping fully-empty trailing rows/columns so a sparse
+    sheet doesn't become a huge mostly-empty table."""
+    if not grid:
+        return []
+    rows_present = sorted({r for r, _ in grid})
+    cols_present = sorted({c for _, c in grid})
+    out: list[list[str]] = []
+    for r in rows_present:
+        row = [grid.get((r, c), "") for c in cols_present]
+        out.append(row)
+    return out
+
+
 def _parse_xlsx(path: str) -> str:
+    import warnings
+    import zipfile
+
     import openpyxl
 
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    from app.services.parse import xlsx_drawing
+
+    # Resolve sheet title -> sheetN.xml part so the DrawingML extractor can find the right drawing. openpyxl drops
+    # shapes on read, so the flowchart comes from the raw zip; the grid comes from openpyxl (merged cells etc.).
+    sheet_part: dict[str, str] = {}
+    zf: zipfile.ZipFile | None = None
+    try:
+        zf = zipfile.ZipFile(path)
+        sheet_part = _xlsx_sheet_parts(zf)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("xlsx_zip_open_failed", error=str(exc))
+
+    with warnings.catch_warnings():
+        # openpyxl warns "Shapes and drawings will be lost" -- expected; we read them from the zip ourselves.
+        warnings.simplefilter("ignore")
+        wb = openpyxl.load_workbook(path, read_only=False, data_only=True)
+
     out: list[str] = []
     for ws in wb.worksheets:
-        rows = [[("" if c is None else str(c)).strip() for c in row]
-                for row in ws.iter_rows(values_only=True)]
-        rows = [r for r in rows if any(r)]
+        section: list[str] = [f"## {ws.title}"]
+        # (a) Mermaid flowchart from DrawingML shapes/connectors, if any.
+        if zf is not None:
+            part = sheet_part.get(ws.title)
+            if part:
+                block, n_nodes, n_edges = xlsx_drawing.extract_sheet_flow(zf, part)
+                if block:
+                    log.info("xlsx_flow_extracted", sheet=ws.title, nodes=n_nodes, edges=n_edges)
+                    section.append(block)
+        # (b) cleaned cell grid: merged cells collapsed, empty rows/cols dropped, errors suppressed.
+        rows = _grid_to_rows(_collapse_merged(ws))
         if rows:
-            out.append(f"## {ws.title}")
-            out.append(_rows_to_md(rows))
+            section.append(_rows_to_md(rows))
+        if len(section) > 1:  # title + at least flow or grid
+            out.extend(section)
     wb.close()
+    if zf is not None:
+        zf.close()
     return "\n\n".join(out).strip()
+
+
+def _xlsx_sheet_parts(zf) -> dict[str, str]:
+    """Map worksheet title -> its ``xl/worksheets/sheetN.xml`` part via workbook.xml + workbook rels."""
+    import xml.etree.ElementTree as ET
+
+    ns_r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    try:
+        wb_xml = ET.fromstring(zf.read("xl/workbook.xml"))
+        rels_xml = ET.fromstring(zf.read("xl/_rels/workbook.xml.rels"))
+    except (KeyError, ET.ParseError):
+        return {}
+    rid_to_target: dict[str, str] = {}
+    for rel in rels_xml:
+        rid = rel.get("Id")
+        target = rel.get("Target", "")
+        if rid and target:
+            # targets are relative to xl/ -> prefix unless absolute
+            rid_to_target[rid] = ("xl/" + target.lstrip("/")) if not target.startswith("/") else target.lstrip("/")
+    mapping: dict[str, str] = {}
+    for sheet in wb_xml.iter():
+        if not sheet.tag.endswith("}sheet"):
+            continue
+        name = sheet.get("name")
+        rid = sheet.get("{" + ns_r + "}id")
+        if name and rid and rid in rid_to_target:
+            mapping[name] = rid_to_target[rid]
+    return mapping
 
 
 def _parse_pptx(path: str) -> str:
