@@ -41,6 +41,7 @@ from app.services import (
     studio_service, wiki_service,
 )
 from app.services.parse import engine as parse_engine
+from app.services.parse import scanned_table as parse_scanned_table
 from app.services.parse import video as video_parser
 from app.services.parse import vl as parse_vl
 from app.services.parse.structure import engine as structure_engine
@@ -379,13 +380,17 @@ async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tie
                     log.warning("vl_enhance_failed", error=str(e))
         if not text and mime == "application/pdf" and tier != "fast":
             # Scanned (no text layer) PDF dominated by a BORDERED TABLE: per-page OCR flattens cells into
-            # headings and detaches page-spanning rows. Reconstruct it as a real HTML table with cross-page
-            # row stitching (several adjacent pages per VL call). Only when it really looks like a ruled table.
+            # headings and detaches page-spanning rows, and whole-page VL guesses/garbles the grid. PRIMARY path:
+            # derive the grid from the ruling lines with OpenCV and OCR each cell region with RapidOCR, so every
+            # word lands in the cell that geometrically contains it (rectangular table, no cross-disease bleed,
+            # cross-page rows stitched, deterministic). VL stitch is only the fallback if grid detection fails.
             try:
                 if await run_in_threadpool(parse_vl.looks_like_scanned_table, data):
-                    text = await parse_vl.parse_pdf_table_stitched(db, data)
+                    text = await run_in_threadpool(parse_scanned_table.parse_scanned_bordered_table, data)
+                    if not text:  # no usable grid found -> fall back to the VL multi-page stitch
+                        text = await parse_vl.parse_pdf_table_stitched(db, data)
             except Exception as e:  # noqa: BLE001
-                log.warning("vl_table_stitch_failed", error=str(e))
+                log.warning("scanned_table_failed", error=str(e))
         if not text:  # non-PDF, scanned PDF, or structure failed -> lexical
             with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
                 tf.write(data)

@@ -32,6 +32,9 @@ dependencies = [
     "typer==0.15.4",
     "pypdfium2>=5.10.1",
     "pdfplumber>=0.11.10",
+    "opencv-python-headless>=4.13.0.92",
+    "rapidocr-onnxruntime>=1.4.4",
+    "onnxruntime>=1.27.0",
 ]
 
 [project.optional-dependencies]
