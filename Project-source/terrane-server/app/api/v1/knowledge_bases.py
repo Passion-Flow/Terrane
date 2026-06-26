@@ -44,6 +44,7 @@ from app.services.parse import engine as parse_engine
 from app.services.parse import video as video_parser
 from app.services.parse import vl as parse_vl
 from app.services.parse.structure import engine as structure_engine
+from app.services.learning import feedback_log
 from app.services.model_channels import get_channel, get_channel_by_model
 from app.services.model_client import ModelError, chat_stream
 
@@ -642,7 +643,29 @@ async def search_kb(kb_id: str = Path(...), q: str = "", limit: int = 10, mode: 
                                             limit=min(max(limit, 1), 50), source_id=sid,
                                             embed_model=embed_model or None, rerank_model=rerank_model or None)
     eff = hits[0]["mode"] if hits else (retrieval_service.classify(q) if mode == "auto" else mode)
-    return {"query": q, "hits": hits, "total": len(hits), "mode": eff}
+    fid = await feedback_log.log_impression(db, kb_id=kb.id, user_id=user.user_id, query=q, mode=eff, hits=hits)
+    return {"query": q, "hits": hits, "total": len(hits), "mode": eff, "feedback_id": fid}
+
+
+class FeedbackIn(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    feedback_id: str
+    clicked: list | None = None          # [{chunk_id, rank, dwell_ms}]
+    thumb: int | None = None             # -1 / 0 / 1
+    answer_accepted: bool | None = None
+
+
+@router.post("/{kb_id}/feedback")
+async def submit_feedback(body: FeedbackIn, kb_id: str = Path(...),
+                          user: CurrentUser = Depends(get_current_user),
+                          db: AsyncSession = Depends(get_db_session)) -> dict:
+    """Attach implicit/explicit feedback to a retrieval impression — the training signal for the
+    self-developed per-deployment learning-to-rank loop (no foundation-model retraining)."""
+    kb, _ = await _load(db, kb_id, user)
+    ok = await feedback_log.log_feedback(db, feedback_id=body.feedback_id, kb_id=kb.id,
+                                         clicked=body.clicked, thumb=body.thumb,
+                                         answer_accepted=body.answer_accepted)
+    return {"ok": ok}
 
 
 async def _graph_build_bg(kb_id: uuid.UUID, job_id: uuid.UUID, sources: list[tuple[str, str]]) -> None:
