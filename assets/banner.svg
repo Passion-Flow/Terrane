@@ -60,17 +60,17 @@
         <rect x="3" y="222" rx="13" width="158" height="27" fill="#0c2e34" stroke="#27a6a4" stroke-opacity="0.5"/>
         <text x="82" y="240" text-anchor="middle" fill="#8df3d6">Knowledge Graph</text></g>
       <g opacity="0"><animate attributeName="opacity" from="0" to="1" dur="0.5s" begin="1.65s" fill="freeze"/>
-        <rect x="171" y="222" rx="13" width="186" height="27" fill="#0c2e34" stroke="#27a6a4" stroke-opacity="0.5"/>
-        <text x="264" y="240" text-anchor="middle" fill="#8df3d6">Hybrid · Reasoning Retrieval</text></g>
+        <rect x="171" y="222" rx="13" width="224" height="27" fill="#0c2e34" stroke="#27a6a4" stroke-opacity="0.5"/>
+        <text x="283" y="240" text-anchor="middle" fill="#8df3d6">Hybrid · Reasoning Retrieval</text></g>
       <g opacity="0"><animate attributeName="opacity" from="0" to="1" dur="0.5s" begin="1.8s" fill="freeze"/>
-        <rect x="367" y="222" rx="13" width="120" height="27" fill="#0c2e34" stroke="#27a6a4" stroke-opacity="0.5"/>
-        <text x="427" y="240" text-anchor="middle" fill="#8df3d6">Multimodal</text></g>
+        <rect x="405" y="222" rx="13" width="116" height="27" fill="#0c2e34" stroke="#27a6a4" stroke-opacity="0.5"/>
+        <text x="463" y="240" text-anchor="middle" fill="#8df3d6">Multimodal</text></g>
       <g opacity="0"><animate attributeName="opacity" from="0" to="1" dur="0.5s" begin="1.95s" fill="freeze"/>
-        <rect x="497" y="222" rx="13" width="92" height="27" fill="#0c2e34" stroke="#27a6a4" stroke-opacity="0.5"/>
-        <text x="543" y="240" text-anchor="middle" fill="#8df3d6">Studio</text></g>
+        <rect x="531" y="222" rx="13" width="80" height="27" fill="#0c2e34" stroke="#27a6a4" stroke-opacity="0.5"/>
+        <text x="571" y="240" text-anchor="middle" fill="#8df3d6">Studio</text></g>
       <g opacity="0"><animate attributeName="opacity" from="0" to="1" dur="0.5s" begin="2.1s" fill="freeze"/>
-        <rect x="599" y="222" rx="13" width="98" height="27" fill="#0c2e34" stroke="#27a6a4" stroke-opacity="0.5"/>
-        <text x="648" y="240" text-anchor="middle" fill="#8df3d6">Memory</text></g>
+        <rect x="621" y="222" rx="13" width="92" height="27" fill="#0c2e34" stroke="#27a6a4" stroke-opacity="0.5"/>
+        <text x="667" y="240" text-anchor="middle" fill="#8df3d6">Memory</text></g>
     </g>
   </g>
 
