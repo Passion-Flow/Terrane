@@ -9,6 +9,7 @@ and chunker stay consistent. Returns None when the PDF has no usable text layer 
 from __future__ import annotations
 
 import io
+import re
 
 import structlog
 
@@ -144,3 +145,42 @@ def structure_markdown_pages(pdf_bytes: bytes, pages: set[int]) -> str | None:
     _emit(root, page_of, out, seen_page=[0])
     md = "\n".join(s for s in out if s is not None).strip()
     return md or None
+
+
+_PAGE_MARKER = re.compile(r"^<!--\s*Page\s+(\d+)\s*-->\s*$", re.M)
+
+
+def splice_figures(md: str, figures: dict[int, list[str]]) -> str:
+    """Insert each page's figure placeholders IN PLACE in structured Markdown, right after that page's
+    `<!-- Page N -->` marker (the page's reading-order start). `figures` = {page_no: [markdown_snippet, ...]}.
+
+    The structure engine emits a `<!-- Page N -->` marker at every page change, so splicing after the marker
+    puts the figure at the top of its page's content (the figure's reading-order position on a digital page is
+    not recoverable from native text alone, so page-top is the faithful, deterministic placement). Each snippet
+    is a self-contained `![caption](ref)` paragraph (blank line around it) so chunking keeps the caption whole
+    and never splits it from neighbouring text. Pages with no marker (or no figures) are unchanged."""
+    if not figures:
+        return md
+    placed: set[int] = set()
+
+    def _ins(m) -> str:
+        pno = int(m.group(1))
+        snippets = figures.get(pno)
+        if not snippets or pno in placed:
+            return m.group(0)
+        placed.add(pno)
+        # Trailing blank line is REQUIRED: the structure engine joins a page's text boxes with single newlines,
+        # so without a blank line after the last snippet the page's first text line would glue onto the
+        # placeholder's paragraph and the `![...]` marker would no longer be its own (atomic) chunk paragraph.
+        return m.group(0) + "\n\n" + "\n\n".join(snippets) + "\n"
+
+    out = _PAGE_MARKER.sub(_ins, md)
+    # Any figures whose page had no marker (page produced no text) -> append a small per-page block so the
+    # figure + caption are never dropped (still searchable + viewable), tagged with their page.
+    leftover = [p for p in sorted(figures) if p not in placed and figures[p]]
+    if leftover:
+        tail = []
+        for p in leftover:
+            tail.append(f"\n<!-- Page {p} -->\n\n" + "\n\n".join(figures[p]))
+        out = out + "\n" + "\n".join(tail)
+    return out

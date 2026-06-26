@@ -41,6 +41,7 @@ from app.services import (
     studio_service, wiki_service,
 )
 from app.services.parse import engine as parse_engine
+from app.services.parse import figures as parse_figures
 from app.services.parse import router as parse_router
 from app.services.parse import scanned_table as parse_scanned_table
 from app.services.parse import video as video_parser
@@ -346,8 +347,13 @@ async def upload_source(kb_id: str = Path(...), file: UploadFile = File(...),
     return {"id": str(raw.id), "title": raw.title, "status": raw.status}
 
 
-async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tier: str) -> str | None:
-    """Parse a file by tier -> Markdown text. None/empty string = failure."""
+async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tier: str,
+                         sid: uuid.UUID | None = None) -> str | None:
+    """Parse a file by tier -> Markdown text. None/empty string = failure.
+
+    `sid` (the source's id) is threaded to the PDF path so detected figures can be cropped, stored under
+    storage.figure_key(sid, ...) and served like page images. None (e.g. the in-memory eval that creates no
+    source row) -> figure crops are skipped (no servable target), text parsing is unchanged."""
     if mime in video_parser.VIDEO_MIMES:
         with tempfile.NamedTemporaryFile(suffix=ext or ".mp4", delete=False) as tf:
             tf.write(data)
@@ -361,7 +367,7 @@ async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tie
             os.unlink(tmp)
     if mime in parse_engine.SUPPORTED:
         if mime == "application/pdf":
-            return await _parse_pdf_by_tier(db, data, ext, tier)
+            return await _parse_pdf_by_tier(db, data, ext, tier, sid)
         # Office (docx/xlsx/pptx): native structure -> 0-error lexical engine (no PDF page routing).
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
             tf.write(data)
@@ -379,7 +385,29 @@ async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tie
         return None
 
 
-async def _parse_pdf_by_tier(db: AsyncSession, data: bytes, ext: str, tier: str) -> str | None:
+async def _enrich_digital_figures(db: AsyncSession, data: bytes, md: str, pages: set[int],
+                                  sid: uuid.UUID | None) -> str:
+    """Detect figures on the digital pages, crop+store+caption (label-only) them, and splice each in place at
+    its page's reading-order position. Best-effort: on any failure the structured Markdown is returned
+    unchanged (figures are an enrichment, never a parse blocker). No-op without `sid` (no servable target)."""
+    if sid is None:
+        return md
+    try:
+        figs = await parse_figures.enrich_figures(db, data, sid, pages)
+    except Exception as e:  # noqa: BLE001
+        log.warning("figure_enrich_failed", error=str(e))
+        return md
+    if not figs:
+        return md
+    try:
+        return structure_engine.splice_figures(md, figs)
+    except Exception as e:  # noqa: BLE001
+        log.warning("figure_splice_failed", error=str(e))
+        return md
+
+
+async def _parse_pdf_by_tier(db: AsyncSession, data: bytes, ext: str, tier: str,
+                             sid: uuid.UUID | None = None) -> str | None:
     """PER-PAGE routed PDF parse. Each page is classified (parse.router) and sent to the precise handler for
     its class, then the per-page outputs are assembled in page order:
 
@@ -392,9 +420,10 @@ async def _parse_pdf_by_tier(db: AsyncSession, data: bytes, ext: str, tier: str)
       * SCANNED prose page          -> parse_vl.parse_pdf_fullvl (whole-page VL layout OCR), only on tier != fast.
 
     tier=fast = model-free (digital pages via the structure engine; scanned pages get deterministic plain OCR
-    via the scanned-table path's gridless fallback, never a VL call). high/standard may ENRICH digital pages
-    with embedded-image descriptions (enhance_pdf) but never replace their native text. Falls back to the old
-    whole-document behavior if routing can't open the PDF, so no PDF regresses.
+    via the scanned-table path's gridless fallback, never a VL call). high/standard ENRICH digital pages with
+    in-place figure crops + label-only captions (parse.figures, spliced at each figure's page position) but
+    never replace their native text. Falls back to the old whole-document behavior if routing can't open the
+    PDF, so no PDF regresses.
     """
     route = parse_router.route_pdf(data)
     if not route.pages:
@@ -416,11 +445,8 @@ async def _parse_pdf_by_tier(db: AsyncSession, data: bytes, ext: str, tier: str)
         except Exception as e:  # noqa: BLE001
             log.warning("structure_parse_failed", error=str(e))
             text = None
-        if text and tier == "high":  # enrich: embedded-image descriptions (does NOT replace native text)
-            try:
-                text = await parse_vl.enhance_pdf(db, data, text)
-            except Exception as e:  # noqa: BLE001
-                log.warning("vl_enhance_failed", error=str(e))
+        if text and tier != "fast":  # in-place figure crops + label-only captions (digital pages)
+            text = await _enrich_digital_figures(db, data, text, route.digital_pages, sid)
         return text or await _parse_pdf_legacy(db, data, ext, tier)
 
     # MIXED PDF: route each page class to its handler and assemble in page order.
@@ -435,13 +461,8 @@ async def _parse_pdf_by_tier(db: AsyncSession, data: bytes, ext: str, tier: str)
         log.warning("structure_parse_failed", error=str(e))
         dtext = None
     if dtext:
-        if tier == "high":  # enrich: embedded-image descriptions on digital pages (does NOT touch native text)
-            try:
-                dsub = parse_router.subset_pdf(data, route.digital_pages)
-                if dsub:
-                    dtext = await parse_vl.enhance_pdf(db, dsub, dtext)
-            except Exception as e:  # noqa: BLE001
-                log.warning("vl_enhance_failed", error=str(e))
+        if tier != "fast":  # in-place figure crops + label-only captions on the digital pages
+            dtext = await _enrich_digital_figures(db, data, dtext, route.digital_pages, sid)
         parts.append((min(route.digital_pages), dtext))
 
     # SCANNED ruled-table pages -> deterministic CV scanned-table path. Subset to just those pages so the
@@ -527,7 +548,7 @@ async def _ingest_bg(rid: uuid.UUID, user_id: uuid.UUID, data: bytes, mime: str,
             raw = await db.get(RawSource, rid)
             if raw is None:
                 return
-            text = await _parse_by_tier(db, data, mime, ext, tier)
+            text = await _parse_by_tier(db, data, mime, ext, tier, sid=rid)
             if not text or not text.strip():
                 raw.status, raw.error = "failed", "parse_empty"
                 await db.commit()
@@ -686,6 +707,33 @@ async def _ondemand_page(db: AsyncSession, sid: uuid.UUID, page_no: int) -> byte
     except Exception:  # noqa: BLE001
         pass
     return webp
+
+
+@router.get("/{kb_id}/sources/{source_id}/figure/{page_no}/{idx}")
+async def get_source_figure(kb_id: str = Path(...), source_id: str = Path(...),
+                            page_no: int = Path(..., ge=1), idx: int = Path(..., ge=0),
+                            user: CurrentUser = Depends(get_current_user),
+                            db: AsyncSession = Depends(get_db_session)) -> StreamingResponse:
+    """Serve a stored figure crop (WebP) — the in-place `![caption](figure/{page}/{idx})` reference in the
+    parsed Markdown resolves here. Same immutable-WebP serving as page images; the crop IS the figure/diagram
+    (kept as an image, never serialized to false connections). 404 if the crop was never produced."""
+    import io
+
+    kb, _ = await _load(db, kb_id, user)
+    try:
+        sid = uuid.UUID(source_id)
+    except ValueError:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    r = await db.get(RawSource, sid)
+    if r is None or r.kb_id != kb.id:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    try:
+        data = await storage.get_adapter().download(storage.figure_key(sid, page_no, idx))
+    except Exception:  # noqa: BLE001
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "figure"})
+    return StreamingResponse(io.BytesIO(data), media_type="image/webp",
+                             headers={"Content-Disposition": "inline",
+                                      "Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @router.get("/{kb_id}/sources/{source_id}/original")

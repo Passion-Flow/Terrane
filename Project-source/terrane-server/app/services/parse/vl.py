@@ -24,7 +24,6 @@ log = structlog.get_logger("terrane.parse.vl")
 _MAX_CALLS = 24        # Max VL calls per document (caps latency/cost on large documents)
 _CONCURRENCY = 5
 _SCANNED_TEXT_MIN = 24  # If a page's lexical text is below this -> treat it as a scanned/image page and OCR the whole page
-_MIN_IMG_BYTES = 6000   # Skip small decorative icons
 _MAX_VL_PAGES = 80      # Page-count cap for full-page VL in high-precision mode (cost/latency guardrail)
 _VL_SCALE = 150 / 72.0  # pypdfium2 render scale ~= 150 DPI for the page images sent to the vision model
 _TABLE_BATCH = 4        # Pages per stitched-table VL call (1 call sees several adjacent pages so it can join page-spanning rows)
@@ -34,7 +33,21 @@ _OCR_PROMPT = (
     "把这一页文档完整、忠实地转写为 Markdown。保留标题层级、列表、表格（用 Markdown 表格语法）、"
     "段落顺序；行内公式用 $...$、独立公式用 $$...$$；不要臆造或翻译，无法辨认处略过。只输出内容本身。"
 )
-_IMG_PROMPT = "用一句中文客观描述这张图片的主要内容（图表/示意图/流程图/照片/截图等及其关键信息），便于检索。"
+# Label-ONLY figure prompt (roadmap §0 + §3.1 step 3 / fixes G2+G3). VLMs read node labels reliably but get
+# edges wrong (flowchart benchmarks: edge F1 < 0.30), so a topology diagram (block/circuit/pin/signal) is kept
+# as an IMAGE crop and described by its *readable labels only* — NEVER as "structured connections" (which would
+# index hallucinated wiring). For a recoverable chart (bar/line/pie) we ask for the data points instead. Output
+# stays a short Chinese list so it chunks as compact, searchable text alongside the placed crop.
+_FIGURE_LABEL_PROMPT = (
+    "这是文档里的一张图（框图/电路/原理/引脚/信号线/示意图/产品图/图表等）。请输出一段**简洁中文**说明，"
+    "仅用于检索，规则：\n"
+    "1) 先一句话说明这是什么图、主体是什么；\n"
+    "2) 然后**逐项列出图中每一个你能直接读到的可见文字标签**：命名的块/部件名、引脚名/编号、网络/信号名、"
+    "图标题、型号、单位、坐标轴名等，按出现顺序列出，原样照抄不翻译不臆造；\n"
+    "3) **绝对不要**推断或编造你看不清的连接关系、箭头方向、走线、上下游关系——只描述能读到的文字，不描述拓扑连接；\n"
+    "4) 若是柱/线/饼等数据图表，则尽量读出坐标轴、图例与可辨认的数据点数值。\n"
+    "只输出这段说明本身，不要解释、不要 Markdown 标题、不要代码围栏。"
+)
 # High-precision "layout parsing" prompt: convert a whole page into high-fidelity Markdown, keeping tables/formulas/figures (comparable to Docling/MinerU/QwenVL-HTML).
 _LAYOUT_PROMPT = (
     "你是文档版面解析器。把这一页**完整、忠实**地转写为结构化 Markdown：\n"
@@ -417,7 +430,15 @@ async def parse_pdf_fullvl(db: AsyncSession, pdf_bytes: bytes) -> str | None:
 
 
 async def enhance_pdf(db: AsyncSession, pdf_bytes: bytes, base_text: str) -> str:
-    """VL-enhance a PDF (scanned-page OCR + image descriptions) and return the enhanced Markdown. Returns unchanged if there is no vl channel."""
+    """VL-enhance a PDF by OCR'ing any page that has NO usable text layer (a scanned page sitting inside an
+    otherwise-digital PDF, used by the whole-document legacy fallback). Returns unchanged if there is no vl
+    channel.
+
+    Embedded-figure description is NO LONGER done here: it used to caption raster images ≥6KB and append a flat
+    `## Image Descriptions` list at the END of the document (G3 — blind to vector diagrams, capped at 24,
+    detached from context). Figures are now handled by `parse.figures.enrich_figures`, which crops + stores +
+    label-only-captions both raster AND vector figures and splices each `![caption](ref)` IN PLACE at its
+    reading-order position. So this function keeps only the scanned-page-OCR backstop."""
     if await get_channel(db, "vl") is None:
         return base_text
     import pdfplumber
@@ -433,7 +454,7 @@ async def enhance_pdf(db: AsyncSession, pdf_bytes: bytes, base_text: str) -> str
         doc.close()
         return base_text
 
-    specs: list[dict] = []  # {kind: ocr|img, page, b64}
+    specs: list[dict] = []  # {page, b64}
     calls = 0
     try:
         for i in range(len(doc)):
@@ -446,24 +467,8 @@ async def enhance_pdf(db: AsyncSession, pdf_bytes: bytes, base_text: str) -> str
                     pil = page.render(scale=_VL_SCALE).to_pil()
                     buf = io.BytesIO()
                     pil.save(buf, format="JPEG")
-                    specs.append({"kind": "ocr", "page": i + 1,
-                                  "b64": base64.b64encode(buf.getvalue()).decode()})
+                    specs.append({"page": i + 1, "b64": base64.b64encode(buf.getvalue()).decode()})
                     calls += 1
-                else:
-                    for obj in page.get_objects(filter=(pdfium.raw.FPDF_PAGEOBJ_IMAGE,)):
-                        if calls >= _MAX_CALLS:
-                            break
-                        try:
-                            ipil = obj.get_bitmap().to_pil()
-                        except Exception:  # noqa: BLE001
-                            continue
-                        ibuf = io.BytesIO()
-                        ipil.convert("RGB").save(ibuf, format="JPEG")
-                        raw = ibuf.getvalue()
-                        if len(raw) < _MIN_IMG_BYTES:
-                            continue
-                        specs.append({"kind": "img", "page": i + 1, "b64": base64.b64encode(raw).decode()})
-                        calls += 1
             finally:
                 page.close()
     finally:
@@ -476,21 +481,17 @@ async def enhance_pdf(db: AsyncSession, pdf_bytes: bytes, base_text: str) -> str
     sem = asyncio.Semaphore(_CONCURRENCY)
 
     async def _run(spec: dict) -> dict:
-        prompt = _OCR_PROMPT if spec["kind"] == "ocr" else _IMG_PROMPT
         async with sem:
             try:
-                spec["text"] = await model_client.vl_caption(db, spec["b64"], prompt=prompt)
+                spec["text"] = await model_client.vl_caption(db, spec["b64"], prompt=_OCR_PROMPT)
             except Exception:  # noqa: BLE001
                 spec["text"] = None
         return spec
 
     done = await asyncio.gather(*[_run(s) for s in specs])
-    ocr = [f"\n### Page {s['page']}\n{s['text'].strip()}" for s in done if s["kind"] == "ocr" and s.get("text")]
-    img = [f"- Page {s['page']} image: {s['text'].strip()}" for s in done if s["kind"] == "img" and s.get("text")]
+    ocr = [f"\n### Page {s['page']}\n{s['text'].strip()}" for s in done if s.get("text")]
     out = base_text
     if ocr:
         out += "\n\n## Scanned Page Content (model-recognized)" + "".join(ocr)
-    if img:
-        out += "\n\n## Image Descriptions (model-recognized)\n" + "\n".join(img)
-    log.info("vl_enhance_done", ocr=len(ocr), img=len(img))
+    log.info("vl_enhance_done", ocr=len(ocr))
     return out

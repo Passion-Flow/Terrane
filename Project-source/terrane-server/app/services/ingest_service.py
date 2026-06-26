@@ -27,6 +27,11 @@ _RECALL = 20  # Per-path recall cap
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 
+# A figure placeholder paragraph `![caption](ref)` (the parser's in-place figure marker). It is ATOMIC during
+# chunking: the caption text must never be window-split away from its image ref (that would break the markdown
+# AND detach a figure's searchable caption from the figure). Matches a paragraph that is a single image marker.
+_FIG_PLACEHOLDER = re.compile(r"^!\[[^\]]*\]\([^)]*\)$")
+
 # A self-contained HTML table; [\s\S] so the rows may span newlines. Greedy is fine — one table per match here.
 _HTML_TABLE = re.compile(r"<table\b[^>]*>[\s\S]*?</table>", re.I)
 _MD_PIPE_ROW = re.compile(r"^\s*\|.*\|\s*$")            # a markdown pipe-table row line: | a | b |
@@ -154,7 +159,18 @@ def chunk_text(body: str, size: int = _CHUNK_CHARS) -> list[str]:
                 chunks.append(prefix + b)
 
         for p in paras:
-            if len(buf) + len(p) + 1 <= budget:
+            if _FIG_PLACEHOLDER.match(p.strip()):
+                # A figure placeholder is ATOMIC: keep it whole and never window-split it (that would break the
+                # `![caption](ref)` markdown and detach the figure's searchable caption). Attach it to the
+                # current buffer if it fits (keeps the figure with its nearby context), else emit it alone.
+                if len(buf) + len(p) + 1 <= budget:
+                    buf = f"{buf}\n{p}" if buf else p
+                else:
+                    flush(buf)
+                    buf = p if len(p) <= budget else ""
+                    if not buf:
+                        chunks.append(prefix + p)   # caption alone already > budget -> one (oversized) chunk
+            elif len(buf) + len(p) + 1 <= budget:
                 buf = f"{buf}\n{p}" if buf else p
             elif _is_table_block(p):
                 # A table is ATOMIC: never merge it with prose (would risk a mid-tag cut) and never window-split

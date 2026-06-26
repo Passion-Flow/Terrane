@@ -76,9 +76,14 @@ async def rerank(db: AsyncSession, query: str, documents: list[str], top_n: int 
     return [(x["index"], float(x["relevance_score"])) for x in results]
 
 
-async def vl_caption(db: AsyncSession, image_b64: str, *, prompt: str = "详细客观地描述这一帧画面的主要内容(物体/文字/场景/动作)。") -> str | None:
-    """Multimodal: describe a single image frame (base64). The channel (base_url/key/model) is taken entirely from the admin "Model channels" kind=vl. No channel -> None."""
-    ch = await get_channel(db, "vl")
+async def vl_caption(db: AsyncSession, image_b64: str, *, prompt: str = "详细客观地描述这一帧画面的主要内容(物体/文字/场景/动作)。",
+                     channel=None) -> str | None:
+    """Multimodal: describe a single image frame (base64). The channel (base_url/key/model) is taken entirely from the admin "Model channels" kind=vl. No channel -> None.
+
+    Pass `channel` to use an ALREADY-resolved kind=vl channel and skip the `get_channel(db)` query — required when
+    several captions run concurrently over ONE AsyncSession (a per-call DB query on a shared session is not safe);
+    the caller resolves the channel once and threads it in."""
+    ch = channel if channel is not None else await get_channel(db, "vl")
     if ch is None or not ch.base_url or not ch.api_key or not ch.model:
         return None
     import httpx

@@ -48,6 +48,15 @@ def page_key(raw_source_id: uuid.UUID | str, page_no: int) -> str:
     return f"pages/{raw_source_id}/{page_no}.webp"
 
 
+def figure_key(raw_source_id: uuid.UUID | str, page_no: int, idx: int) -> str:
+    """Object key for the WebP crop of figure `idx` (0-based, in reading order) on page `page_no` (1-based).
+
+    Parallels `page_key`: a figure crop is served the same way as a page image (same adapter, same
+    immutable-WebP serving route), so a `![caption](.../figure/{page}/{idx})` reference resolves to the stored
+    crop. The crop is the topology/artwork itself (kept as an IMAGE, never serialized to false connections)."""
+    return f"figures/{raw_source_id}/{page_no}-{idx}.webp"
+
+
 async def delete_source_objects(raw_source_id: uuid.UUID | str) -> None:
     """Delete all objects for a source in object storage (original + all page images). Best-effort, never raises."""
     a = get_adapter()
@@ -55,11 +64,12 @@ async def delete_source_objects(raw_source_id: uuid.UUID | str) -> None:
         await a.delete(original_key(raw_source_id))
     except Exception:  # noqa: BLE001
         pass
-    try:
-        for o in await a.list(f"pages/{raw_source_id}/"):
-            try:
-                await a.delete(o.key)
-            except Exception:  # noqa: BLE001
-                pass
-    except Exception:  # noqa: BLE001
-        pass
+    for prefix in (f"pages/{raw_source_id}/", f"figures/{raw_source_id}/"):
+        try:
+            for o in await a.list(prefix):
+                try:
+                    await a.delete(o.key)
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception:  # noqa: BLE001
+            pass
