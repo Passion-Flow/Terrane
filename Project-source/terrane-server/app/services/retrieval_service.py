@@ -70,6 +70,50 @@ def rrf_fuse(lists: list[list[dict]], k: int = RRF_K) -> list[dict]:
     return sorted(fused.values(), key=lambda d: d["_rrf"], reverse=True)
 
 
+_PRF_TOP = 5           # pseudo-relevance feedback uses the top-k initial hits as the "relevant" set
+_PRF_ALPHA = 1.0       # Rocchio: weight on the original query vector
+_PRF_BETA = 0.75       # Rocchio: weight on the feedback centroid
+
+
+def _parse_emb(s: str) -> list[float]:
+    return [float(x) for x in s.strip().strip("[]").split(",") if x]
+
+
+def _norm(v: list[float]) -> list[float]:
+    n = sum(x * x for x in v) ** 0.5 or 1.0
+    return [x / n for x in v]
+
+
+async def recall_vector_prf(db: AsyncSession, kb_id: uuid.UUID, query: str, limit: int = 20,
+                            source_ids: list[uuid.UUID] | None = None, embed_model: str | None = None) -> list[dict]:
+    """Vector recall with self-developed Rocchio pseudo-relevance feedback: run an initial vector search,
+    blend the centroid of the top hits back into the query vector (q' = α·q + β·centroid), then re-search.
+    Zero LLM, no training, no new model — just reuses the embeddings already in the DB; classic, robust
+    recall boost. Falls back to a plain vector recall if anything is unavailable."""
+    try:
+        qvec = await model_client.embed_query(db, query, model=embed_model)
+    except ModelError:
+        qvec = None
+    if not qvec:
+        return []
+    first = await ingest_service.recall_by_vector(db, kb_id=kb_id, vec=qvec, limit=max(limit, _PRF_TOP),
+                                                  source_ids=source_ids, want_embedding=True)
+    embs = [_parse_emb(h["_emb"]) for h in first[:_PRF_TOP] if h.get("_emb")]
+    if not embs:  # no feedback vectors -> plain recall
+        return [{k: v for k, v in h.items() if k != "_emb"} for h in first[:limit]]
+    dim = len(qvec)
+    centroid = [0.0] * dim
+    for e in embs:
+        en = _norm(e)
+        for i in range(min(dim, len(en))):
+            centroid[i] += en[i]
+    centroid = [c / len(embs) for c in centroid]
+    qn = _norm(qvec)
+    expanded = _norm([_PRF_ALPHA * qn[i] + _PRF_BETA * centroid[i] for i in range(dim)])
+    second = await ingest_service.recall_by_vector(db, kb_id=kb_id, vec=expanded, limit=limit, source_ids=source_ids)
+    return second
+
+
 async def cross_doc_select(db: AsyncSession, kb_id: uuid.UUID, query: str, n: int = _CAND_DOCS) -> list[uuid.UUID]:
     """Pick the top-N candidate documents across the whole KB via hybrid recall, RRF-aggregated by source.
     This is the step PageIndex has no answer for (it reasons over one tree at a time)."""
@@ -213,10 +257,27 @@ async def recall_semantic(db: AsyncSession, kb_id: uuid.UUID, query: str, limit:
 
 # ---------------------------------------------------------------- top-level entry
 
+_CRAG_ACCEPT = 0.30    # if the best reranked score is below this, the retrieval is "weak" -> one correction
+
+
+async def _rewrite_query(db: AsyncSession, q: str) -> str | None:
+    """Self-developed corrective step: rewrite a query that retrieved poorly into a clearer search query."""
+    try:
+        out = await model_client.chat_complete(db, [{"role": "user", "content":
+            "把下面的问题改写成一句更利于检索的查询(同义扩展/澄清指代,保留原意,只输出改写结果):\n" + q[:300]}],
+            temperature=0.3, max_tokens=80)
+        out = (out or "").strip().strip('"').splitlines()[0][:300]
+        return out or None
+    except ModelError:
+        return None
+
+
 async def retrieve(db: AsyncSession, *, kb_id: uuid.UUID, query: str, mode: str = "auto", limit: int = 8,
                    source_id: uuid.UUID | None = None, embed_model: str | None = None,
-                   rerank_model: str | None = None) -> list[dict]:
-    """Unified retrieval. mode: fast | deep | auto. Returns ranked chunk dicts with optional citation path."""
+                   rerank_model: str | None = None, _allow_correct: bool = True) -> list[dict]:
+    """Unified retrieval. mode: fast | deep | auto. Returns ranked chunk dicts with optional citation path.
+    Deep mode runs a self-developed corrective loop (CRAG-style): if the reranked top score is weak, the
+    query is rewritten once and re-retrieved, keeping whichever result is stronger."""
     q = query.strip()
     if not q:
         return []
@@ -234,7 +295,8 @@ async def retrieve(db: AsyncSession, *, kb_id: uuid.UUID, query: str, mode: str 
 
     # Deep path: cross-doc routing → R1..R5 → RRF → rerank → citations.
     source_ids = [source_id] if source_id else await cross_doc_select(db, kb_id, q, _CAND_DOCS)
-    r1 = await ingest_service.recall_vector(db, kb_id=kb_id, query=q, limit=20, source_ids=source_ids or None, embed_model=embed_model)
+    # R1 = vector recall with Rocchio pseudo-relevance feedback (self-developed, zero-LLM recall boost)
+    r1 = await recall_vector_prf(db, kb_id, q, limit=20, source_ids=source_ids or None, embed_model=embed_model)
     r2 = await ingest_service.recall_lexical(db, kb_id=kb_id, query=q, limit=20, source_ids=source_ids or None)
     r3 = await tree_service.tree_search(db, kb_id=kb_id, query=q, source_ids=source_ids) if source_ids else []
     r4 = await graph_service.multihop(db, kb_id, q)
@@ -269,5 +331,15 @@ async def retrieve(db: AsyncSession, *, kb_id: uuid.UUID, query: str, mode: str 
         h.pop("_rrf", None)
         h.pop("_tree_rank", None)
         deduped.append(h)
+    # CRAG corrective loop: weak top score (with calibrated rerank, full-KB search) -> rewrite + retry once.
+    if (_allow_correct and reranked and not source_id and deduped
+            and deduped[0].get("score", 0) < _CRAG_ACCEPT):
+        rq = await _rewrite_query(db, q)
+        if rq and rq.strip() and rq.strip() != q:
+            alt = await retrieve(db, kb_id=kb_id, query=rq, mode="deep", limit=limit,
+                                 embed_model=embed_model, rerank_model=rerank_model, _allow_correct=False)
+            if alt and alt[0].get("score", 0) > deduped[0].get("score", 0):
+                log.info("crag_corrected", kb=str(kb_id), gain=alt[0]["score"] - deduped[0]["score"])
+                return alt
     await attach_citations(db, deduped)
     return deduped[:limit]

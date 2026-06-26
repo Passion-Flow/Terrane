@@ -43,6 +43,7 @@ from app.services import (
 from app.services.parse import engine as parse_engine
 from app.services.parse import video as video_parser
 from app.services.parse import vl as parse_vl
+from app.services.parse.structure import engine as structure_engine
 from app.services.model_channels import get_channel, get_channel_by_model
 from app.services.model_client import ModelError, chat_stream
 
@@ -361,7 +362,20 @@ async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tie
                 text = await parse_vl.parse_pdf_fullvl(db, data)
             except Exception as e:  # noqa: BLE001
                 log.warning("vl_fullparse_failed", error=str(e))
-        if not text:  # fast/standard, or high-fidelity fallback -> lexical
+        if not text and mime == "application/pdf":
+            # Self-developed structure engine: digital PDFs -> exact native text + XY-Cut++ reading order
+            # + font/numbering hierarchy (no model, no API, no OCR error). None for scanned PDFs.
+            try:
+                text = await run_in_threadpool(structure_engine.structure_markdown, data)
+            except Exception as e:  # noqa: BLE001
+                log.warning("structure_parse_failed", error=str(e))
+                text = None
+            if text and tier != "fast":  # Standard: VL still adds embedded-image / scanned-page descriptions
+                try:
+                    text = await parse_vl.enhance_pdf(db, data, text)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("vl_enhance_failed", error=str(e))
+        if not text:  # non-PDF, scanned PDF, or structure failed -> lexical
             with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
                 tf.write(data)
                 tmp = tf.name

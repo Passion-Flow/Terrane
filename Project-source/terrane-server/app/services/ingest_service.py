@@ -25,32 +25,50 @@ _OVERLAP = 60
 _RECALL = 20  # Per-path recall cap
 
 
+_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
+
+
 def chunk_text(body: str, size: int = _CHUNK_CHARS) -> list[str]:
     """Aggregate paragraphs into ~size-char chunks (light overlap). Heading-aware: a chunk never crosses a
-    Markdown heading boundary, so each chunk falls within one section — this gives Retrieval 2.0 clean
-    chunk→tree-node (document > section > page) attribution."""
+    Markdown heading boundary, so each chunk falls within one section — clean chunk→tree-node attribution.
+    Breadcrumb injection: each chunk is prefixed with its section path (`[A › B › C]`), which lifts both
+    dense and lexical retrieval by giving every chunk its document context (self-developed enrichment)."""
     # Split at Markdown headings first (keeps the heading at the start of its segment).
     segments = [s for s in re.split(r"(?=^#{1,6}\s)", body, flags=re.M) if s.strip()]
     if not segments:
         segments = [body]
     chunks: list[str] = []
+    path: list[tuple[int, str]] = []   # running heading stack -> breadcrumb
     for seg in segments:
+        first = seg.lstrip().split("\n", 1)[0]
+        m = _HEADING.match(first)
+        if m:
+            level, title = len(m.group(1)), m.group(2).strip()
+            while path and path[-1][0] >= level:
+                path.pop()
+            path.append((level, title))
+        crumb = " › ".join(t for _, t in path)
+        prefix = f"[{crumb}]\n" if crumb else ""
+        budget = size - len(prefix)
         paras = [p.strip() for p in re.split(r"\n\s*\n", seg) if p.strip()]
         buf = ""
+
+        def flush(b: str):
+            if b:
+                chunks.append(prefix + b)
+
         for p in paras:
-            if len(buf) + len(p) + 1 <= size:
+            if len(buf) + len(p) + 1 <= budget:
                 buf = f"{buf}\n{p}" if buf else p
             else:
-                if buf:
-                    chunks.append(buf)
-                if len(p) > size:
-                    for i in range(0, len(p), size - _OVERLAP):
-                        chunks.append(p[i:i + size])
+                flush(buf)
+                if len(p) > budget:
+                    for i in range(0, len(p), max(64, budget - _OVERLAP)):
+                        chunks.append(prefix + p[i:i + budget])
                     buf = ""
                 else:
                     buf = p
-        if buf:
-            chunks.append(buf)
+        flush(buf)
     return chunks or ([body.strip()] if body.strip() else [])
 
 
@@ -160,6 +178,29 @@ async def recall_lexical(db: AsyncSession, *, kb_id: uuid.UUID, query: str, limi
              "source_title": r["src"], "source_id": str(r["sid"]), "score": float(r["sc"] or 0)} for r in rows]
 
 
+async def recall_by_vector(db: AsyncSession, *, kb_id: uuid.UUID, vec: list[float], limit: int = _RECALL,
+                           source_ids: list[uuid.UUID] | None = None, want_embedding: bool = False) -> list[dict]:
+    """Vector recall given an explicit query vector (HNSW cosine). want_embedding -> include each chunk's
+    stored vector (used by Rocchio pseudo-relevance feedback)."""
+    clause, extra = _src_clause(source_ids)
+    emb_col = ", c.embedding::text AS emb" if want_embedding else ""
+    rows = (await db.execute(text(f"""
+        SELECT c.id, c.content, c.ord, r.title AS src, r.id AS sid,
+               1 - (c.embedding <=> (:v)::halfvec) AS sc{emb_col}
+        FROM chunks c JOIN raw_sources r ON r.id = c.raw_source_id
+        WHERE c.kb_id = :kb AND c.embedding IS NOT NULL{clause}
+        ORDER BY c.embedding <=> (:v)::halfvec LIMIT :n
+    """), {"kb": str(kb_id), "v": _vec_literal(vec), "n": limit, **extra})).mappings().all()
+    out = []
+    for r in rows:
+        d = {"chunk_id": str(r["id"]), "content": r["content"], "ord": r["ord"],
+             "source_title": r["src"], "source_id": str(r["sid"]), "score": float(r["sc"] or 0)}
+        if want_embedding and r.get("emb"):
+            d["_emb"] = r["emb"]
+        out.append(d)
+    return out
+
+
 async def recall_vector(db: AsyncSession, *, kb_id: uuid.UUID, query: str, limit: int = _RECALL,
                         source_ids: list[uuid.UUID] | None = None, embed_model: str | None = None) -> list[dict]:
     """Vector recall (HNSW cosine), ranked. Empty if there is no embed channel. (R1)"""
@@ -173,16 +214,7 @@ async def recall_vector(db: AsyncSession, *, kb_id: uuid.UUID, query: str, limit
         return []
     if not qvec:
         return []
-    clause, extra = _src_clause(source_ids)
-    rows = (await db.execute(text(f"""
-        SELECT c.id, c.content, c.ord, r.title AS src, r.id AS sid,
-               1 - (c.embedding <=> (:v)::halfvec) AS sc
-        FROM chunks c JOIN raw_sources r ON r.id = c.raw_source_id
-        WHERE c.kb_id = :kb AND c.embedding IS NOT NULL{clause}
-        ORDER BY c.embedding <=> (:v)::halfvec LIMIT :n
-    """), {"kb": str(kb_id), "v": _vec_literal(qvec), "n": limit, **extra})).mappings().all()
-    return [{"chunk_id": str(r["id"]), "content": r["content"], "ord": r["ord"],
-             "source_title": r["src"], "source_id": str(r["sid"]), "score": float(r["sc"] or 0)} for r in rows]
+    return await recall_by_vector(db, kb_id=kb_id, vec=qvec, limit=limit, source_ids=source_ids)
 
 
 async def search_chunks(db: AsyncSession, *, kb_id: uuid.UUID, query: str, limit: int = 10,
