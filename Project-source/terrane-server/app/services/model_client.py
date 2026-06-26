@@ -24,6 +24,10 @@ async def _pick(db, kind: str, model: str | None):
 log = structlog.get_logger("terrane.model")
 
 EMBED_DIM = 1024  # text-embedding-v4 defaults to 1024, aligned with chunks.embedding halfvec(1024)
+# Per-request embedding batch. DashScope text-embedding-v* caps `input` at 10 items per request (a larger
+# value returns "batch size ... should not be larger than 10"), so this stays 10. The G7 speedup comes from
+# the BULK multi-row vector write in ingest_service._embed_chunks (one UPDATE per batch, not one per chunk),
+# not from a bigger embed request.
 _EMBED_BATCH = 10
 
 

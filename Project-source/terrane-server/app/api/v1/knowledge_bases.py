@@ -44,6 +44,7 @@ from app.services.parse import engine as parse_engine
 from app.services.parse import figures as parse_figures
 from app.services.parse import router as parse_router
 from app.services.parse import scanned_table as parse_scanned_table
+from app.services.parse import stream as parse_stream
 from app.services.parse import video as video_parser
 from app.services.parse import vl as parse_vl
 from app.services.parse.structure import engine as structure_engine
@@ -539,22 +540,110 @@ async def _parse_pdf_legacy(db: AsyncSession, data: bytes, ext: str, tier: str) 
     return text
 
 
+async def _ensure_ingest_job(db: AsyncSession, raw: RawSource, *, file_sha: str, total_pages: int,
+                             batch_size: int) -> uuid.UUID:
+    """Get-or-create the DURABLE parse job row for a file source (it is the source of truth a restart resumes
+    from). Reuses an existing non-done job for this source (resume) so a re-run continues its checkpoint instead
+    of forking a second job; otherwise creates a fresh `running` job. Bumps `attempts` each entry."""
+    existing = (await db.execute(text(
+        "SELECT id FROM ingest_jobs WHERE raw_source_id = :s AND kind = 'parse' AND status <> 'done' "
+        "ORDER BY created_at DESC LIMIT 1"), {"s": str(raw.id)})).scalar_one_or_none()
+    if existing is not None:
+        await db.execute(text(
+            "UPDATE ingest_jobs SET status='running', attempts = attempts + 1, content_sha = :sha, "
+            "total_pages = :tp, batch_size = :bs, heartbeat_at = now(), updated_at = now() WHERE id = :id"),
+            {"sha": file_sha, "tp": total_pages, "bs": batch_size, "id": str(existing)})
+        await db.commit()
+        return existing
+    job = IngestJob(kb_id=raw.kb_id, raw_source_id=raw.id, kind="parse", status="running", progress=0,
+                    total_pages=total_pages, pages_done=0, batch_size=batch_size, content_sha=file_sha,
+                    attempts=1)
+    db.add(job)
+    await db.flush()
+    jid = job.id
+    await db.execute(text("UPDATE ingest_jobs SET heartbeat_at = now() WHERE id = :id"), {"id": str(jid)})
+    await db.commit()
+    return jid
+
+
 async def _ingest_bg(rid: uuid.UUID, user_id: uuid.UUID, data: bytes, mime: str, ext: str, tier: str) -> None:
-    """Background: parse by tier -> write source + chunks/embeddings; on failure set status=failed. Manages its own session."""
+    """Background: parse by tier -> write source + chunks/embeddings; on failure set status=failed. Manages its
+    own session.
+
+    Large PDFs (>= the streaming threshold) go through the bounded-memory STREAMING path: a durable
+    `ingest_jobs` row is created/resumed and the doc is parsed + chunked + embedded page-batch by page-batch with
+    a per-batch checkpoint, so peak memory tracks one batch and a restart resumes from the last completed batch
+    (the startup sweeper re-runs `_ingest_bg` for any job left `running`). Everything else keeps the prior
+    whole-document path. A file whose `content_sha` already matches its parsed source is skipped (dedup)."""
     from app.db.session import get_sessionmaker
     sm = get_sessionmaker()
+    file_sha = hashlib.sha256(data).hexdigest()
     try:
         async with sm() as db:
             raw = await db.get(RawSource, rid)
             if raw is None:
                 return
-            text = await _parse_by_tier(db, data, mime, ext, tier, sid=rid)
-            if not text or not text.strip():
+
+            # File-level dedup: identical bytes already parsed for THIS source -> skip parse + embed.
+            if raw.content_sha == file_sha and raw.status == "parsed":
+                log.info("ingest_skip_unchanged_file", rid=str(rid))
+                return
+
+            route = None
+            if mime == "application/pdf":
+                try:
+                    route = await run_in_threadpool(parse_router.route_pdf, data)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("route_pdf_failed", rid=str(rid), error=str(e))
+                    route = None
+
+            if route is not None and route.pages and parse_stream.should_stream(route):
+                # ---- STREAMING large-PDF path (bounded memory + durable checkpoint + resume) ----
+                total_pages = len(route.pages)
+                batch_size = parse_stream.PAGE_BATCH
+                job_id = await _ensure_ingest_job(db, raw, file_sha=file_sha, total_pages=total_pages,
+                                                  batch_size=batch_size)
+                raw.status, raw.error, raw.content_sha = "parsing", None, file_sha
+                await db.commit()
+
+                # P2 preserved on large docs: enrich each batch's digital pages with in-place figure crops +
+                # label-only captions (bounded to one batch of figures). fast tier stays model-free.
+                async def _enrich(md: str, pages: set[int]) -> str:
+                    if tier == "fast":
+                        return md
+                    return await _enrich_digital_figures(db, data, md, pages, rid)
+
+                written, assembled = await ingest_service.stream_ingest(
+                    db, raw=raw, job_id=job_id, pdf_bytes=data, route=route,
+                    file_sha=file_sha, batch_size=batch_size, enrich_batch=_enrich)
+                if not assembled or not assembled.strip():
+                    raw.status, raw.error = "failed", "parse_empty"
+                    await db.execute(text("UPDATE ingest_jobs SET status='failed', error='parse_empty' "
+                                          "WHERE id = :id"), {"id": str(job_id)})
+                    await db.commit()
+                    return
+                # Finalize: parsed_text projection + tree + mark job done. Chunks/embeddings are already persisted
+                # per batch; the tree builds from parsed_text without re-chunking.
+                raw.parsed_text, raw.status, raw.error = assembled, "parsed", None
+                await db.flush()
+                await ingest_service._build_tree_safe(db, raw)
+                await db.execute(text("UPDATE ingest_jobs SET status='done', progress=100, "
+                                      "pages_done=total_pages, heartbeat_at=now() WHERE id = :id"),
+                                 {"id": str(job_id)})
+                await db.commit()
+                log.info("stream_ingest_finalized", rid=str(rid), chunks=written)
+                asyncio.create_task(memory_service.consolidate_bg(user_id, assembled, "document"))
+                return
+
+            # ---- whole-document path (small docs, Office, video, text) ----
+            text_md = await _parse_by_tier(db, data, mime, ext, tier, sid=rid)
+            if not text_md or not text_md.strip():
                 raw.status, raw.error = "failed", "parse_empty"
                 await db.commit()
                 return
-            await ingest_service.reingest(db, raw, text)
-        asyncio.create_task(memory_service.consolidate_bg(user_id, text, "document"))
+            raw.content_sha = file_sha
+            await ingest_service.reingest(db, raw, text_md)
+        asyncio.create_task(memory_service.consolidate_bg(user_id, text_md, "document"))
     except Exception as e:  # noqa: BLE001
         log.warning("ingest_bg_failed", rid=str(rid), error=str(e))
         try:
@@ -563,8 +652,70 @@ async def _ingest_bg(rid: uuid.UUID, user_id: uuid.UUID, data: bytes, mime: str,
                 if raw:
                     raw.status, raw.error = "failed", str(e)[:500]
                     await db.commit()
+                await db.execute(text(
+                    "UPDATE ingest_jobs SET status='failed', error=:e "
+                    "WHERE raw_source_id=:s AND kind='parse' AND status='running'"),
+                    {"e": str(e)[:500], "s": str(rid)})
+                await db.commit()
         except Exception:  # noqa: BLE001
             pass
+
+
+async def resume_incomplete_ingests() -> int:
+    """Startup sweeper: re-queue every file-parse job left `running` by a crash/restart. Each job is re-run via
+    `_ingest_bg`, which sees the durable `ingest_jobs.pages_done` checkpoint and RESUMES from the last completed
+    page batch (already-persisted chunks are not re-parsed or re-embedded) rather than losing the in-flight
+    `asyncio.create_task`. The original bytes come from object storage (or the DB fallback). Returns how many
+    jobs were resumed. Best-effort and isolated: a job that can't be resumed is marked failed, never crashes
+    startup."""
+    from app.db.session import get_sessionmaker
+    sm = get_sessionmaker()
+    resumed = 0
+    try:
+        async with sm() as db:
+            rows = (await db.execute(text(
+                "SELECT id, raw_source_id FROM ingest_jobs "
+                "WHERE kind='parse' AND status='running' AND raw_source_id IS NOT NULL"))).mappings().all()
+    except Exception as e:  # noqa: BLE001
+        log.warning("ingest_sweeper_query_failed", error=str(e))
+        return 0
+    for row in rows:
+        jid, sid = row["id"], row["raw_source_id"]
+        try:
+            async with sm() as db:
+                raw = await db.get(RawSource, sid)
+                if raw is None:
+                    await db.execute(text("UPDATE ingest_jobs SET status='failed', error='source_gone' "
+                                          "WHERE id=:id"), {"id": str(jid)})
+                    await db.commit()
+                    continue
+                o = await db.get(RawSourceOriginal, sid)
+                data = o.data if o else None
+                if data is None:
+                    try:
+                        data = await storage.get_adapter().download(storage.original_key(sid))
+                    except Exception:  # noqa: BLE001
+                        data = None
+                if data is None:
+                    await db.execute(text("UPDATE ingest_jobs SET status='failed', error='no_original' "
+                                          "WHERE id=:id"), {"id": str(jid)})
+                    await db.commit()
+                    continue
+                o_mime = (o.mime if o else None) or raw.mime or ""
+                o_ext = os.path.splitext(raw.title)[1].lower()
+                # The original uploader isn't recorded on the job; use the KB owner for the (best-effort) memory
+                # consolidation so the resume still has a valid user id.
+                owner = (await db.execute(text(
+                    "SELECT owner_id FROM knowledge_bases WHERE id=:k"), {"k": str(raw.kb_id)})).scalar_one_or_none()
+            uid = owner or raw.kb_id  # fallback: any uuid (consolidate is best-effort, never blocks ingest)
+            # Resume in the background (its own session); the durable checkpoint drives the resume point.
+            asyncio.create_task(_ingest_bg(sid, uid, data, o_mime, o_ext, "standard"))
+            resumed += 1
+        except Exception as e:  # noqa: BLE001
+            log.warning("ingest_sweeper_resume_failed", job_id=str(jid), error=str(e))
+    if resumed:
+        log.info("ingest_sweeper_resumed", count=resumed)
+    return resumed
 
 
 @router.post("/{kb_id}/sources/{source_id}/reparse")
@@ -635,10 +786,18 @@ async def get_source(kb_id: str = Path(...), source_id: str = Path(...),
     orig_mime = (await db.execute(select(RawSourceOriginal.mime)
                                   .where(RawSourceOriginal.raw_source_id == r.id))).scalar_one_or_none()
     rnd = await db.get(RawSourceRender, r.id)
+    # Large-file streaming ingest progress (pages done / total) so the UI shows real progress on a 450-page file.
+    job = (await db.execute(text(
+        "SELECT status, progress, pages_done, total_pages FROM ingest_jobs "
+        "WHERE raw_source_id = :s AND kind = 'parse' ORDER BY created_at DESC LIMIT 1"),
+        {"s": str(r.id)})).mappings().first()
+    ingest = ({"status": job["status"], "progress": job["progress"],
+               "pages_done": job["pages_done"], "total_pages": job["total_pages"]} if job else None)
     return {"id": str(r.id), "title": r.title, "kind": r.kind, "mime": orig_mime or r.mime,
             "status": r.status, "size_bytes": r.size_bytes, "chunk_count": n,
             "error": r.error, "parsed_text": r.parsed_text or "", "has_original": orig_mime is not None,
             "render_status": rnd.status if rnd else None, "page_count": rnd.page_count if rnd else 0,
+            "ingest": ingest,
             "created_at": r.created_at.isoformat() if r.created_at else None}
 
 

@@ -78,15 +78,27 @@ def structure_tree(pdf_bytes: bytes, only_pages: set[int] | None = None) -> tupl
     page_of: dict[int, int] = {}
     gid = 0
     try:
-        for pno, page in enumerate(doc.pages, start=1):
-            if only_pages is not None and pno not in only_pages:
+        npages = len(doc.pages)
+        # When a subset is requested, touch ONLY those page indices (don't materialize/cache skipped pages); this
+        # is what makes the streaming page-batch path memory-bounded — a 16-page batch loads 16 pages, not 450.
+        target = sorted(only_pages) if only_pages is not None else range(1, npages + 1)
+        for pno in target:
+            if pno < 1 or pno > npages:
                 continue
+            page = doc.pages[pno - 1]
             ordered = reading_order(_fold_tables(extract_page_boxes(page), _page_geometry(page)))
             for b in ordered:
                 b.id = gid
                 page_of[gid] = pno
                 all_boxes.append(b)
                 gid += 1
+            # Release this page's cached objects (words/lines/rects/curves) so peak memory tracks ONE page, not
+            # the whole document — pdfplumber otherwise retains every visited page's parse on the PDF object.
+            try:
+                page.flush_cache()
+                page.close()
+            except Exception:  # noqa: BLE001
+                pass
     finally:
         doc.close()
     if not all_boxes:

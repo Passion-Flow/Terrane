@@ -7,6 +7,7 @@ Graceful degradation throughout: no embed channel -> lexical only; no rerank -> 
 
 from __future__ import annotations
 
+import hashlib
 import re
 import uuid
 
@@ -23,6 +24,12 @@ log = structlog.get_logger("terrane.ingest")
 _CHUNK_CHARS = 500
 _OVERLAP = 60
 _RECALL = 20  # Per-path recall cap
+
+
+def content_sha(s: str) -> str:
+    """Stable hash of a chunk's content for incremental dedup. Normalises only trailing/leading whitespace so a
+    cosmetically-unchanged chunk hashes identically across reingests and is NOT re-embedded."""
+    return hashlib.sha256(s.strip().encode("utf-8")).hexdigest()
 
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
@@ -197,7 +204,14 @@ def _vec_literal(vec: list[float]) -> str:
 
 
 async def _embed_chunks(db: AsyncSession, chunk_ids: list[uuid.UUID], contents: list[str]) -> int:
-    """Call the embedding channel to backfill vectors for chunks. No channel -> 0; failure -> logged but does not block ingestion (chunks remain lexically searchable)."""
+    """Call the embedding channel to backfill vectors for chunks. No channel -> 0; failure -> logged but does
+    not block ingestion (chunks remain lexically searchable).
+
+    Bulk write (G7): the embeddings come back as one batched call, and the vectors are written with a single
+    multi-row `UPDATE ... FROM (VALUES ...)` instead of one round-trip per chunk — at 10k chunks that is one
+    statement per batch rather than 10k single-row UPDATEs."""
+    if not contents:
+        return 0
     try:
         vecs = await model_client.embed_texts(db, contents)
     except ModelError as e:
@@ -205,12 +219,20 @@ async def _embed_chunks(db: AsyncSession, chunk_ids: list[uuid.UUID], contents: 
         return 0
     if not vecs:
         return 0
-    n = 0
-    for cid, vec in zip(chunk_ids, vecs):
-        await db.execute(text("UPDATE chunks SET embedding = (:v)::halfvec WHERE id = :id"),
-                         {"v": _vec_literal(vec), "id": str(cid)})
-        n += 1
-    return n
+    pairs = list(zip(chunk_ids, vecs))
+    # Multi-row bulk UPDATE via a VALUES list. Cast id->uuid and the literal->halfvec inside the SET so one
+    # statement vectorises the whole batch.
+    for i in range(0, len(pairs), 500):  # cap params per statement (each row = 2 binds)
+        sub = pairs[i:i + 500]
+        rows = ", ".join(f"(:id{j}, :v{j})" for j in range(len(sub)))
+        params: dict = {}
+        for j, (cid, vec) in enumerate(sub):
+            params[f"id{j}"] = str(cid)
+            params[f"v{j}"] = _vec_literal(vec)
+        await db.execute(text(
+            f"UPDATE chunks AS c SET embedding = (d.v)::halfvec "
+            f"FROM (VALUES {rows}) AS d(id, v) WHERE c.id = (d.id)::uuid"), params)
+    return len(pairs)
 
 
 async def add_text_source(db: AsyncSession, *, kb_id: uuid.UUID, workspace_id: uuid.UUID,
@@ -222,7 +244,8 @@ async def add_text_source(db: AsyncSession, *, kb_id: uuid.UUID, workspace_id: u
     db.add(raw)
     await db.flush()
     pieces = chunk_text(body)
-    objs = [Chunk(kb_id=kb_id, raw_source_id=raw.id, ord=i, content=p, token_count=max(1, len(p) // 4))
+    objs = [Chunk(kb_id=kb_id, raw_source_id=raw.id, ord=i, content=p, token_count=max(1, len(p) // 4),
+                  content_sha=content_sha(p))
             for i, p in enumerate(pieces)]
     db.add_all(objs)
     await db.flush()
@@ -256,22 +279,159 @@ async def create_pending_source(db: AsyncSession, *, kb_id: uuid.UUID, workspace
 
 
 async def reingest(db: AsyncSession, raw: RawSource, body: str) -> int:
-    """Write parsed text to an existing source -> clear old chunks -> re-chunk + backfill vectors -> status=parsed. Returns the chunk count."""
-    await db.execute(delete(Chunk).where(Chunk.raw_source_id == raw.id))
+    """Write parsed text to an existing source -> re-chunk -> persist + backfill vectors -> status=parsed.
+
+    INCREMENTAL DEDUP (G6): instead of deleting ALL chunks and re-embedding everything, the new chunks are
+    diffed against the existing ones by content hash. A chunk whose content_sha is unchanged AND already has a
+    vector is REUSED verbatim (no re-embed); only genuinely new/changed content is embedded. Editing one page of
+    a 450-page doc therefore re-embeds a handful of chunks, not ten thousand. Returns the chunk count.
+    """
     raw.parsed_text = body
     raw.status = "parsed"
     raw.error = None
     await db.flush()
     pieces = chunk_text(body)
-    objs = [Chunk(kb_id=raw.kb_id, raw_source_id=raw.id, ord=i, content=p, token_count=max(1, len(p) // 4))
+    new_shas = [content_sha(p) for p in pieces]
+
+    # Existing chunks of this source, by content hash -> their embedding presence. A sha that survives AND was
+    # embedded can be reused; we keep ONE existing row per surviving sha (the rest are reordered/dropped).
+    existing = (await db.execute(text(
+        "SELECT id, content_sha, (embedding IS NOT NULL) AS has_emb FROM chunks WHERE raw_source_id = :s"),
+        {"s": str(raw.id)})).mappings().all()
+    reusable: dict[str, list[str]] = {}      # sha -> [chunk_id, ...] that are embedded and can be kept
+    for r in existing:
+        if r["content_sha"] and r["has_emb"]:
+            reusable.setdefault(r["content_sha"], []).append(str(r["id"]))
+
+    # Snapshot each surviving sha's vector BEFORE deleting (so it can be re-stamped onto the new rows without a
+    # re-embed). Rows are re-inserted (ord may shift), then unchanged content carries its old vector forward and
+    # only new/changed content is embedded.
+    keep_vec: dict[str, str] = {}  # sha -> halfvec text, for shas we can carry forward
+    surviving = [s for s in set(new_shas) if s in reusable]
+    if surviving:
+        vrows = (await db.execute(text(
+            "SELECT content_sha, embedding::text AS emb FROM chunks "
+            "WHERE raw_source_id = :s AND content_sha = ANY(:shas) AND embedding IS NOT NULL"),
+            {"s": str(raw.id), "shas": surviving})).mappings().all()
+        for vr in vrows:
+            if vr["content_sha"] not in keep_vec and vr["emb"]:
+                keep_vec[vr["content_sha"]] = vr["emb"]
+
+    await db.execute(delete(Chunk).where(Chunk.raw_source_id == raw.id))
+    objs = [Chunk(kb_id=raw.kb_id, raw_source_id=raw.id, ord=i, content=p, token_count=max(1, len(p) // 4),
+                  content_sha=sha)
+            for i, (p, sha) in enumerate(zip(pieces, new_shas))]
+    db.add_all(objs)
+    await db.flush()
+
+    # Carry forward vectors for unchanged content (no re-embed); embed only the rest.
+    to_embed_ids: list[uuid.UUID] = []
+    to_embed_txt: list[str] = []
+    carried = 0
+    for c, p, sha in zip(objs, pieces, new_shas):
+        if sha in keep_vec:
+            await db.execute(text("UPDATE chunks SET embedding = (:v)::halfvec WHERE id = :id"),
+                             {"v": keep_vec[sha], "id": str(c.id)})
+            carried += 1
+        else:
+            to_embed_ids.append(c.id)
+            to_embed_txt.append(p)
+    embedded = await _embed_chunks(db, to_embed_ids, to_embed_txt)
+    await db.commit()
+    await _build_tree_safe(db, raw)
+    log.info("source_reingested", raw_id=str(raw.id), chunks=len(pieces),
+             reembedded=embedded, carried=carried)
+    return len(pieces)
+
+
+# ---- Bounded-memory streaming ingest (P3/F4) ----
+
+async def _persist_batch_chunks(db: AsyncSession, *, kb_id: uuid.UUID, raw_id: uuid.UUID,
+                                pieces: list[str], ord_offset: int) -> int:
+    """Persist one batch's chunks (ord continues from `ord_offset`) + embed them, in a single committed
+    transaction so the batch is durable before the next batch is parsed. Returns the number of chunks written.
+    A flushed-and-committed batch is the resume unit: a crash after this leaves the batch's chunks on disk and
+    the job's `pages_done` is advanced by the caller in the same commit window."""
+    if not pieces:
+        return 0
+    objs = [Chunk(kb_id=kb_id, raw_source_id=raw_id, ord=ord_offset + i, content=p,
+                  token_count=max(1, len(p) // 4), content_sha=content_sha(p))
             for i, p in enumerate(pieces)]
     db.add_all(objs)
     await db.flush()
-    embedded = await _embed_chunks(db, [c.id for c in objs], pieces)
-    await db.commit()
-    await _build_tree_safe(db, raw)
-    log.info("source_reingested", raw_id=str(raw.id), chunks=len(pieces), embedded=embedded)
-    return len(pieces)
+    await _embed_chunks(db, [c.id for c in objs], pieces)
+    return len(objs)
+
+
+async def stream_ingest(db: AsyncSession, *, raw: RawSource, job_id: uuid.UUID, pdf_bytes: bytes,
+                        route, file_sha: str, batch_size: int, enrich_batch=None) -> tuple[int, str]:
+    """Stream a large PDF into chunks PAGE-BATCH by PAGE-BATCH with a durable checkpoint (G6).
+
+    For each batch of `batch_size` pages: parse just that batch (bounded memory) -> chunk it -> persist +
+    embed it -> advance the job's `pages_done` cursor and append the batch text -> COMMIT. Peak memory tracks
+    one batch, not the whole document. On resume (`raw`'s job already has pages_done > 0) the already-completed
+    pages are skipped: their chunks stay on disk and are NOT re-parsed or re-embedded.
+
+    `enrich_batch(markdown, pages)` (optional, async) enriches ONE batch's Markdown before it is chunked — used
+    to splice in-place figure crops + label-only captions (P2) for just this batch's pages, so the P2 figure
+    feature is preserved on large docs while memory stays bounded to one batch of figures.
+
+    Returns (total_chunks_written_this_run, assembled_markdown). The assembled Markdown is the concatenation of
+    every batch (including any already-persisted text the resume reads back), used only for the tree build /
+    parsed_text projection at the end — it is built incrementally, never by holding all pages mid-parse.
+    """
+    from fastapi.concurrency import run_in_threadpool
+
+    from app.services.parse import stream as parse_stream
+
+    # Resume cursor + running ord come from the durable job row. On a fresh job both are 0.
+    job = (await db.execute(text(
+        "SELECT pages_done, total_pages FROM ingest_jobs WHERE id = :id"), {"id": str(job_id)})).mappings().one()
+    done_pages = int(job["pages_done"] or 0)
+    total_pages = int(job["total_pages"] or len(route.pages))
+
+    # On resume, the chunks already on disk define the next ord and the already-parsed text. Read the prefix back
+    # (ordered) so the final tree/parsed_text projection is whole, without re-parsing completed pages.
+    prior = (await db.execute(text(
+        "SELECT content FROM chunks WHERE raw_source_id = :s ORDER BY ord"), {"s": str(raw.id)})).scalars().all()
+    ord_offset = len(prior)
+    md_parts: list[str] = list(prior)
+
+    written = 0
+    poison: list[int] = []
+    windows = parse_stream.page_windows(route, batch_size=batch_size, start_after_page=done_pages)
+    for window in windows:
+        # Parse just this window off the event loop; only one batch's boxes/text are in memory at a time.
+        batch = await run_in_threadpool(parse_stream.parse_window, pdf_bytes, route, window)
+        if batch.errors:
+            poison.extend(batch.errors)
+        if batch.markdown:
+            md = batch.markdown
+            if enrich_batch is not None:
+                try:
+                    md = await enrich_batch(md, set(batch.pages))
+                except Exception as e:  # noqa: BLE001 -- figures are an enrichment, never a parse blocker
+                    log.warning("stream_enrich_failed", start=batch.start_page, end=batch.end_page, error=str(e))
+            pieces = chunk_text(md)
+            n = await _persist_batch_chunks(db, kb_id=raw.kb_id, raw_id=raw.id,
+                                            pieces=pieces, ord_offset=ord_offset)
+            ord_offset += n
+            written += n
+            md_parts.append(md)
+        # Advance the durable checkpoint: pages_done = last page of this batch, progress %, heartbeat.
+        progress = int(batch.end_page / max(1, total_pages) * 100)
+        await db.execute(text(
+            "UPDATE ingest_jobs SET pages_done = :pd, progress = :pg, status = 'running', "
+            "heartbeat_at = now(), updated_at = now() WHERE id = :id"),
+            {"pd": batch.end_page, "pg": min(progress, 99), "id": str(job_id)})
+        await db.commit()
+
+    assembled = "\n\n".join(p for p in md_parts if p and p.strip()).strip()
+    if poison:
+        log.warning("stream_poison_pages", raw_id=str(raw.id), pages=poison[:50], count=len(poison))
+    log.info("stream_ingest_done", raw_id=str(raw.id), chunks_this_run=written,
+             total_pages=total_pages, poison=len(poison))
+    return written, assembled
 
 
 def _src_clause(source_ids: list[uuid.UUID] | None) -> tuple[str, dict]:

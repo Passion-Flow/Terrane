@@ -32,6 +32,8 @@ class RawSource(UUIDMixin, HardTimestampMixin, Base):
     parsed_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    # sha256 of the original bytes -> file-level dedup (skip parse+embed on identical re-upload). Migration 000014.
+    content_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class Chunk(UUIDMixin, Base):
@@ -44,6 +46,8 @@ class Chunk(UUIDMixin, Base):
     ord: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # sha256 of normalised content -> incremental re-embed (only changed chunks) on reingest. See migration 000014.
+    content_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class RawSourceOriginal(Base):
@@ -129,3 +133,11 @@ class IngestJob(UUIDMixin, HardTimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # --- streaming-ingest resume/checkpoint (migration 000014) ---
+    total_pages: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    pages_done: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # resume cursor (last page persisted)
+    batch_size: Mapped[int] = mapped_column(Integer, nullable=False, default=16)
+    content_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    heartbeat_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    checkpoint: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)

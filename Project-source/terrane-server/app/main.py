@@ -38,6 +38,12 @@ log = structlog.get_logger("terrane.app")
 async def _lifespan(app: FastAPI):
     state: LicenseState = app.state.license
     await state.start()
+    # Resume any large-file ingest left `running` by a crash/restart (durable checkpoint -> continue, not lose).
+    try:
+        from app.api.v1.knowledge_bases import resume_incomplete_ingests
+        await resume_incomplete_ingests()
+    except Exception as e:  # noqa: BLE001 -- sweeper is best-effort; never block startup
+        log.warning("ingest_resume_sweeper_failed", error=str(e))
     yield
     await state.stop()
 

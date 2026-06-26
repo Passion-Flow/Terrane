@@ -117,6 +117,13 @@ def route_pdf(pdf_bytes: bytes) -> RouteResult:
             else:
                 scanned_idx.append(pno - 1)  # defer: needs a render to decide table vs prose
             feats.append(pf)
+            # Release this page's cached parse so routing a 450-page PDF stays memory-bounded (pdfplumber retains
+            # every visited page's objects on the PDF otherwise — the dominant peak before this fix).
+            try:
+                page.flush_cache()
+                page.close()
+            except Exception:  # noqa: BLE001
+                pass
     finally:
         pl.close()
 
