@@ -297,7 +297,9 @@
     "modeAuto": "Auto",
     "modeFast": "Fast",
     "modeDeep": "Deep",
-    "modeHint": "Fast = millisecond vector+lexical hybrid; Deep = tree-reasoning + graph multi-hop + RRF fusion with section/page citations; Auto = picks per query."
+    "modeHint": "Fast = millisecond vector+lexical hybrid; Deep = tree-reasoning + graph multi-hop + RRF fusion with section/page citations; Auto = picks per query.",
+    "grounded": "Grounded",
+    "groundedHint": "Share of the answer supported by the retrieved sources (self-developed grounding check)"
   },
   "nav": {
     "kbs": "Knowledge",

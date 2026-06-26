@@ -7,9 +7,9 @@ import { useNavigate, useParams } from "react-router";
 
 import { Markdown } from "@/components/ui/Markdown";
 import { FALLBACK_LANG, isSupported } from "@/i18n/langs";
-import { streamChat, type ChatSource } from "@/lib/kb";
+import { streamChat, verifyAnswer, type ChatSource } from "@/lib/kb";
 
-interface Msg { role: "user" | "assistant"; content: string; sources?: ChatSource[]; error?: string }
+interface Msg { role: "user" | "assistant"; content: string; sources?: ChatSource[]; error?: string; grounded?: number | null }
 
 export function KbChat({ kbId }: { kbId: string }) {
   const { t } = useTranslation();
@@ -36,13 +36,21 @@ export function KbChat({ kbId }: { kbId: string }) {
     if (!q || busy) return;
     setInput(""); setBusy(true);
     setMsgs((m) => [...m, { role: "user", content: q }, { role: "assistant", content: "", sources: [] }]);
+    let acc = ""; let srcs: ChatSource[] = [];
     try {
       await streamChat(kbId, q, {
-        onSources: (hits) => patchLast((m) => ({ ...m, sources: hits })),
-        onDelta: (txt) => patchLast((m) => ({ ...m, content: m.content + txt })),
+        onSources: (hits) => { srcs = hits; patchLast((m) => ({ ...m, sources: hits })); },
+        onDelta: (txt) => { acc += txt; patchLast((m) => ({ ...m, content: m.content + txt })); },
         onError: (e) => patchLast((m) => ({ ...m, error: e.code === "NO_CHAT_CHANNEL" ? t("kb.noChatModel") : t("kb.chatError") })),
         onDone: () => setBusy(false),
       });
+      // Self-developed answer-grounding check (engine 4): verify the answer against its cited sources.
+      if (acc.trim() && srcs.length) {
+        try {
+          const v = await verifyAnswer(kbId, acc, srcs.map((s) => s.content));
+          patchLast((m) => ({ ...m, grounded: v.grounded }));
+        } catch { /* verification is best-effort */ }
+      }
     } catch { patchLast((m) => ({ ...m, error: t("kb.chatError") })); }
     finally { setBusy(false); }
   }
@@ -120,6 +128,14 @@ export function KbChat({ kbId }: { kbId: string }) {
                     {m.content && streaming && <span className="ms-0.5 inline-block w-1 animate-pulse">▋</span>}
                     {m.error && (
                       <p className="mt-1 flex items-center gap-1 text-[12px] text-danger"><ArrowClockwise className="size-3" /> {m.error}</p>
+                    )}
+                    {typeof m.grounded === "number" && (
+                      <span title={t("kb.groundedHint")}
+                        className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          m.grounded >= 0.8 ? "bg-emerald-500/12 text-emerald-600"
+                            : m.grounded >= 0.5 ? "bg-amber-500/12 text-amber-600" : "bg-danger/12 text-danger"}`}>
+                        {t("kb.grounded")} {Math.round(m.grounded * 100)}%
+                      </span>
                     )}
                   </>
                 )}

@@ -222,6 +222,15 @@ export interface KbLint { score: number; stats: KbStats; issues: KbLintIssue[] }
 export const lintKb = (kbId: string) =>
   request<KbLint>(`/api/v1/knowledge-bases/${kbId}/lint`, { credentials: "include" });
 
+/** Self-developed answer-grounding check (engine 4) — how much of the answer is supported by its sources. */
+export const verifyAnswer = (kbId: string, answer: string, contexts: string[]) =>
+  request<{ grounded: number | null; unsupported: string[] }>(
+    `/api/v1/knowledge-bases/${kbId}/verify`, opt("POST", { answer, contexts }));
+
+/** Report retrieval feedback (engine 3 learning signal). */
+export const submitFeedback = (kbId: string, body: { feedback_id: string; clicked?: unknown[]; thumb?: number; answer_accepted?: boolean }) =>
+  request<{ ok: boolean }>(`/api/v1/knowledge-bases/${kbId}/feedback`, opt("POST", body));
+
 export interface ChatSource { n: number; source_title: string; source_id: string; content: string; score: number;
   citation_path?: string[] | null; page_start?: number | null; page_end?: number | null }
 
