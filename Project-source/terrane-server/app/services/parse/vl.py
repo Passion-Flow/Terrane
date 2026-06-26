@@ -27,6 +27,8 @@ _SCANNED_TEXT_MIN = 24  # If a page's lexical text is below this -> treat it as 
 _MIN_IMG_BYTES = 6000   # Skip small decorative icons
 _MAX_VL_PAGES = 80      # Page-count cap for full-page VL in high-precision mode (cost/latency guardrail)
 _VL_SCALE = 150 / 72.0  # pypdfium2 render scale ~= 150 DPI for the page images sent to the vision model
+_TABLE_BATCH = 4        # Pages per stitched-table VL call (1 call sees several adjacent pages so it can join page-spanning rows)
+_TABLE_OVERLAP = 1      # Trailing pages re-sent into the next batch so a row split across the batch boundary still stitches
 
 _OCR_PROMPT = (
     "把这一页文档完整、忠实地转写为 Markdown。保留标题层级、列表、表格（用 Markdown 表格语法）、"
@@ -43,6 +45,245 @@ _LAYOUT_PROMPT = (
     "5) 去除页眉/页脚/页码等噪声；不要臆造、不要翻译、无法辨认处留空。\n"
     "只输出该页的 Markdown 内容本身，不要任何解释或代码围栏。"
 )
+# Cross-page bordered-table reconstruction prompt: several adjacent pages are sent in ONE call so the model
+# can stitch a single logical row that spans the page break, keep every cell in its own column, and never
+# flatten a cell's inner sub-headings ("原则"/"预防"/"发现病人") into document headings.
+_TABLE_STITCH_PROMPT = (
+    "下面按页码顺序给出同一份文档的连续多页扫描图。这是一张**跨页的有边框表格**：每一逻辑行（通常是一个编号条目，"
+    "如一种疾病）很高、含多列单元格；一行的内容常常从某一页**底部**延续到**下一页顶部**（续接处不重复表头）。\n"
+    "请把这些页**还原为一张完整的 HTML 表格**，规则：\n"
+    "1) 用 `<table>...<tr><td>...</td></tr>...</table>` 输出；严格按真实行列对齐，把每段文字放进它**所属的那一列单元格**；\n"
+    "2) **绝不**把单元格里的小标题（如“原则”“预防”“发现病人”“三报三不”等）变成文档标题(#/##/###)或单独成行——它们只是某个单元格的内容；\n"
+    "3) **跨页续接合并（最重要，且绝不能丢字）**：每一页**最顶端**那几行内容，几乎总是上一页某一行某列的延续"
+    "（编号继续 / 句子接续 / 明显属于上一条目而非新条目）。**必须完整保留并追加回上一条目对应列的同一个单元格**，"
+    "用 `<br>` 连接；即使只有一两行小字也不能遗漏、不能单独新建逻辑行、不能错放进下一条目；\n"
+    "4) 只有出现新的编号条目名（如新的疾病名）时才另起新的逻辑行；每个条目内重复出现的列名表头可只保留一次；\n"
+    "5) 单元格内多行用 `<br>` 保留；完整、忠实、不臆造、不翻译、不遗漏任何文字；无法辨认处留空。\n"
+    "只输出这张表格的 HTML，不要解释、不要代码围栏。"
+)
+
+
+def _strip_fence(s: str) -> str:
+    """Drop a leading/trailing ```html / ``` code fence the VL model sometimes wraps its output in."""
+    t = s.strip()
+    if t.startswith("```"):
+        nl = t.find("\n")
+        t = t[nl + 1:] if nl != -1 else t[3:]
+        if t.rstrip().endswith("```"):
+            t = t.rstrip()[:-3]
+    return t.strip()
+
+
+def _longest_run(bits) -> int:
+    """Length of the longest consecutive True run (used to find an unbroken ruling line in a pixel row/column)."""
+    best = cur = 0
+    for b in bits:
+        cur = cur + 1 if b else 0
+        if cur > best:
+            best = cur
+    return best
+
+
+def _bitmap_has_grid(pil) -> bool:
+    """Detect a bordered-table grid in a rendered page bitmap (pure PIL, no numpy).
+
+    Thin ruling lines blur away under area-averaging downscale, so resize with NEAREST (keeps a 1px line as a
+    continuous dark run) and look for a *long continuous dark run* per pixel row/column: >=3 rows with a run
+    covering >=60% of the width (horizontal rules) and >=2 columns with a run covering >=50% of the height
+    (vertical rules). That signature is a ruled table, not prose."""
+    from PIL import Image
+    g = pil.convert("L")
+    W = 800
+    if g.width > W:
+        g = g.resize((W, max(1, int(g.height * W / g.width))), Image.NEAREST)
+    w, h = g.size
+    if w < 60 or h < 60:
+        return False
+    px = g.load()
+    thr = 160  # ink darker than this
+    h_lines = sum(1 for y in range(h) if _longest_run(px[x, y] < thr for x in range(w)) >= 0.6 * w)
+    v_lines = sum(1 for x in range(w) if _longest_run(px[x, y] < thr for y in range(h)) >= 0.5 * h)
+    return h_lines >= 3 and v_lines >= 2
+
+
+def looks_like_scanned_table(pdf_bytes: bytes, max_check: int = 6) -> bool:
+    """Heuristic: is this a SCANNED (no text layer) PDF whose pages are dominated by a bordered table?
+
+    The per-page OCR path flattens a bordered table's cells into headings and detaches page-spanning rows, so
+    such documents get the cross-page table-stitch path instead. A scan stores its ruling lines as raster ink
+    (no vector paths / pdfplumber sees nothing), so detection renders each page and looks for a dark grid in the
+    bitmap. Only fires for genuinely scanned pages (digital PDFs go through the structure engine). Conservative
+    -> False on any error so normal scans keep the existing per-page OCR path."""
+    try:
+        import pdfplumber
+        import pypdfium2 as pdfium
+    except Exception:  # noqa: BLE001
+        return False
+    try:
+        pl = pdfplumber.open(io.BytesIO(pdf_bytes))
+    except Exception:  # noqa: BLE001
+        return False
+    try:
+        n = min(len(pl.pages), max_check)
+        # Only relevant for scanned pages (no extractable text); a digital PDF goes through the structure engine.
+        textful = sum(1 for p in pl.pages[:n] if len((p.extract_text() or "").strip()) >= _SCANNED_TEXT_MIN)
+        if textful > 0:
+            return False
+    finally:
+        pl.close()
+    try:
+        doc = pdfium.PdfDocument(pdf_bytes)
+    except Exception:  # noqa: BLE001
+        return False
+    try:
+        grid_pages = 0
+        n = min(len(doc), max_check)
+        for i in range(n):
+            page = doc[i]
+            try:
+                pil = page.render(scale=100 / 72.0).to_pil()  # low DPI is enough to find ruling lines
+            except Exception:  # noqa: BLE001
+                continue
+            finally:
+                page.close()
+            try:
+                if _bitmap_has_grid(pil):
+                    grid_pages += 1
+            except Exception:  # noqa: BLE001
+                continue
+        return grid_pages >= 1 and grid_pages >= (n + 1) // 2  # majority of checked pages are ruled tables
+    except Exception:  # noqa: BLE001
+        return False
+    finally:
+        doc.close()
+
+
+async def parse_pdf_table_stitched(db: AsyncSession, pdf_bytes: bytes) -> str | None:
+    """Scanned table-heavy PDF -> one stitched HTML table per page-batch, joining page-spanning rows.
+
+    Renders the (scanned) pages and sends several adjacent pages PER VL CALL (`_TABLE_BATCH`, overlapping by
+    `_TABLE_OVERLAP`) so the model sees the page boundary and can merge a row whose cells continue on the next
+    page, keeping every cell in the right column instead of flattening to headings. No vl channel -> None."""
+    if await get_channel(db, "vl") is None:
+        return None
+    import pypdfium2 as pdfium
+
+    try:
+        doc = pdfium.PdfDocument(pdf_bytes)
+    except Exception:  # noqa: BLE001
+        return None
+    pages_b64: list[str] = []
+    try:
+        n = min(len(doc), _MAX_VL_PAGES)
+        for i in range(n):
+            page = doc[i]
+            try:
+                pil = page.render(scale=_VL_SCALE).to_pil()
+            finally:
+                page.close()
+            buf = io.BytesIO()
+            pil.convert("RGB").save(buf, format="JPEG", quality=82)
+            pages_b64.append(base64.b64encode(buf.getvalue()).decode())
+    finally:
+        doc.close()
+    if not pages_b64:
+        return None
+
+    # Build overlapping page batches: [0..B), [B-ov..2B-ov), ... so a boundary row appears in two calls and stitches.
+    batches: list[tuple[int, list[int]]] = []  # (first_page_index_owned, page_indices_in_batch)
+    step = max(1, _TABLE_BATCH - _TABLE_OVERLAP)
+    start = 0
+    while start < len(pages_b64):
+        end = min(start + _TABLE_BATCH, len(pages_b64))
+        batches.append((start, list(range(start, end))))
+        if end >= len(pages_b64):
+            break
+        start += step
+
+    sem = asyncio.Semaphore(_CONCURRENCY)
+
+    async def _run(first: int, idxs: list[int]) -> tuple[int, str | None]:
+        labels = [f"第 {p + 1} 页：" for p in idxs]
+        imgs = [pages_b64[p] for p in idxs]
+        async with sem:
+            try:
+                out = await model_client.vl_caption_multi(db, imgs, prompt=_TABLE_STITCH_PROMPT, labels=labels)
+            except Exception:  # noqa: BLE001
+                return first, None
+        return first, (_strip_fence(out) if out else None)
+
+    # Plain per-page OCR runs in parallel as a *completeness backstop*: the stitch model occasionally drops a
+    # small top-of-page continuation fragment; we reconcile below so NOTHING is silently lost.
+    async def _ocr(pno: int) -> tuple[int, str | None]:
+        async with sem:
+            try:
+                return pno, await model_client.vl_caption(db, pages_b64[pno], prompt=_OCR_PROMPT)
+            except Exception:  # noqa: BLE001
+                return pno, None
+
+    results, ocr_results = await asyncio.gather(
+        asyncio.gather(*[_run(f, idxs) for f, idxs in batches]),
+        asyncio.gather(*[_ocr(p) for p in range(len(pages_b64))]),
+    )
+    parts = []
+    for first, html in sorted(results):
+        if html and html.strip():
+            parts.append(f"\n\n<!-- Page {first + 1}+ -->\n{html.strip()}")
+    out = "".join(parts).strip()
+    if not out:
+        return None
+
+    missing = _reconcile_missing(out, ocr_results)
+    if missing:
+        out += "\n\n<!-- 补全（跨页/被表格遗漏的内容） -->\n" + "\n".join(missing)
+    log.info("vl_table_stitched_done", batches=len(parts), pages=len(pages_b64), recovered=len(missing))
+    return out or None
+
+
+def _norm(s: str) -> str:
+    """Normalize text for content comparison: drop whitespace and common punctuation so the same words match
+    whether the stitch model rendered them with different spacing/markup than the per-page OCR."""
+    import re
+    return re.sub(r"[\s　，。、；：;:,.<>/|（）()【】\[\]\"'`*#\-—_·]+", "", s)
+
+
+def _recovery_units(txt: str) -> list[str]:
+    """Split one page's OCR markdown into comparable text units: a markdown-table row becomes its individual
+    cells (so a cell already in the stitched HTML matches and isn't re-emitted); other lines stay whole. Drops
+    code fences and table separator rows."""
+    units: list[str] = []
+    for raw in txt.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("```") or set(line) <= set("|-: "):
+            continue
+        if line.count("|") >= 2:  # a markdown table row -> compare cell by cell
+            units.extend(c.strip() for c in line.split("|") if c.strip())
+        else:
+            units.append(line.lstrip("#").strip())
+    return units
+
+
+def _reconcile_missing(stitched_html: str, ocr_results: list[tuple[int, str | None]]) -> list[str]:
+    """Return per-page OCR content units whose text does not appear in the stitched table -> recovery lines.
+
+    Compares on a punctuation/space-stripped form so only genuinely absent text is recovered (avoids dupes from
+    markup differences); markdown-table rows are compared cell-by-cell so a present cell isn't re-emitted. This
+    is the guarantee that 'drop nothing' holds even when the table-stitch model omits a continuation fragment."""
+    hay = _norm(stitched_html)
+    out: list[str] = []
+    seen: set[str] = set()
+    for pno, txt in sorted(ocr_results):
+        if not txt:
+            continue
+        for unit in _recovery_units(txt):
+            n = _norm(unit.replace("<br>", ""))
+            if len(n) < 6:  # skip headers/short tokens that fragment differently between the two parses
+                continue
+            if n in hay or n in seen:
+                continue
+            seen.add(n)
+            out.append(f"- (第{pno + 1}页) {unit}")
+    return out
 
 
 async def parse_pdf_fullvl(db: AsyncSession, pdf_bytes: bytes) -> str | None:

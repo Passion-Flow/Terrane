@@ -377,6 +377,15 @@ async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tie
                     text = await parse_vl.enhance_pdf(db, data, text)
                 except Exception as e:  # noqa: BLE001
                     log.warning("vl_enhance_failed", error=str(e))
+        if not text and mime == "application/pdf" and tier != "fast":
+            # Scanned (no text layer) PDF dominated by a BORDERED TABLE: per-page OCR flattens cells into
+            # headings and detaches page-spanning rows. Reconstruct it as a real HTML table with cross-page
+            # row stitching (several adjacent pages per VL call). Only when it really looks like a ruled table.
+            try:
+                if await run_in_threadpool(parse_vl.looks_like_scanned_table, data):
+                    text = await parse_vl.parse_pdf_table_stitched(db, data)
+            except Exception as e:  # noqa: BLE001
+                log.warning("vl_table_stitch_failed", error=str(e))
         if not text:  # non-PDF, scanned PDF, or structure failed -> lexical
             with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
                 tf.write(data)

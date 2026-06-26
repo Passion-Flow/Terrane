@@ -94,6 +94,31 @@ async def vl_caption(db: AsyncSession, image_b64: str, *, prompt: str = "详细�
     return r.json()["choices"][0]["message"]["content"]
 
 
+async def vl_caption_multi(db: AsyncSession, images_b64: list[str], *, prompt: str,
+                           labels: list[str] | None = None, max_tokens: int = 8000) -> str | None:
+    """Multimodal over SEVERAL images in one call (ordered) — used to parse a table that spans pages so the
+    model can see adjacent pages together and stitch continued rows. Each image may be preceded by a short
+    text label (e.g. '第 N 页：'). No vl channel -> None."""
+    ch = await get_channel(db, "vl")
+    if ch is None or not ch.base_url or not ch.api_key or not ch.model or not images_b64:
+        return None
+    import httpx
+
+    url = ch.base_url.rstrip("/") + "/chat/completions"
+    content: list[dict] = [{"type": "text", "text": prompt}]
+    for i, b64 in enumerate(images_b64):
+        if labels and i < len(labels) and labels[i]:
+            content.append({"type": "text", "text": labels[i]})
+        content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+    payload = {"model": ch.model, "messages": [{"role": "user", "content": content}],
+               "max_tokens": max_tokens, "temperature": 0.0}
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        r = await client.post(url, headers={"Authorization": f"Bearer {ch.api_key}"}, json=payload)
+    if r.status_code >= 400:
+        raise ModelError(f"vl_http_{r.status_code}: {r.text[:160]}")
+    return r.json()["choices"][0]["message"]["content"]
+
+
 async def asr(db: AsyncSession, audio_b64: str, *, mime: str = "audio/wav") -> str | None:
     """Speech recognition: transcribe audio (base64). The channel is taken from the admin "Model channels" kind=asr. No channel -> None."""
     ch = await get_channel(db, "asr")
