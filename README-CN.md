@@ -1,101 +1,162 @@
-# Terrane
+<p align="center">
+  <img src="assets/banner.svg" alt="Terrane — 开源 AI 知识库" width="100%">
+</p>
 
-**私有化部署的旗舰级 AI 知识库** —— 知识库、知识图谱、混合检索、个人 Chat 助手、NotebookLM 式 Studio
-与长期记忆。**纯 CPU 运行(无需 GPU)**,面向**私有化 / 气隙离线 / 信创**环境交付。
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2bb0a6.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/PostgreSQL-18%20·%20AGE%20·%20pgvector-0c5563" alt="PostgreSQL 18 + AGE + pgvector">
+  <img src="https://img.shields.io/badge/运行-纯%20CPU%20·%20无需%20GPU-23606a" alt="纯 CPU">
+  <img src="https://img.shields.io/badge/部署-Docker%20·%20Helm-2bb0a6" alt="部署">
+  <a href="https://github.com/Passion-Flow/Terrane/issues"><img src="https://img.shields.io/badge/PRs-welcome-8df3d6.svg" alt="欢迎 PR"></a>
+  <a href="https://github.com/Passion-Flow/Terrane/stargazers"><img src="https://img.shields.io/github/stars/Passion-Flow/Terrane?style=flat&color=27a6a4" alt="Stars"></a>
+</p>
 
-[English](README.md) | 中文
+<p align="center">
+  <b>Terrane</b> 把你的文档变成一个<i>可推理</i>的知识库 —— 知识图谱、推理级混合检索、NotebookLM 式 Studio、
+  个人 Chat 助手与长期记忆。
+  <br>它<b>纯 CPU 运行(无需 GPU)</b>,模型自带,并能接入任意应用。
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> · <b>简体中文</b>
+</p>
 
 ---
 
-## 概述
+## ✨ 亮点
 
-Terrane 把你的私有文档变成可检索、带图谱、多模态的知识平台。一切都留在你的网络内:文档、向量、
-知识图谱、对话与记忆都不出部署环境。双控制面把面向用户的业务平台与运营管理分离;所有模型后端都由你
-用**自己的 API key** 配置(产品**出厂零 key**)。
+- 🧠 **推理级检索(Retrieval&nbsp;2.0)。** 不止是向量搜索 —— 为每篇文档构建结构树,由 LLM 推理式导航,并通过
+  **倒数排名融合(RRF)** 与向量召回、词法召回、**知识图谱多跳**、RAPTOR 语义树融合。**快/深分级路由**让日常查询
+  停在毫秒级,只在值得时才动用推理。每条深度答案都可追溯到精确的 **`文档 › 章节 › 页码`**。
+- 🕸️ **内置知识图谱。** 实体与关系抽取进 **Apache AGE**(PostgreSQL 18 内的图数据库),回答扁平检索答不了的多跳问题。
+- 🖼️ **SOTA 多模态解析。** 三档引擎(词法 → 视觉语言 → 整页 VL 版面)处理扫描件、表格、公式、图表;视频按场景关键帧解析;内置 OCR / ASR / TTS。
+- 🧩 **接入任意应用。** 把任一知识库暴露为 **Dify 兼容的外部知识库 API**、通用 REST 端点、自描述 **OpenAPI** 工具
+  (Coze / GPTs / n8n / FastGPT),或给 Claude Code / Cursor 用的 **MCP Server**。
+- 📓 **NotebookLM 式 Studio 与 Wiki。** 把资料编译成学习指南、FAQ、简报与音频概览,或一篇结构化、可导航的知识 Wiki。
+- 🧬 **长期记忆。** 跨对话记住事实与偏好的个人助手。
+- 🔌 **模型自带。** chat / embedding / rerank / 视觉 / ASR / TTS 全用任意 OpenAI 兼容渠道,后台配置,零改代码。
+- 🗄️ **可插拔对象存储。** 开箱自带 SeaweedFS,或任选 S3、Azure Blob、Google Cloud Storage、阿里云 OSS、腾讯云 COS、火山引擎 TOS、华为云 OBS。
+- 🏠 **私有部署 / 气隙离线。** 一条 `docker compose up` 拉起整套栈 —— 自带 PostgreSQL 18 + AGE + pgvector 与 Redis,纯 CPU,数据不出网。
 
-## 功能
+## 📋 目录
 
-- **知识库** —— 通过自研 **Terrane Parse** 引擎摄入 文本 / PDF / Office(docx、xlsx、pptx),支持
-  版面、有线/无线表格、公式还原 —— 全程 CPU,无需 GPU。
-- **视频/音频理解** —— ffmpeg 抽关键帧+音轨 → 视觉(VL)描述 + 语音(ASR)转录,回灌进知识库。
-- **混合检索** —— pgvector 语义检索 + 词法检索 + 重排。
-- **知识图谱** —— 基于 Apache AGE 的图谱,支持图谱浏览。
-- **个人 Chat 助手** —— 跨知识库自动引用、联网搜索开关(带来源卡片)、多模态附件(文档/图片/视频/
-  音频)、持久化对话、记忆唤回。
-- **Studio(NotebookLM 式)** —— 一键生成 学习指南、FAQ、简报、时间线、思维导图、记忆闪卡、测验、
-  数据表、**幻灯片(PPTX 导出)** 与 **播客音频(双人对话,TTS)**。
-- **长期记忆** —— 从你的对话与上传文档**自动记忆**,也可手动添加;去重+更新(抽取→检索→ADD/UPDATE),
-  严格按用户隔离。
-- **模型渠道** —— 对话 / 嵌入 / 重排 / 多模态 / 语音识别 / 语音合成,均在后台用你自己的 key 配置
-  (DashScope / OpenAI 兼容)。
-- **MCP 服务** —— 把知识库暴露为 MCP 工具供外部 Agent 调用。
-- **企业能力** —— 工作空间与 RBAC、SSO(OIDC)、2FA、字段级加密(KEK)、审计日志、可观测、备份与迁移、
-  License 授权激活。
+- [快速开始](#-快速开始)
+- [Retrieval 2.0](#-retrieval-20)
+- [接入任意应用](#-接入任意应用)
+- [架构](#-架构)
+- [技术栈](#-技术栈)
+- [部署](#-部署)
+- [路线图](#-路线图)
+- [贡献](#-贡献)
+- [许可证](#-许可证)
 
-## 架构
+## 🚀 快速开始
 
-5 个应用服务 + 2 个数据存储:
-
-| 组件 | 角色 |
-|---|---|
-| `terrane-server` | 前台业务控制面(知识库 / 检索 / Chat / Studio / 记忆),`:43001` |
-| `terrane-admin-server` | 后台管理控制面(激活 / 向导 / 模型渠道 / 成员),`:43003` |
-| `terrane-gateway` | Go 数据面网关 |
-| `terrane-web` | 前台 SPA(nginx) |
-| `terrane-admin-web` | 后台 SPA(nginx) |
-| **PostgreSQL 18 + Apache AGE + pgvector** | 知识图谱 + 向量检索 + 关系数据(必需扩展) |
-| **Redis** | 缓存 + 限流 |
-
-同一 PostgreSQL 实例上有两个逻辑库:`terrane_main`(平台)与 `terrane_admin`(运营)。
-
-## 技术栈
-
-- **后端** —— Python 3.13、FastAPI、SQLAlchemy 2(async)、Alembic、asyncpg、Redis、Pydantic v2、
-  argon2id、structlog。
-- **数据面** —— Go 网关。
-- **前端** —— React 19、Vite、Tailwind v4、react-i18next(zh-CN / en)。
-- **模型** —— DashScope / OpenAI 兼容(对话、嵌入、重排、多模态、ASR、TTS)。
-
-## 仓库结构
-
-```
-Terrane/
-├── Project-source/        # 全部服务
-│   ├── terrane-server/        # 前台业务 API(FastAPI)
-│   ├── terrane-admin-server/  # 后台 API(FastAPI)
-│   ├── terrane-gateway/       # 数据面网关(Go)
-│   ├── terrane-web/           # 前台 SPA(React)
-│   └── terrane-admin-web/     # 后台 SPA(React)
-├── terrane-deploy/        # 交付:docker-compose / helm / gitlab / migration
-├── terrane-shared/        # 共享规约(数据分类、错误码、webhook)
-├── Project-design/        # PRD、设计文档、规格、PoC
-└── ops/                   # 运维脚本(多架构构建、备份、信创说明)
-```
-
-## 部署
-
-从 [`terrane-deploy/`](terrane-deploy/README.md) 选一种方式:
-
-| 方式 | 适用 |
-|---|---|
-| **docker-compose** | 单机 / 一体机 / 气隙离线(默认自带 PostgreSQL + Redis) |
-| **Helm** | Kubernetes(含信创 K8s,默认对接外部数据存储) |
-| **GitLab CI/CD** | 多架构构建镜像 → 手动推送 → 手动 Helm 部署 |
-
-### 单机快速起
+> 前置:Docker + Docker Compose。无需 GPU。
 
 ```bash
-cd terrane-deploy/docker-compose
-cp .env.example .env        # 填 TERRANE_KEK + 数据库/Redis 密码
-docker compose up -d        # 一把起全栈,含 PG18+AGE+pgvector 与 Redis
+git clone https://github.com/Passion-Flow/Terrane.git
+cd Terrane/terrane-deploy/docker-compose
+
+cp .env.example .env          # 设置 TERRANE_KEK + 数据库/Redis 密码
+docker compose up -d          # 拉起整套栈,含 PostgreSQL 18(AGE + pgvector)与 Redis
 ```
 
-随后在后台:**激活 License → 修改出厂超管密码 → 走初始化向导 → 配置模型渠道(填你自己的 API key)**,
-前台即可全功能使用。
+随后进入**管理后台**,修改出厂超管密码、运行初始化向导,并添加一个**模型渠道**(你自己的 OpenAI 兼容 API Key),前台即可完整使用。
 
-> 自带的 PostgreSQL 镜像内置 Apache AGE + pgvector。纯 CPU,无需 GPU。
+| 应用 | 默认地址 | 用途 |
+|---|---|---|
+| 前台(用户) | `http://localhost:43000` | 知识库、检索、Chat、Studio、记忆 |
+| 后台(运营) | `http://localhost:43002` | 用户、模型渠道、设置、审计 |
 
-## 授权
+> 自带的 PostgreSQL 镜像内置 **Apache AGE + pgvector**;全程纯 CPU 运行。
 
-Terrane 是商业化、私有化部署产品。每个部署用为该部署签发的 License 激活;字段级密文由每部署独立的
-KEK 加密。
+## 🧠 Retrieval 2.0
+
+Terrane 把检索当作一等引擎,而非一次向量查找。它为每篇文档构建**结构「目录」树**(源自视觉语言解析出的 Markdown),
+再用**倒数排名融合(RRF)** 融合多达五路召回来回答问题:
+
+| 召回路 | 贡献 |
+|---|---|
+| 向量(pgvector / HNSW) | 稠密语义召回 |
+| 词法(pg_trgm) | 精确术语、人名、标识符 |
+| **树推理** | LLM 沿文档结构导航到正确章节(PageIndex 式) |
+| **图谱多跳** | Apache AGE 沿实体扩展 1–2 跳,解跨文档问题 |
+| RAPTOR 语义树 | 簇摘要,解全局 / 多步问题 |
+
+轻量的**快 / 深分级路由**把短关键词查询送往毫秒级混合路径,把推理密集或结构化查询交给完整融合 —— 并对推理调用设硬上限,延迟可控。
+深度结果带可解释的 **`文档 › 章节 › 页码`** 引用路径。
+
+## 🧩 接入任意应用
+
+每个知识库都能用范围化 API Key 暴露给外部应用:
+
+- **Dify** —— 「连接外部知识库」→ 指向 `/api/v1/external`(Dify 规范 `/retrieval`)。
+- **Coze · GPTs · n8n · FastGPT** —— 导入自描述 OpenAPI:`/api/v1/external/openapi.json`。
+- **Claude Code · Cursor** —— 添加内置 **MCP** Server。
+- **其它任意** —— 直连 REST `POST /api/v1/external/search`,请求 `{ "query": "...", "top_k": 5 }`。
+
+## 🏗 架构
+
+```
+              ┌──────────────┐        ┌──────────────────┐
+   浏览器 ──▶ │  terrane-web │ ──────▶│   terrane-server  │  前台 API(FastAPI)
+              │  (React/Vite)│        │  知识库 · 检索    │
+              └──────────────┘        │  图谱 · Studio    │
+                                      │  记忆 · MCP       │
+   运营 ────▶ terrane-admin-web ────▶ terrane-admin-server │  后台 API
+                                      └─────────┬─────────┘
+                                                │
+   terrane-gateway(Go 数据面) ◀────────────────┤
+                                                ▼
+        PostgreSQL 18  ·  Apache AGE  ·  pgvector   |   Redis   |   SeaweedFS / S3 / …
+        (关系 + 图 + 向量,同一个数据库)            | (缓存)    | (对象存储)
+```
+
+| 组件 | 技术 | 角色 |
+|---|---|---|
+| `terrane-server` | Python · FastAPI · SQLAlchemy | 知识库、检索、图谱、Studio、记忆、MCP 与外部 API |
+| `terrane-admin-server` | Python · FastAPI | 用户、模型渠道、设置、审计 |
+| `terrane-gateway` | Go | 高吞吐数据面热路径 |
+| `terrane-web` / `terrane-admin-web` | React 19 · Vite · Tailwind | 用户 / 运营控制台(i18n:简体中文 / English) |
+| 存储 | PostgreSQL 18(AGE + pgvector)· Redis · SeaweedFS | 关系 + 图 + 向量同库;缓存;对象存储 |
+
+## 🛠 技术栈
+
+**后端** FastAPI · SQLAlchemy 2(异步)· Alembic · Pydantic v2 · Go(网关)· Celery
+**数据** PostgreSQL 18 · Apache AGE · pgvector(halfvec)· Redis · SeaweedFS
+**前端** React 19 · Vite · Tailwind CSS · react-i18next
+**模型** chat / embed / rerank / 视觉 / ASR / TTS 任选 OpenAI 兼容厂商
+
+## 📦 部署
+
+从 [`terrane-deploy/`](terrane-deploy/) 选一条路径:
+
+| 路径 | 适用 |
+|---|---|
+| **docker-compose** | 单机 / 一体机 / 气隙离线(自带 PostgreSQL + Redis) |
+| **Helm** | Kubernetes(默认外接数据存储) |
+| **GitLab CI/CD** | 构建多架构镜像 → 推送 → Helm 部署 |
+
+镜像提供 **`linux/amd64` 与 `linux/arm64`** 双架构。
+
+## 🗺 路线图
+
+- [x] 推理级 Retrieval 2.0(树推理 + 图谱多跳 + RRF 融合)
+- [x] 外部知识库 API + MCP Server + OpenAPI 工具
+- [x] 多模态解析(视觉语言版面、视频、OCR/ASR/TTS)、Studio、Wiki、记忆
+- [ ] 评测装置与检索基准
+- [ ] 更多连接器(Notion、网页抓取、IMAP)
+- [ ] 协作批注
+
+## 🤝 贡献
+
+欢迎贡献。发现 Bug、用着别扭、或有功能想法?
+**[提一个 Issue](https://github.com/Passion-Flow/Terrane/issues)** —— 这是联系维护者最好的方式。
+代码改动请 fork 仓库、新建特性分支并发起 Pull Request。
+
+## 📄 许可证
+
+Terrane 以 **[MIT 许可证](LICENSE)** 发布。另附一套可选、可自托管的许可证门控机制,默认关闭,供需要按部署激活的组织使用。
+
+<p align="center"><sub>为「让知识留在自己手里」的团队而造。</sub></p>

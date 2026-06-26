@@ -1,110 +1,175 @@
-# Terrane
+<p align="center">
+  <img src="assets/banner.svg" alt="Terrane — open-source AI knowledge base" width="100%">
+</p>
 
-**A flagship, private-deployment AI knowledge base** — knowledge bases, a knowledge graph, hybrid
-retrieval, a personal Chat assistant, a NotebookLM-style Studio, and long-term memory. Runs fully on
-**CPU (no GPU)**, ships for **on-prem / air-gapped / Xinchuang (domestic secure-controllable)** environments.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2bb0a6.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/PostgreSQL-18%20·%20AGE%20·%20pgvector-0c5563" alt="PostgreSQL 18 + AGE + pgvector">
+  <img src="https://img.shields.io/badge/Runtime-CPU--only%20·%20no%20GPU-23606a" alt="CPU-only">
+  <img src="https://img.shields.io/badge/Deploy-Docker%20·%20Helm-2bb0a6" alt="Deploy">
+  <a href="https://github.com/Passion-Flow/Terrane/issues"><img src="https://img.shields.io/badge/PRs-welcome-8df3d6.svg" alt="PRs welcome"></a>
+  <a href="https://github.com/Passion-Flow/Terrane/stargazers"><img src="https://img.shields.io/github/stars/Passion-Flow/Terrane?style=flat&color=27a6a4" alt="Stars"></a>
+</p>
 
-English | [中文](README-CN.md)
+<p align="center">
+  <b>Terrane</b> turns your documents into a knowledge base you can <i>reason over</i> — knowledge graph,
+  reasoning-grade hybrid retrieval, a NotebookLM-style Studio, a personal Chat assistant and long-term memory.
+  <br>It runs entirely on <b>CPU (no GPU)</b>, you bring your own models, and you can plug it into any app.
+</p>
+
+<p align="center">
+  <b>English</b> · <a href="README-CN.md">简体中文</a>
+</p>
 
 ---
 
-## Overview
+## ✨ Highlights
 
-Terrane turns your private documents into a queryable, graph-aware, multi-modal knowledge platform.
-Everything stays inside your network: documents, embeddings, the knowledge graph, conversations and
-memory never leave the deployment. A dual control plane separates the end-user platform from operator
-administration, and every model backend is configured by you with your own API keys (the product
-ships with **zero keys**).
+- 🧠 **Reasoning-grade retrieval (Retrieval&nbsp;2.0).** Not just vector search — a per-document structural
+  tree is navigated by an LLM and fused (via Reciprocal Rank Fusion) with vector + lexical recall, a
+  knowledge-graph multi-hop path and a RAPTOR-style semantic tree. A Fast/Deep router keeps everyday
+  queries in milliseconds and spends reasoning only when it pays off. Every Deep answer is **traceable to
+  the exact `document › section › page`.**
+- 🕸️ **Built-in knowledge graph.** Entities and relations are extracted into **Apache AGE** (graph database
+  inside PostgreSQL 18) for multi-hop questions that flat retrieval misses.
+- 🖼️ **SOTA multimodal parsing.** A 3-tier engine (lexical → vision-language → full-page VL layout) handles
+  scanned PDFs, tables, formulas and figures; videos are parsed by scene keyframes; OCR / ASR / TTS included.
+- 🧩 **Plug into any app.** Expose any knowledge base as a **Dify-compatible External Knowledge API**, a
+  generic REST endpoint, a self-describing **OpenAPI** tool (Coze / GPTs / n8n / FastGPT) or an **MCP server**
+  for Claude Code / Cursor.
+- 📓 **NotebookLM-style Studio & Wiki.** Compile sources into study guides, FAQs, briefings and audio
+  overviews, or a structured, navigable knowledge Wiki.
+- 🧬 **Long-term memory.** A personal assistant that remembers facts and preferences across conversations.
+- 🔌 **Bring your own models.** Any OpenAI-compatible channel for chat / embedding / rerank / vision /
+  ASR / TTS — configured from the admin console, no code changes.
+- 🗄️ **Pluggable object storage.** Bundled SeaweedFS out of the box, or any of S3, Azure Blob, Google Cloud
+  Storage, Aliyun OSS, Tencent COS, Volcengine TOS, Huawei OBS.
+- 🏠 **Self-hosted & air-gapped.** One `docker compose up` brings up the whole stack — PostgreSQL 18 + AGE +
+  pgvector and Redis bundled. CPU-only, no data leaves your network.
 
-## Features
+## 📋 Table of contents
 
-- **Knowledge bases** — ingest text / PDF / Office (docx, xlsx, pptx) via the self-built **Terrane
-  Parse** engine (page layout, ruled & borderless tables, formulas) — all on CPU, no GPU.
-- **Video & audio understanding** — ffmpeg keyframes + audio → vision (VL) captions + speech (ASR)
-  transcript, ingested back into the knowledge base.
-- **Hybrid retrieval** — pgvector semantic search + lexical search + reranking.
-- **Knowledge graph** — Apache AGE graph over your sources, with graph exploration.
-- **Personal Chat assistant** — cross-knowledge-base auto-grounding, a web-search toggle with source
-  cards, multi-modal attachments (docs / images / video / audio), persistent conversations, and
-  memory recall.
-- **Studio (NotebookLM-style)** — one-click study guide, FAQ, briefing, timeline, mind map,
-  flashcards, quiz, data table, **slide deck (PPTX export)** and **audio overview (two-host podcast,
-  TTS)**.
-- **Long-term memory** — automatically remembered from your chats and uploaded documents, plus manual
-  entries; deduped & updated (extract → retrieve → ADD/UPDATE), fully per-user isolated.
-- **Model channels** — chat / embedding / rerank / vision / ASR / TTS backends, all configured in the
-  admin console with your own keys (DashScope / OpenAI-compatible).
-- **MCP server** — expose knowledge bases as MCP tools for external agents.
-- **Enterprise** — workspaces & RBAC, SSO (OIDC), 2FA, field-level encryption (KEK), audit logging,
-  observability, backup & migration, and optional license-gated activation.
+- [Quick start](#-quick-start)
+- [Retrieval 2.0](#-retrieval-20)
+- [Plug into any app](#-plug-into-any-app)
+- [Architecture](#-architecture)
+- [Tech stack](#-tech-stack)
+- [Deployment](#-deployment)
+- [Roadmap](#-roadmap)
+- [Contributing](#-contributing)
+- [License](#-license)
 
-## Architecture
+## 🚀 Quick start
 
-Five application services + two datastores:
+> Prerequisites: Docker + Docker Compose. No GPU required.
 
-| Component | Role |
+```bash
+git clone https://github.com/Passion-Flow/Terrane.git
+cd Terrane/terrane-deploy/docker-compose
+
+cp .env.example .env          # set TERRANE_KEK + database/Redis passwords
+docker compose up -d          # brings up the full stack, incl. PostgreSQL 18 (AGE + pgvector) & Redis
+```
+
+Then open the **admin console**, change the factory super-admin password, run the setup wizard, and add a
+**model channel** (your own OpenAI-compatible API key). The front app is then fully usable.
+
+| App | Default URL | Purpose |
+|---|---|---|
+| Front (user) | `http://localhost:43000` | Knowledge bases, retrieval, Chat, Studio, Memory |
+| Admin (operator) | `http://localhost:43002` | Users, model channels, settings, audit |
+
+> The bundled PostgreSQL image ships **Apache AGE + pgvector**; everything runs on CPU.
+
+## 🧠 Retrieval 2.0
+
+Terrane treats retrieval as a first-class engine, not a vector lookup. For each document it builds a
+**structural "table-of-contents" tree** (from the vision-language–parsed Markdown), then answers queries by
+**fusing up to five recall paths** with Reciprocal Rank Fusion (RRF):
+
+| Path | What it contributes |
 |---|---|
-| `terrane-server` | Front business control plane (knowledge base / retrieval / Chat / Studio / memory), `:43001` |
-| `terrane-admin-server` | Admin control plane (activation / wizard / model channels / members), `:43003` |
-| `terrane-gateway` | Go data-plane gateway |
-| `terrane-web` | Front SPA (nginx) |
-| `terrane-admin-web` | Admin SPA (nginx) |
-| **PostgreSQL 18 + Apache AGE + pgvector** | Knowledge graph + vector retrieval + relational data (required extensions) |
-| **Redis** | Cache + rate limiting |
+| Vector (pgvector / HNSW) | Dense semantic recall |
+| Lexical (pg_trgm) | Exact terms, names, identifiers |
+| **Tree reasoning** | LLM navigates the document structure to the right section (PageIndex-style) |
+| **Graph multi-hop** | Apache AGE expands entities 1–2 hops for cross-document questions |
+| RAPTOR semantic tree | Cluster summaries for global / multi-step questions |
 
-Two logical databases live on one PostgreSQL instance: `terrane_main` (platform) and `terrane_admin`
-(operators).
+A lightweight **Fast / Deep router** sends short keyword lookups down a millisecond hybrid path, and routes
+reasoning-heavy or structured queries to the full fusion — with a hard cap on reasoning calls so latency
+stays bounded. Deep results carry an explainable **`document › section › page`** citation path.
 
-## Tech stack
+## 🧩 Plug into any app
 
-- **Backend** — Python 3.13, FastAPI, SQLAlchemy 2 (async), Alembic, asyncpg, Redis, Pydantic v2,
-  argon2id, structlog.
-- **Data plane** — Go gateway.
-- **Frontend** — React 19, Vite, Tailwind v4, react-i18next (zh-CN / en).
-- **Models** — DashScope / OpenAI-compatible (chat, embedding, rerank, vision, ASR, TTS).
+Every knowledge base can be exposed to external applications with a scoped API key:
 
-## Repository layout
+- **Dify** — *Connect to an external knowledge base* → point it at `/api/v1/external` (Dify-spec `/retrieval`).
+- **Coze · GPTs · n8n · FastGPT** — import the self-describing OpenAPI at `/api/v1/external/openapi.json`.
+- **Claude Code · Cursor** — add the built-in **MCP** server.
+- **Anything else** — a plain REST `POST /api/v1/external/search` with `{ "query": "...", "top_k": 5 }`.
+
+## 🏗 Architecture
 
 ```
-Terrane/
-├── Project-source/        # all services
-│   ├── terrane-server/        # front business API (FastAPI)
-│   ├── terrane-admin-server/  # admin API (FastAPI)
-│   ├── terrane-gateway/       # data-plane gateway (Go)
-│   ├── terrane-web/           # front SPA (React)
-│   └── terrane-admin-web/     # admin SPA (React)
-├── terrane-deploy/        # delivery: docker-compose / helm / gitlab / migration
-└── ops/                   # ops scripts (multi-arch build, backup, Xinchuang notes)
+              ┌──────────────┐        ┌──────────────────┐
+  Browser ──▶ │  terrane-web │ ──────▶│   terrane-server  │  Front API (FastAPI)
+              │  (React/Vite)│        │  KB · retrieval   │
+              └──────────────┘        │  graph · Studio   │
+                                      │  memory · MCP     │
+  Operator ─▶ terrane-admin-web ────▶ terrane-admin-server │  Admin API
+                                      └─────────┬─────────┘
+                                                │
+   terrane-gateway (Go data plane) ◀────────────┤
+                                                ▼
+        PostgreSQL 18  ·  Apache AGE  ·  pgvector   |   Redis   |   SeaweedFS / S3 / …
+        (relational + graph + vector, one database) | (cache)   | (object storage)
 ```
 
-## Deployment
+| Component | Stack | Role |
+|---|---|---|
+| `terrane-server` | Python · FastAPI · SQLAlchemy | Knowledge bases, retrieval, graph, Studio, memory, MCP & external API |
+| `terrane-admin-server` | Python · FastAPI | Users, model channels, settings, audit |
+| `terrane-gateway` | Go | High-throughput data-plane hot path |
+| `terrane-web` / `terrane-admin-web` | React 19 · Vite · Tailwind | User & operator consoles (i18n: 简体中文 / English) |
+| Datastores | PostgreSQL 18 (AGE + pgvector) · Redis · SeaweedFS | Relational + graph + vector in one DB; cache; object storage |
 
-Pick a path from [`terrane-deploy/`](terrane-deploy/README.md):
+## 🛠 Tech stack
+
+**Backend** FastAPI · SQLAlchemy 2 (async) · Alembic · Pydantic v2 · Go (gateway) · Celery
+**Data** PostgreSQL 18 · Apache AGE · pgvector (halfvec) · Redis · SeaweedFS
+**Frontend** React 19 · Vite · Tailwind CSS · react-i18next
+**Models** Any OpenAI-compatible provider for chat / embed / rerank / vision / ASR / TTS
+
+## 📦 Deployment
+
+Pick a path from [`terrane-deploy/`](terrane-deploy/):
 
 | Path | Use when |
 |---|---|
-| **docker-compose** | single host / appliance / air-gapped (bundled PostgreSQL + Redis by default) |
-| **Helm** | Kubernetes incl. Xinchuang (domestic) K8s (external datastores by default) |
-| **GitLab CI/CD** | build multi-arch images → manual push → manual Helm deploy |
+| **docker-compose** | Single host / appliance / air-gapped (bundled PostgreSQL + Redis) |
+| **Helm** | Kubernetes (external datastores by default) |
+| **GitLab CI/CD** | Build multi-arch images → push → Helm deploy |
 
-### Single-host quick start
+Images are published for **`linux/amd64` and `linux/arm64`**.
 
-```bash
-cd terrane-deploy/docker-compose
-cp .env.example .env        # fill TERRANE_KEK + DB/Redis passwords
-docker compose up -d        # brings up the full stack incl. PG18+AGE+pgvector & Redis
-```
+## 🗺 Roadmap
 
-Then in the admin console: **change the factory super-admin password → run the setup wizard →
-configure your model channels (your own API keys)**. The front app is then fully usable. (License
-activation is optional and off by default.)
+- [x] Reasoning-grade Retrieval 2.0 (tree reasoning + graph multi-hop + RRF fusion)
+- [x] External Knowledge API + MCP server + OpenAPI tool
+- [x] Multimodal parsing (vision-language layout, video, OCR/ASR/TTS), Studio, Wiki, memory
+- [ ] Evaluation harness & retrieval benchmarks
+- [ ] More connectors (Notion, web crawl, IMAP)
+- [ ] Collaborative annotations
 
-> The bundled PostgreSQL image ships Apache AGE + pgvector. CPU-only, no GPU required.
+## 🤝 Contributing
 
-## License
+Contributions are welcome. Found a bug, hit a rough edge, or have a feature in mind?
+**[Open an issue](https://github.com/Passion-Flow/Terrane/issues)** — that is the best way to reach the
+maintainers. For code changes, fork the repo, create a feature branch, and open a pull request.
 
-Terrane is open-source software released under the **MIT License** — see [LICENSE](LICENSE).
+## 📄 License
 
-It also ships an optional, self-hostable license-gating mechanism (disabled by default) for
-organizations that want per-deployment activation; field-level secrets are encrypted with a
-per-deployment KEK.
+Terrane is released under the **[MIT License](LICENSE)**. An optional, self-hostable license-gating
+mechanism ships disabled by default for organizations that want per-deployment activation.
+
+<p align="center"><sub>Built for teams that want their knowledge to stay theirs.</sub></p>
