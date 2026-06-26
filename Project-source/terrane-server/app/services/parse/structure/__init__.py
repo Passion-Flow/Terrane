@@ -1,6 +1,6 @@
 """Terrane self-developed document structure engine (pure-algorithm, no model, CPU-trivial).
 
-Operates on a list of recognizer boxes (from PyMuPDF native text, or any OCR that yields boxes) and
+Operates on a list of recognizer boxes (from pdfplumber native text, or any OCR that yields boxes) and
 reconstructs reading order, section hierarchy, and tables — entirely in our own code. Models are only
 used upstream for the irreducible "pixels -> text" recognition step; everything here is geometry.
 

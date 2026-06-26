@@ -1,6 +1,6 @@
 """Page-by-page WebP layout rendering pipeline for original documents.
 
-PDF -> PyMuPDF rasterizes each page -> WebP; Office (docx/xlsx/pptx and legacy doc/xls/ppt) -> LibreOffice headless
+PDF -> pypdfium2 (PDFium) rasterizes each page -> WebP; Office (docx/xlsx/pptx and legacy doc/xls/ppt) -> LibreOffice headless
 conversion to PDF -> same as above. Page images go to object storage (pages/{rid}/{n}.webp); page count + per-page dimensions go to raw_source_renders.
 Runs asynchronously in the background; failures are only logged and do not affect ingestion/retrieval/Q&A (object-storage degradation rule).
 
@@ -73,28 +73,44 @@ def _soffice_to_pdf(data: bytes, ext: str) -> bytes | None:
         return None
 
 
-def _pdf_page_count(pdf_bytes: bytes) -> int:
-    import fitz  # PyMuPDF
+_RENDER_SCALE = DPI / 72.0   # pypdfium2 render scale ~= DPI/72 (72pt == 1in)
 
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+
+def _page_to_webp(page) -> tuple[int, int, bytes]:
+    """Render a pypdfium2 page -> (w, h, webp bytes) at the configured DPI/quality."""
+    import io
+
+    pil = page.render(scale=_RENDER_SCALE).to_pil()
+    buf = io.BytesIO()
+    pil.save(buf, format="WEBP", quality=WEBP_QUALITY, method=WEBP_METHOD)
+    return pil.width, pil.height, buf.getvalue()
+
+
+def _pdf_page_count(pdf_bytes: bytes) -> int:
+    import pypdfium2 as pdfium
+
+    doc = pdfium.PdfDocument(pdf_bytes)
     try:
-        return min(doc.page_count, MAX_PAGES)
+        return min(len(doc), MAX_PAGES)
     finally:
         doc.close()
 
 
 def _render_batch(pdf_bytes: bytes, start: int, count: int) -> list[tuple[int, int, int, bytes]]:
     """Render pages in the range [start, start+count) -> [(page number 1-based, w, h, webp), ...]."""
-    import fitz
+    import pypdfium2 as pdfium
 
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    doc = pdfium.PdfDocument(pdf_bytes)
     out: list[tuple[int, int, int, bytes]] = []
     try:
-        end = min(start + count, doc.page_count, MAX_PAGES)
+        end = min(start + count, len(doc), MAX_PAGES)
         for i in range(start, end):
-            pix = doc[i].get_pixmap(dpi=DPI)
-            webp = pix.pil_tobytes(format="WEBP", quality=WEBP_QUALITY, method=WEBP_METHOD)
-            out.append((i + 1, pix.width, pix.height, webp))
+            page = doc[i]
+            try:
+                w, h, webp = _page_to_webp(page)
+            finally:
+                page.close()
+            out.append((i + 1, w, h, webp))
     finally:
         doc.close()
     return out
@@ -102,14 +118,17 @@ def _render_batch(pdf_bytes: bytes, start: int, count: int) -> list[tuple[int, i
 
 def render_one_page(pdf_bytes: bytes, page_no: int) -> tuple[int, int, bytes] | None:
     """Render a single page on demand (1-based) -> (w, h, webp). Used by the "render-as-you-scroll" endpoint for large documents."""
-    import fitz
+    import pypdfium2 as pdfium
 
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    doc = pdfium.PdfDocument(pdf_bytes)
     try:
-        if page_no < 1 or page_no > doc.page_count:
+        if page_no < 1 or page_no > len(doc):
             return None
-        pix = doc[page_no - 1].get_pixmap(dpi=DPI)
-        return pix.width, pix.height, pix.pil_tobytes(format="WEBP", quality=WEBP_QUALITY, method=WEBP_METHOD)
+        page = doc[page_no - 1]
+        try:
+            return _page_to_webp(page)
+        finally:
+            page.close()
     finally:
         doc.close()
 

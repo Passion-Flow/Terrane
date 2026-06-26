@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,7 @@ _CONCURRENCY = 5
 _SCANNED_TEXT_MIN = 24  # If a page's lexical text is below this -> treat it as a scanned/image page and OCR the whole page
 _MIN_IMG_BYTES = 6000   # Skip small decorative icons
 _MAX_VL_PAGES = 80      # Page-count cap for full-page VL in high-precision mode (cost/latency guardrail)
+_VL_SCALE = 150 / 72.0  # pypdfium2 render scale ~= 150 DPI for the page images sent to the vision model
 
 _OCR_PROMPT = (
     "把这一页文档完整、忠实地转写为 Markdown。保留标题层级、列表、表格（用 Markdown 表格语法）、"
@@ -48,18 +50,24 @@ async def parse_pdf_fullvl(db: AsyncSession, pdf_bytes: bytes) -> str | None:
     No vl channel -> None (the caller falls back to lexical parsing). Bounded (_MAX_VL_PAGES) + concurrent; failed pages are skipped."""
     if await get_channel(db, "vl") is None:
         return None
-    import fitz
+    import pypdfium2 as pdfium
 
     try:
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        doc = pdfium.PdfDocument(pdf_bytes)
     except Exception:  # noqa: BLE001
         return None
     specs: list[tuple[int, str]] = []
     try:
-        n = min(doc.page_count, _MAX_VL_PAGES)
+        n = min(len(doc), _MAX_VL_PAGES)
         for i in range(n):
-            pix = doc[i].get_pixmap(dpi=150)
-            specs.append((i + 1, base64.b64encode(pix.pil_tobytes(format="JPEG")).decode()))
+            page = doc[i]
+            try:
+                pil = page.render(scale=_VL_SCALE).to_pil()
+            finally:
+                page.close()
+            buf = io.BytesIO()
+            pil.save(buf, format="JPEG")
+            specs.append((i + 1, base64.b64encode(buf.getvalue()).decode()))
     finally:
         doc.close()
     if not specs:
@@ -86,39 +94,54 @@ async def enhance_pdf(db: AsyncSession, pdf_bytes: bytes, base_text: str) -> str
     """VL-enhance a PDF (scanned-page OCR + image descriptions) and return the enhanced Markdown. Returns unchanged if there is no vl channel."""
     if await get_channel(db, "vl") is None:
         return base_text
-    import fitz  # PyMuPDF
+    import pdfplumber
+    import pypdfium2 as pdfium
 
     try:
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        doc = pdfium.PdfDocument(pdf_bytes)
     except Exception:  # noqa: BLE001
+        return base_text
+    try:
+        pl = pdfplumber.open(io.BytesIO(pdf_bytes))
+    except Exception:  # noqa: BLE001
+        doc.close()
         return base_text
 
     specs: list[dict] = []  # {kind: ocr|img, page, b64}
     calls = 0
     try:
-        for i, page in enumerate(doc):
+        for i in range(len(doc)):
             if calls >= _MAX_CALLS:
                 break
-            txt = (page.get_text() or "").strip()
-            if len(txt) < _SCANNED_TEXT_MIN:
-                pix = page.get_pixmap(dpi=150)
-                specs.append({"kind": "ocr", "page": i + 1,
-                              "b64": base64.b64encode(pix.pil_tobytes(format="JPEG")).decode()})
-                calls += 1
-            else:
-                for img in page.get_images(full=True):
-                    if calls >= _MAX_CALLS:
-                        break
-                    try:
-                        ext = doc.extract_image(img[0])
-                    except Exception:  # noqa: BLE001
-                        continue
-                    raw = ext.get("image") or b""
-                    if len(raw) < _MIN_IMG_BYTES:
-                        continue
-                    specs.append({"kind": "img", "page": i + 1, "b64": base64.b64encode(raw).decode()})
+            page = doc[i]
+            try:
+                txt = (pl.pages[i].extract_text() or "").strip() if i < len(pl.pages) else ""
+                if len(txt) < _SCANNED_TEXT_MIN:
+                    pil = page.render(scale=_VL_SCALE).to_pil()
+                    buf = io.BytesIO()
+                    pil.save(buf, format="JPEG")
+                    specs.append({"kind": "ocr", "page": i + 1,
+                                  "b64": base64.b64encode(buf.getvalue()).decode()})
                     calls += 1
+                else:
+                    for obj in page.get_objects(filter=(pdfium.raw.FPDF_PAGEOBJ_IMAGE,)):
+                        if calls >= _MAX_CALLS:
+                            break
+                        try:
+                            ipil = obj.get_bitmap().to_pil()
+                        except Exception:  # noqa: BLE001
+                            continue
+                        ibuf = io.BytesIO()
+                        ipil.convert("RGB").save(ibuf, format="JPEG")
+                        raw = ibuf.getvalue()
+                        if len(raw) < _MIN_IMG_BYTES:
+                            continue
+                        specs.append({"kind": "img", "page": i + 1, "b64": base64.b64encode(raw).decode()})
+                        calls += 1
+            finally:
+                page.close()
     finally:
+        pl.close()
         doc.close()
 
     if not specs:

@@ -1,6 +1,6 @@
 """Terrane Parse -- in-house document parsing engine (pure CPU, no GPU). See design/07-parse-engine.md.
 
-Mature libraries (PyMuPDF / python-docx ... = the font rasterization layer) provide the low-level primitives; the "intelligence" -- layout reconstruction, table reconstruction, etc. -- is 100% in-house:
+Mature libraries (pdfplumber / python-docx ... = the text-extraction layer) provide the low-level primitives; the "intelligence" -- layout reconstruction, table reconstruction, etc. -- is 100% in-house:
 - Reading order: column detection (vertical whitespace) + top->down within a column (XY-Cut idea).
 - Headings: graded by font size relative to body text.
 - Tables: ruled -> intersect a grid from vector lines; unruled -> cluster text coordinates (this version does ruled tables first; unruled is an enhancement).
@@ -53,22 +53,23 @@ def _cluster(vals: list[float], tol: float = 3.0) -> list[float]:
     return [statistics.mean(c) for c in clusters]
 
 
-def _ruled_tables(page) -> list[dict]:
-    """Reconstruct ruled tables from vector lines. Returns [{bbox, md}]. In-house: lines -> grid -> cells -> placement."""
+def _ruled_tables(page, words_xy: list[tuple]) -> list[dict]:
+    """Reconstruct ruled tables from vector lines. Returns [{bbox, md}]. In-house: lines -> grid -> cells -> placement.
+
+    `page` is a pdfplumber Page; `words_xy` is the page's words as (x0,y0,x1,y1,text) tuples (top-origin y).
+    """
     hlines: list[tuple[float, float, float]] = []  # (y, x0, x1)
     vlines: list[tuple[float, float, float]] = []  # (x, y0, y1)
-    for d in page.get_drawings():
-        for it in d.get("items", []):
-            if it[0] == "l":
-                p1, p2 = it[1], it[2]
-                if abs(p1.y - p2.y) <= 2 and abs(p1.x - p2.x) > 8:
-                    hlines.append((p1.y, min(p1.x, p2.x), max(p1.x, p2.x)))
-                elif abs(p1.x - p2.x) <= 2 and abs(p1.y - p2.y) > 8:
-                    vlines.append((p1.x, min(p1.y, p2.y), max(p1.y, p2.y)))
-            elif it[0] == "re":
-                r = it[1]
-                hlines += [(r.y0, r.x0, r.x1), (r.y1, r.x0, r.x1)]
-                vlines += [(r.x0, r.y0, r.y1), (r.x1, r.y0, r.y1)]
+    for ln in page.lines:
+        ax0, ay0, ax1, ay1 = ln["x0"], ln["top"], ln["x1"], ln["bottom"]
+        if abs(ay0 - ay1) <= 2 and abs(ax0 - ax1) > 8:
+            hlines.append((ay0, min(ax0, ax1), max(ax0, ax1)))
+        elif abs(ax0 - ax1) <= 2 and abs(ay0 - ay1) > 8:
+            vlines.append((ax0, min(ay0, ay1), max(ay0, ay1)))
+    for r in page.rects:
+        rx0, ry0, rx1, ry1 = r["x0"], r["top"], r["x1"], r["bottom"]
+        hlines += [(ry0, rx0, rx1), (ry1, rx0, rx1)]
+        vlines += [(rx0, ry0, ry1), (rx1, ry0, ry1)]
     if len(hlines) < 2 or len(vlines) < 2:
         return []
     ys = _cluster([h[0] for h in hlines])
@@ -76,8 +77,8 @@ def _ruled_tables(page) -> list[dict]:
     if len(ys) < 2 or len(xs) < 2:
         return []
     x0, x1, y0, y1 = xs[0], xs[-1], ys[0], ys[-1]
-    # Take text spans within the table region and place them into cells
-    words = page.get_text("words")  # (x0,y0,x1,y1,word,block,line,word_no)
+    # Take text words within the table region and place them into cells
+    words = words_xy  # (x0,y0,x1,y1,word)
     rows_md: list[list[str]] = []
     for ri in range(len(ys) - 1):
         row: list[str] = []
@@ -184,19 +185,68 @@ def _reading_order(blocks: list[dict], page_w: float) -> list[dict]:
     return sorted(blocks, key=lambda b: b["bbox"][1])
 
 
-def _parse_pdf(path: str) -> str:
-    import fitz
+_BOLD_FLAG = 1 << 4   # bold flag bit the downstream heading heuristics check (s["flags"] & 16)
 
-    doc = fitz.open(path)
+
+def _page_to_blocks(page) -> list[dict]:
+    """Convert a pdfplumber page into structured text blocks (one line per text line, spans = words).
+
+    Each span carries bbox (top-origin y), text, size and font so the in-house heading / table / formula
+    heuristics keep working unchanged."""
+    try:
+        words = page.extract_words(extra_attrs=["size", "fontname"])
+    except Exception:  # noqa: BLE001
+        return []
+    words = [w for w in words if (w.get("text") or "").strip()]
+    if not words:
+        return []
+    words.sort(key=lambda w: (round(float(w.get("top", 0.0)), 1), float(w.get("x0", 0.0))))
+    blocks: list[dict] = []
+    cur: list[dict] = []
+
+    def flush() -> None:
+        if not cur:
+            return
+        spans = []
+        for w in cur:
+            font = w.get("fontname", "") or ""
+            flags = _BOLD_FLAG if "bold" in font.lower() else 0
+            spans.append({
+                "bbox": (float(w["x0"]), float(w["top"]), float(w["x1"]), float(w["bottom"])),
+                "text": w.get("text") or "",
+                "size": float(w.get("size", 0) or 0),
+                "font": font,
+                "flags": flags,
+            })
+        bx0 = min(s["bbox"][0] for s in spans); by0 = min(s["bbox"][1] for s in spans)
+        bx1 = max(s["bbox"][2] for s in spans); by1 = max(s["bbox"][3] for s in spans)
+        blocks.append({"type": 0, "bbox": (bx0, by0, bx1, by1), "lines": [{"spans": spans}]})
+        cur.clear()
+
+    for w in words:
+        if cur and abs(float(w.get("top", 0.0)) - float(cur[0].get("top", 0.0))) <= 3.0:
+            cur.append(w)
+        else:
+            flush()
+            cur.append(w)
+    flush()
+    return blocks
+
+
+def _parse_pdf(path: str) -> str:
+    import pdfplumber
+
+    doc = pdfplumber.open(path)
     out: list[str] = []
-    for page in doc:
-        data = page.get_text("dict")
-        blocks = [b for b in data.get("blocks", []) if b.get("type") == 0]
-        tables = _ruled_tables(page) + _borderless_regions(blocks)
+    for page in doc.pages:
+        blocks = _page_to_blocks(page)
+        words_xy = [(float(w["x0"]), float(w["top"]), float(w["x1"]), float(w["bottom"]), w.get("text") or "")
+                    for w in page.extract_words()]
+        tables = _ruled_tables(page, words_xy) + _borderless_regions(blocks)
         tregions = [t["bbox"] for t in tables]
         sizes = [s["size"] for b in blocks for ln in b.get("lines", []) for s in ln.get("spans", [])]
         body = statistics.median(sizes) if sizes else 10.0
-        ordered = _reading_order(blocks, page.rect.width)
+        ordered = _reading_order(blocks, float(page.width))
         placed: set[int] = set()
         page_md: list[str] = []
         for b in ordered:
@@ -208,7 +258,7 @@ def _parse_pdf(path: str) -> str:
                 continue
             for ln in b.get("lines", []):
                 spans = ln.get("spans", [])
-                txt = "".join(s["text"] for s in spans).strip()
+                txt = " ".join(s["text"] for s in spans).strip()
                 if not txt:
                     continue
                 if _line_is_formula(spans):

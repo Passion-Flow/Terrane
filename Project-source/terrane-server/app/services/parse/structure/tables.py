@@ -5,7 +5,7 @@ reconstruct_table(boxes): given the text boxes inside one table region, infer th
   and emit HTML. (Camelot "Stream" / ClusterTabNet geometry, implemented as our own code.)
 detect_tables(page_boxes): find grid-like clusters on a page (>=2 rows x >=2 aligned columns) so the
   reconstructor knows where tables are. Library-agnostic: operates only on Box, so the upstream PDF
-  reader (PyMuPDF today, pypdfium2/pdfplumber later) can be swapped without touching this algorithm.
+  reader (pdfplumber native text) can be swapped without touching this algorithm.
 
 Honest limits: borderless tables with many-line cells, hierarchical headers or heavy empty cells degrade
 (over/under-splitting). Those are the cases a small table model may back up later; the HTML/grid logic

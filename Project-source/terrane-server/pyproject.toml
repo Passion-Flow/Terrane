@@ -9,8 +9,7 @@ dependencies = [
     "python-pptx>=1.0",
     "openpyxl>=3.1",
     "python-docx>=1.1",
-    "PyMuPDF>=1.27",
-    "Pillow>=11.0",            # PDF page pixmap -> WebP encoding (pil_tobytes)
+    "Pillow>=11.0",            # PDF page render (pypdfium2 .to_pil()) -> WebP/JPEG encoding
     # -- Object storage, 8 providers (lazy import: unselected providers are not triggered) --
     "boto3>=1.35",            # S3-compatible: AWS S3 + 4 domestic clouds + SeaweedFS (self-hosted default)
     "azure-storage-blob>=12.24",  # Azure Blob (native SDK)
@@ -31,6 +30,8 @@ dependencies = [
     "email-validator==2.2.0",
     "uuid-utils==0.11.1",
     "typer==0.15.4",
+    "pypdfium2>=5.10.1",
+    "pdfplumber>=0.11.10",
 ]
 
 [project.optional-dependencies]

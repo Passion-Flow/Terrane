@@ -8,6 +8,8 @@ and chunker stay consistent. Returns None when the PDF has no usable text layer 
 
 from __future__ import annotations
 
+import io
+
 import structlog
 
 from app.services.parse.structure.box import Box
@@ -41,21 +43,24 @@ log = structlog.get_logger("terrane.structure")
 def structure_tree(pdf_bytes: bytes) -> tuple[Node, dict[int, int]] | None:
     """Build the section tree from a digital PDF. Returns (root, page_of_box_id) or None if no text."""
     try:
-        import fitz
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        import pdfplumber
+        doc = pdfplumber.open(io.BytesIO(pdf_bytes))
     except Exception as e:  # noqa: BLE001
         log.warning("structure_open_failed", error=str(e))
         return None
     all_boxes: list[Box] = []
     page_of: dict[int, int] = {}
     gid = 0
-    for pno, page in enumerate(doc, start=1):
-        ordered = reading_order(_fold_tables(extract_page_boxes(page)))
-        for b in ordered:
-            b.id = gid
-            page_of[gid] = pno
-            all_boxes.append(b)
-            gid += 1
+    try:
+        for pno, page in enumerate(doc.pages, start=1):
+            ordered = reading_order(_fold_tables(extract_page_boxes(page)))
+            for b in ordered:
+                b.id = gid
+                page_of[gid] = pno
+                all_boxes.append(b)
+                gid += 1
+    finally:
+        doc.close()
     if not all_boxes:
         return None
     root = build_hierarchy(all_boxes, page_of=lambda b: page_of.get(b.id))
