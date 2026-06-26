@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="Terrane — 开源 AI 知识库" width="100%">
+  <img src="assets/banner.svg?v=2" alt="Terrane — 开源 AI 知识库" width="100%">
 </p>
 
 <p align="center">
