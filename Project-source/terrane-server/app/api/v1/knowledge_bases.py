@@ -45,6 +45,7 @@ from app.services.parse import video as video_parser
 from app.services.parse import vl as parse_vl
 from app.services.parse.structure import engine as structure_engine
 from app.services.learning import feedback_log
+from app.services import verify_service
 from app.services.model_channels import get_channel, get_channel_by_model
 from app.services.model_client import ModelError, chat_stream
 
@@ -653,6 +654,22 @@ class FeedbackIn(BaseModel):
     clicked: list | None = None          # [{chunk_id, rank, dwell_ms}]
     thumb: int | None = None             # -1 / 0 / 1
     answer_accepted: bool | None = None
+
+
+class VerifyIn(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    answer: str = Field(min_length=1, max_length=8000)
+    contexts: list[str] = Field(default_factory=list)
+
+
+@router.post("/{kb_id}/verify")
+async def verify_answer(body: VerifyIn, kb_id: str = Path(...),
+                        user: CurrentUser = Depends(get_current_user),
+                        db: AsyncSession = Depends(get_db_session)) -> dict:
+    """Self-developed answer-grounding check: how much of the answer is supported by the retrieved context
+    (engine ④). Returns {grounded: 0-1|null, unsupported: [...]} for the front end to flag / abstain."""
+    kb, _ = await _load(db, kb_id, user)
+    return await verify_service.verify_grounded(db, answer=body.answer, contexts=body.contexts)
 
 
 @router.post("/{kb_id}/feedback")
