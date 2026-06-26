@@ -16,13 +16,33 @@ from app.services.parse.structure.box import Box
 from app.services.parse.structure.extract import extract_page_boxes, has_text_layer
 from app.services.parse.structure.hierarchy import Node, build_hierarchy
 from app.services.parse.structure.reading_order import reading_order
-from app.services.parse.structure.tables import detect_tables, reconstruct_table
+from app.services.parse.structure.tables import (
+    RulingGeometry,
+    detect_tables,
+    reconstruct_table,
+    ruling_geometry,
+)
 
 
-def _fold_tables(boxes: list[Box]) -> list[Box]:
+def _page_geometry(page) -> RulingGeometry | None:
+    """Build the vector ruling/curve geometry (real table evidence) from a pdfplumber page, so the table
+    detector can distinguish a real table (ruling-line grid / regular column grid) from a DIAGRAM (block /
+    circuit / pin diagram, packaging artwork) whose labels merely pseudo-align. Best-effort: a reader that
+    cannot expose lines/rects/curves degrades the detector to the column-regularity check only."""
+    try:
+        return ruling_geometry(page.lines or [], page.rects or [], page.curves or [])
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _fold_tables(boxes: list[Box], geometry: RulingGeometry | None = None) -> list[Box]:
     """Detect table regions and replace each region's cells with a single 'table' box whose text is the
-    reconstructed HTML — so reading order places the table once and the hierarchy attaches it as content."""
-    regions = detect_tables(boxes)
+    reconstructed HTML — so reading order places the table once and the hierarchy attaches it as content.
+
+    `geometry` carries the page's vector rules + curves; the detector's real-table guard uses it to refuse
+    folding a diagram into a garbled <table> (G1/G5). When a candidate is NOT a real table its cells are
+    left untouched here, so they flow through XY-Cut++ reading order as ordinary text."""
+    regions = detect_tables(boxes, geometry)
     if not regions:
         return boxes
     in_table = {id(b): ri for ri, reg in enumerate(regions) for b in reg}
@@ -60,7 +80,7 @@ def structure_tree(pdf_bytes: bytes, only_pages: set[int] | None = None) -> tupl
         for pno, page in enumerate(doc.pages, start=1):
             if only_pages is not None and pno not in only_pages:
                 continue
-            ordered = reading_order(_fold_tables(extract_page_boxes(page)))
+            ordered = reading_order(_fold_tables(extract_page_boxes(page), _page_geometry(page)))
             for b in ordered:
                 b.id = gid
                 page_of[gid] = pno
