@@ -360,7 +360,7 @@ async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tie
             tf.write(data)
             tmp = tf.name
         try:
-            return await video_parser.parse_video(db, tmp)
+            return await video_parser.parse_video(db, tmp, sid=sid)
         except Exception as e:  # noqa: BLE001
             log.warning("video_parse_failed", error=str(e))
             return None
@@ -891,6 +891,33 @@ async def get_source_figure(kb_id: str = Path(...), source_id: str = Path(...),
     except Exception:  # noqa: BLE001
         raise BizError("RESOURCE_NOT_FOUND", {"resource": "figure"})
     return StreamingResponse(io.BytesIO(data), media_type="image/webp",
+                             headers={"Content-Disposition": "inline",
+                                      "Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@router.get("/{kb_id}/sources/{source_id}/video-frame/{idx}")
+async def get_source_video_frame(kb_id: str = Path(...), source_id: str = Path(...),
+                                 idx: int = Path(..., ge=0),
+                                 user: CurrentUser = Depends(get_current_user),
+                                 db: AsyncSession = Depends(get_db_session)) -> StreamingResponse:
+    """Serve a stored video keyframe (JPEG) — the `![帧](video-frame/{idx})` reference in the timecoded video
+    Markdown resolves here, so a retrieval hit can show the scene image (and deep-link to its `t=start`). Same
+    immutable serving as page/figure images. 404 if the frame was never produced."""
+    import io
+
+    kb, _ = await _load(db, kb_id, user)
+    try:
+        sid = uuid.UUID(source_id)
+    except ValueError:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    r = await db.get(RawSource, sid)
+    if r is None or r.kb_id != kb.id:
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "source"})
+    try:
+        data = await storage.get_adapter().download(storage.video_frame_key(sid, idx))
+    except Exception:  # noqa: BLE001
+        raise BizError("RESOURCE_NOT_FOUND", {"resource": "video_frame"})
+    return StreamingResponse(io.BytesIO(data), media_type="image/jpeg",
                              headers={"Content-Disposition": "inline",
                                       "Cache-Control": "public, max-age=31536000, immutable"})
 

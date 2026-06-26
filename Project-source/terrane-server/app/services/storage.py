@@ -57,6 +57,15 @@ def figure_key(raw_source_id: uuid.UUID | str, page_no: int, idx: int) -> str:
     return f"figures/{raw_source_id}/{page_no}-{idx}.webp"
 
 
+def video_frame_key(raw_source_id: uuid.UUID | str, idx: int) -> str:
+    """Object key for keyframe `idx` (0-based, in time order) extracted from a video source.
+
+    Served the same way as a page/figure image (same adapter, same immutable-image route), so a
+    `![帧](.../video-frame/{idx})` reference in the timecoded Markdown resolves to the stored keyframe and a
+    retrieval hit can deep-link to its scene."""
+    return f"video/{raw_source_id}/{idx}.jpg"
+
+
 async def delete_source_objects(raw_source_id: uuid.UUID | str) -> None:
     """Delete all objects for a source in object storage (original + all page images). Best-effort, never raises."""
     a = get_adapter()
@@ -64,7 +73,7 @@ async def delete_source_objects(raw_source_id: uuid.UUID | str) -> None:
         await a.delete(original_key(raw_source_id))
     except Exception:  # noqa: BLE001
         pass
-    for prefix in (f"pages/{raw_source_id}/", f"figures/{raw_source_id}/"):
+    for prefix in (f"pages/{raw_source_id}/", f"figures/{raw_source_id}/", f"video/{raw_source_id}/"):
         try:
             for o in await a.list(prefix):
                 try:
