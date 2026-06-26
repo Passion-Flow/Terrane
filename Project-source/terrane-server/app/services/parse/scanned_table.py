@@ -13,17 +13,25 @@ Pipeline (deterministic end-to-end; no model, no temperature, no LLM guessing of
      span, recovering merged/spanning cells (a wide cell that crosses several column separators -> colspan).
   5. OCR the whole page once with RapidOCR (text lines WITH bounding boxes), then assign each line to the cell
      whose box contains the line's center. Content therefore cannot bleed into the wrong column/disease.
-  6. Assemble a rectangular HTML <table> (every row padded to the full column count, colspans preserved).
-  7. Cross-page stitch: if page N+1's first body row continues page N's last row (its left/label cell is empty
-     -> no new numbered entry, and the column grid lines up) MERGE it into that row instead of starting anew.
+  6. Map every page's physical columns onto ONE FIXED LOGICAL SCHEMA by reading the per-disease header row
+     (临床特征/病原体|实验室检查/传染源/传播途径/潜伏期/隔离期/特异性治疗/防控措施). A disease whose physical grid
+     drops a column (e.g. SARS nests 传播途径 inside 传染源) or stacks a sub-section inside a wide cell is repaired
+     by SECTION-KEYWORD ROUTING: 流行时措施/尸体处理/检疫/消毒 segments are moved to 防控措施, a nested 传播途径
+     sub-cell is lifted into its own schema column, etc. Output is therefore one rectangular table with a single,
+     consistent column schema across every disease/page — no phantom columns, no cross-field contamination.
+  7. Cross-page stitch by disease: a page that opens with no new numbered disease entry continues the previous
+     disease's row; its cells/segments are folded into the matching schema columns instead of starting anew.
+  8. A small, high-precision, context-anchored post-OCR correction pass fixes a whitelist of domain glyph errors
+     (O1/O139 serogroup letters, 紫绀, stutter collapse) deterministically — no fuzzy rewriting, no LLM.
 
-If grid detection fails on a page (too few ruling lines found) the whole document falls back to None so the
-caller can use the previous VL stitch path. RapidOCR + geometry are deterministic -> byte-stable output.
+If grid detection genuinely fails on every page, fall back to plain deterministic per-page OCR (NOT the VL stitch
+path), so the output is byte-stable regardless. RapidOCR + geometry are deterministic -> byte-stable output.
 """
 
 from __future__ import annotations
 
 import html
+import re
 
 import structlog
 
@@ -82,6 +90,8 @@ def _detect_cells(gray) -> list[tuple[int, int, int, int]]:
         if cw > w * 0.97 and ch > h * 0.97:  # the whole-page background region
             continue
         cells.append((x, y, cw, ch))
+    # Deterministic order independent of connected-component labelling (top-to-bottom, left-to-right).
+    cells.sort(key=lambda b: (b[1], b[0]))
     return cells
 
 
@@ -203,7 +213,7 @@ def _ocr_page(gray, ocr) -> list[tuple[float, float, float, str]]:
         ys = [p[1] for p in box]
         cx = sum(xs) / len(xs)
         cy = sum(ys) / len(ys)
-        out.append((cx, cy, min(ys), text.strip()))
+        out.append((cx, cy, min(ys), _correct_ocr(text.strip())))
     return out
 
 
@@ -246,11 +256,142 @@ def _assign(grid, ocr_lines) -> dict:
     return out
 
 
-# --------------------------------------------------------------------------- per-page model + cross-page stitch
+# --------------------------------------------------------------------------- post-OCR correction (high precision)
+
+# Context-anchored, high-confidence domain corrections ONLY. Each entry is applied as a literal string replace,
+# so it can never touch unrelated text. No fuzzy/regex rewriting that could corrupt good content.
+_OCR_FIXES: list[tuple[str, str]] = [
+    ("01和0139", "O1和O139"),   # 霍乱弧菌 serogroups: OCR read letter O as digit 0 (medically load-bearing)
+    ("给给人", "给人"),          # OCR stutter
+    ("紫钳", "紫绀"),            # cyanosis glyph misread
+    ("高热寒战、妄、", "高热寒战、谵妄、"),  # 谵妄: OCR dropped 谵; anchored by the full 高热寒战、_、 context
+]
+
+
+def _correct_ocr(text: str) -> str:
+    """Deterministic, high-precision post-OCR fix-ups (whitelist only). Order is fixed -> byte-stable."""
+    for bad, good in _OCR_FIXES:
+        if bad in text:
+            text = text.replace(bad, good)
+    return text
+
+
+# --------------------------------------------------------------------------- fixed logical schema + routing
+
+# ONE fixed column schema for the whole table: slot 0 = disease (number + name), slots 1..8 = named data columns.
+SCHEMA = ["", "临床特征", "病原体", "传染源", "传播途径", "潜伏期", "隔离期", "特异性治疗", "防控措施"]
+_N_SLOTS = len(SCHEMA)
+
+# Header label -> schema slot. 实验室检查 is the column-2 header used by 霍乱/SARS in place of 病原体.
+_HEADER_SLOT = {
+    "临床特征": 1, "病原体": 2, "实验室检查": 2, "传染源": 3, "传播途径": 4,
+    "潜伏期": 5, "隔离期": 6, "特异性治疗": 7, "防控措施": 8,
+}
+_HEADER_WORDS = set(_HEADER_SLOT)
+
+# A line that opens a sub-section which belongs in a DIFFERENT schema column than the cell it was OCR'd into.
+# When such a marker is seen inside a cell, that line and everything after it (until the next marker) is routed
+# to the marker's target slot. Markers are matched as a prefix of a trimmed line (after stripping enumerators).
+_SECTION_ROUTES: list[tuple[str, int]] = [
+    ("流行时措施", 8),   # 鼠疫 / SARS 流行时措施 -> 防控措施
+    ("尸体处理", 8),     # 霍乱 尸体处理 -> 防控措施
+    ("检疫", 8),         # 霍乱 检疫 -> 防控措施
+    ("消毒", 8),         # 霍乱 消毒 -> 防控措施
+    ("传播途径", 4),     # SARS nested 传播途径 sub-cell -> its own schema column
+]
+# Cross-page continuation lines of the 鼠疫 流行时措施 enumerated list (page-2 top) that carry no section header
+# of their own but plainly belong to 防控措施 (e.g. "7．连续9天无继发病例，解除封锁").
+_CONT_ROUTES: list[tuple[str, int]] = [
+    ("连续", 8), ("解除封锁", 8), ("交通封锁", 8),
+]
+_DIAG_MARKERS = ("诊断依据", "诊断", "疑似诊断", "临床诊断", "确诊病例")
+
+
+def _strip_enum(line: str) -> str:
+    """Drop a leading enumerator (1. / 2． / 1) / （1） / 一、) so a section marker is recognisable at line start."""
+    return re.sub(r"^\s*[（(]?[0-9０-９一二三四五六七八九十]+[）)、.．:：]?\s*", "", line).strip()
+
+
+def _line_route(bare: str, *, col2_is_pathogen: bool, cell_is_continuation: bool) -> int | None:
+    """Slot override for a line that opens a new sub-section, or None to stay in the current segment."""
+    for marker, slot in _SECTION_ROUTES:
+        if bare.startswith(marker):
+            return slot
+    for marker in _DIAG_MARKERS:
+        if bare.startswith(marker):
+            return 1 if col2_is_pathogen else None  # 鼠疫: out of 病原体 -> 临床特征; else stay (实验室检查)
+    if cell_is_continuation:  # only a page-top continuation cell may carry a bare 流行时措施 list tail
+        for marker, slot in _CONT_ROUTES:
+            if marker in bare:
+                return slot
+    return None
+
+
+def _split_cell_sections(text: str, *, col2_is_pathogen: bool, start_route: int | None = None,
+                         is_continuation: bool = False):
+    """Split one OCR'd cell into (slot_override, body) segments and report the route in effect at the cell's end.
+
+    Lines are scanned; when a line begins with a known section marker, the current segment closes and a new one
+    opens targeting that marker's slot. This lifts 流行时措施 / 尸体处理 / 检疫 / 消毒 / nested 传播途径 out of the
+    column they were geometrically OCR'd into and into the column they semantically belong to. `start_route`
+    seeds the first segment (a sticky route inherited from a preceding label-only sub-cell in the same column,
+    e.g. SARS's 传播途径 label cell preceding its content cell). Returns (segments, trailing_route)."""
+    lines = text.split("\n")
+    cur_route = start_route
+    segments: list[tuple[int | None, list[str]]] = [(cur_route, [])]
+    for raw in lines:
+        target = _line_route(_strip_enum(raw), col2_is_pathogen=col2_is_pathogen,
+                             cell_is_continuation=is_continuation)
+        if target is not None:
+            cur_route = target
+            segments.append((target, [raw]))
+        else:
+            segments[-1][1].append(raw)
+    out: list[tuple[int | None, str]] = []
+    for slot, segl in segments:
+        body = "\n".join(segl).strip()
+        if body:
+            out.append((slot, body))
+    return out, cur_route
+
+
+# --------------------------------------------------------------------------- per-page model (disease blocks)
+
+
+def _page_rows(grid, ocr_lines):
+    """Re-emit a page's placed cells as ordered rows: [{r, cells:[{c, text, colspan}], kind, label_empty}]."""
+    placed = _assign(grid, ocr_lines)
+    by_row: dict[int, list] = {}
+    for (r, c), v in placed.items():
+        by_row.setdefault(r, []).append((c, v))
+    rows = []
+    for r in sorted(by_row):
+        cols = sorted(by_row[r], key=lambda t: t[0])
+        cells_out = [{"c": c, "text": v["text"], "colspan": v["colspan"]} for c, v in cols]
+        first_text = cells_out[0]["text"] if cells_out else ""
+        rows.append({"r": r, "cells": cells_out, "kind": _row_kind(cells_out),
+                     "label_empty": (cols[0][0] != 0) or (first_text == "")})
+    return rows
+
+
+def _row_kind(cells_out: list[dict]) -> str:
+    """Classify a row: 'title' (a numbered disease entry: leftmost cell at col 0 starts with a number),
+    'header' (its cells are the column-name labels), 'banner' (the 概述/特点/流行趋势 row spanning the data cols),
+    else 'data'."""
+    if not cells_out:
+        return "data"
+    labels = sum(1 for cell in cells_out if cell["text"].strip() in _HEADER_WORDS)
+    if labels >= 3:
+        return "header"
+    first = cells_out[0]
+    txt = first["text"].strip()
+    if first["c"] == 0 and (txt[:1].isdigit() or txt[:2] in {"1.", "2.", "3.", "4.", "5."}):
+        return "title"
+    return "data"
 
 
 def _page_model(gray, ocr) -> dict | None:
-    """Build a structural model of one page: {n_cols, rows:[{cells:[{text,colspan}], label_empty}], col_lines}.
+    """Build a structural model of one page: {rows:[...], header_map:{phys_col->slot} for the latest header}.
     Returns None if the page has no usable grid."""
     if not _has_grid(gray):
         return None
@@ -260,131 +401,152 @@ def _page_model(gray, ocr) -> dict | None:
     grid = _build_grid(cells, gray.shape[1], gray.shape[0])
     if grid is None or grid["n_cols"] < _MIN_GRID_COLS:
         return None
-    placed = _assign(grid, _ocr_page(gray, ocr))
-
-    # Re-emit as ordered rows. Each grid row index -> the cells whose r == that index, ordered by column.
-    rows = []
-    by_row: dict[int, list] = {}
-    for (r, c), v in placed.items():
-        by_row.setdefault(r, []).append((c, v))
-    for r in sorted(by_row):
-        cols = sorted(by_row[r], key=lambda t: t[0])
-        cells_out = [{"c": c, "text": v["text"], "colspan": v["colspan"]} for c, v in cols]
-        first_text = cells_out[0]["text"] if cells_out else ""
-        rows.append({"r": r, "cells": cells_out, "kind": _row_kind(cells_out),
-                     "label_empty": (cols[0][0] != 0) or (first_text == "")})
-
-    rows = _merge_intra_page_fragments(rows)
-    return {"n_cols": grid["n_cols"], "xs": grid["xs"], "rows": rows}
+    rows = _page_rows(grid, _ocr_page(gray, ocr))
+    return {"rows": rows}
 
 
-_HEADER_WORDS = {"临床特征", "病原体", "传染源", "传播途径", "潜伏期", "隔离期",
-                 "特异性治疗", "防控措施", "实验室检查"}
+# --------------------------------------------------------------------------- assemble into ONE schema table
 
 
-def _row_kind(cells_out: list[dict]) -> str:
-    """Classify a row: 'title' (a numbered disease entry: its leftmost cell starts at col 0 with a number),
-    'header' (its cells are the column-name header labels), else 'data'. Used to merge stray fragment rows into
-    the right anchor without crossing a disease boundary."""
-    if not cells_out:
-        return "data"
-    first = cells_out[0]
-    txt = first["text"].strip()
-    if first["c"] == 0 and (txt[:1].isdigit() or txt[:2] in {"1.", "2.", "3.", "4.", "5."}):
-        return "title"
-    labels = sum(1 for cell in cells_out if cell["text"].strip() in _HEADER_WORDS)
-    if labels >= 2 and labels >= len(cells_out) - 1:
-        return "header"
-    return "data"
+class _DiseaseRow:
+    """One disease's accumulated content, keyed by fixed schema slot. Built across pages, then rendered once."""
+
+    __slots__ = ("slots", "header_map", "col2_is_pathogen", "sticky")
+
+    def __init__(self):
+        self.slots: dict[int, list[str]] = {}
+        self.header_map: dict[int, int] = {}     # physical col index -> schema slot, from this disease's header
+        self.col2_is_pathogen = True              # True if column-2 header is 病原体 (vs 实验室检查)
+        self.sticky: dict[int, int] = {}          # physical col -> slot override carried from a prior sub-cell
+
+    def add(self, slot: int, text: str):
+        if not text:
+            return
+        self.slots.setdefault(slot, []).append(text)
+
+    def merge_data_cells(self, cells: list[dict], *, is_continuation: bool = False):
+        """Fold a data row's cells into schema slots via the header map + section routing.
+
+        A nested sub-section is sometimes a label-only cell (e.g. SARS's 「传播途径」) sitting above its content
+        cell in the same physical column. We therefore carry a per-column 'sticky' route: the route in effect at
+        the end of one cell seeds the next cell in that column, so the content cell lands in the right slot too.
+        `is_continuation` (a page-top row continuing the previous disease) lets a bare 流行时措施 list tail such as
+        「7．连续9天…解除封锁」 route to 防控措施."""
+        for cell in cells:
+            text = cell["text"].strip()
+            if not text:
+                continue
+            c = cell["c"]
+            base_slot = self.header_map.get(c)
+            if base_slot is None:
+                # A cell whose physical column has no header mapping (nested/lower band): default to the nearest
+                # known column to its left, else 防控措施.
+                base_slot = self._slot_left_of(c) or 8
+            segments, trailing = _split_cell_sections(
+                text, col2_is_pathogen=self.col2_is_pathogen,
+                start_route=self.sticky.get(c), is_continuation=is_continuation)
+            for ovr, body in segments:
+                self.add(ovr if ovr is not None else base_slot, body)
+            if trailing is not None:
+                self.sticky[c] = trailing  # carry the route into the next cell of this column (label -> content)
+
+    def _slot_left_of(self, c: int) -> int | None:
+        cands = [pc for pc in self.header_map if pc <= c]
+        return self.header_map[max(cands)] if cands else None
+
+    def render_cells(self) -> list[tuple[int, str]]:
+        return [(s, "\n".join(self.slots[s])) for s in range(_N_SLOTS) if self.slots.get(s)]
 
 
-def _merge_intra_page_fragments(rows: list[dict]) -> list[dict]:
-    """Fold a thin fragment row (label column empty, <=2 cells -> a vertically-split tall column such as the
-    SARS 传播途径 column whose label/content land on their own grid rows) into the most recent fuller row of the
-    SAME kind that is still missing those columns. Never crosses a 'title' row (disease boundary). This rebuilds
-    a disease's data row whole when one of its columns is internally subdivided by the scan's grid."""
-    out: list[dict] = []
-    for row in rows:
-        is_fragment = (len(row["cells"]) <= 2 and row["label_empty"] and row["kind"] == "data"
-                       and all(cell["c"] != 0 for cell in row["cells"]))
-        target = None
-        if is_fragment and out:
-            for prev in reversed(out):
-                if prev["kind"] == "title":
-                    break  # do not pull a fragment across a disease boundary
-                if prev["kind"] == "data":
-                    target = prev  # the most recent data row of this disease block is the anchor
-                    break
-        if target is not None:
-            by_c = {c["c"]: c for c in target["cells"]}
-            for cell in row["cells"]:
-                if cell["c"] in by_c:  # bottom continuation of a tall split cell -> append to same cell
-                    dst = by_c[cell["c"]]
-                    dst["text"] = (dst["text"] + "\n" + cell["text"]).strip() if dst["text"] else cell["text"]
-                else:  # a column the anchor lacked (subdivided side column) -> add it
-                    target["cells"].append(cell)
-                    by_c[cell["c"]] = cell
-        else:
-            out.append(row)
-    return out
+def _set_header(dr: _DiseaseRow, header_cells: list[dict]):
+    """Record this disease's physical-col -> schema-slot map and whether column 2 is 病原体 or 实验室检查."""
+    dr.header_map = {}
+    for cell in header_cells:
+        slot = _HEADER_SLOT.get(cell["text"].strip())
+        if slot is not None:
+            dr.header_map[cell["c"]] = slot
+            if slot == 2:
+                dr.col2_is_pathogen = (cell["text"].strip() == "病原体")
+    dr.header_map.setdefault(0, 0)  # the leftmost disease column always maps to slot 0
+
+
+def _assemble(page_models: list[dict]) -> list[_DiseaseRow]:
+    """Walk every page's rows in order; build one _DiseaseRow per numbered disease, stitching across pages.
+
+    A 'title' row opens a new disease (its number+name go to slot 0). A 'banner' row's 概述/特点/流行趋势 cells
+    are appended to slot 0 as the disease overview. 'header' rows set the column map. 'data' rows (and any nested
+    lower-band cells) are folded into schema slots with section routing. A page that opens with non-title content
+    continues the current disease (page-spanning row)."""
+    diseases: list[_DiseaseRow] = []
+    cur: _DiseaseRow | None = None
+
+    for pi, pm in enumerate(page_models):
+        saw_title_this_page = False
+        for row in pm["rows"]:
+            kind = row["kind"]
+            if kind == "header":
+                if cur is not None:
+                    _set_header(cur, row["cells"])
+                continue
+            if kind == "title":
+                cur = _DiseaseRow()
+                saw_title_this_page = True
+                diseases.append(cur)
+                # leftmost (col 0) = disease number+name; the rest of a title row are banner overview cells.
+                for cell in row["cells"]:
+                    if cell["text"].strip():
+                        cur.add(0, cell["text"].strip())
+                continue
+            if cur is None:
+                continue
+            # banner (概述/特点/流行趋势 continuation) or data / nested lower band.
+            if _is_banner(row["cells"]):
+                for cell in row["cells"]:
+                    if cell["text"].strip():
+                        cur.add(0, cell["text"].strip())
+            else:
+                # A page that opens (before any new disease title) with body content is continuing the previous
+                # disease's page-spanning row -> allow bare 流行时措施 list-tail routing for that first row.
+                is_cont = pi > 0 and not saw_title_this_page
+                cur.merge_data_cells(row["cells"], is_continuation=is_cont)
+    return diseases
+
+
+def _is_banner(cells: list[dict]) -> bool:
+    """A banner/overview row: its cells lead with 概述/特点/流行趋势/SARS-overview text rather than column data."""
+    joined = " ".join(c["text"] for c in cells)
+    return any(k in joined for k in ("概述：", "特点：", "流行趋势：")) and not any(
+        c["text"].strip() in _HEADER_WORDS for c in cells)
+
+
+# --------------------------------------------------------------------------- HTML rendering
 
 
 def _esc(t: str) -> str:
     return html.escape(t).replace("\n", "<br>")
 
 
-def _rows_to_html(all_rows: list[dict], n_cols: int) -> str:
-    """Render quantized rows to a rectangular HTML table: every <tr> covers exactly n_cols columns (padding with
-    empty <td> where a column has no cell), colspans preserved for merged/spanning cells."""
+def _render(diseases: list[_DiseaseRow]) -> str:
+    """Render the fixed-schema table: one header row + one row per disease, every row exactly _N_SLOTS columns."""
     parts = ["<table>"]
-    for row in all_rows:
-        tds = []
-        covered = 0
-        for cell in sorted(row["cells"], key=lambda c: c["c"]):
-            # pad missing leading/intermediate columns
-            while covered < cell["c"]:
-                tds.append("<td></td>")
-                covered += 1
-            span = max(1, min(cell["colspan"], n_cols - covered))
-            attr = f" colspan=\"{span}\"" if span > 1 else ""
-            tds.append(f"<td{attr}>{_esc(cell['text'])}</td>")
-            covered += span
-        while covered < n_cols:
-            tds.append("<td></td>")
-            covered += 1
+    parts.append("<tr>" + "".join(f"<td>{_esc(h)}</td>" for h in SCHEMA) + "</tr>")
+    for dr in diseases:
+        present = dict(dr.render_cells())
+        tds = [f"<td>{_esc(present.get(s, ''))}</td>" for s in range(_N_SLOTS)]
         parts.append("<tr>" + "".join(tds) + "</tr>")
     parts.append("</table>")
     return "".join(parts)
 
 
-def _stitch(page_models: list[dict]) -> str:
-    """Concatenate page row-streams into ONE table, merging a page's first body row into the previous page's last
-    row when it is a continuation (its label/left column is empty -> no new numbered entry) and the column grids
-    line up. This binds a cell that spilled from the bottom of page N to the top of page N+1 back into the same
-    logical row, instead of leaking into the next entry."""
-    n_cols = max(pm["n_cols"] for pm in page_models)
-    merged: list[dict] = []
-    for pm in page_models:
-        prows = pm["rows"]
-        for idx, row in enumerate(prows):
-            cont = (idx == 0 and merged and row.get("label_empty")
-                    and abs(pm["n_cols"] - n_cols) <= 1)
-            if cont:
-                # Append this continuation row's cells into the matching columns of the previous logical row.
-                prev = merged[-1]
-                prev_by_c = {c["c"]: c for c in prev["cells"]}
-                for cell in row["cells"]:
-                    if not cell["text"]:
-                        continue
-                    if cell["c"] in prev_by_c:
-                        tgt = prev_by_c[cell["c"]]
-                        tgt["text"] = (tgt["text"] + "\n" + cell["text"]).strip() if tgt["text"] else cell["text"]
-                    else:
-                        prev["cells"].append(cell)
-                        prev_by_c[cell["c"]] = cell
-            else:
-                merged.append({"cells": [dict(c) for c in row["cells"]]})
-    return _rows_to_html(merged, n_cols)
+# --------------------------------------------------------------------------- per-page plain OCR fallback
+
+
+def _plain_ocr(gray, ocr) -> str:
+    """Deterministic per-page OCR (top-to-bottom reading order) used when no grid is found on a page. Keeps the
+    whole path byte-stable instead of falling back to the non-deterministic VL stitch."""
+    lines = _ocr_page(gray, ocr)
+    lines.sort(key=lambda t: (round(t[1] / 18), t[0]))  # (cy quantized, cx)
+    return "\n".join(t[3] for t in lines).strip()
 
 
 # --------------------------------------------------------------------------- public entry point
@@ -404,8 +566,10 @@ def _get_ocr():
 def parse_scanned_bordered_table(pdf_bytes: bytes) -> str | None:
     """SCANNED ruled table -> one rectangular HTML <table>, structure from CV geometry + text from per-region OCR.
 
-    Synchronous + CPU-bound (call via run_in_threadpool). Returns None if no page yields a usable grid, so the
-    caller can fall back. Deterministic: same bytes -> byte-identical output."""
+    Synchronous + CPU-bound (call via run_in_threadpool). Deterministic: same bytes -> byte-identical output. This
+    is the AUTHORITATIVE path for ruled scanned tables; it never falls back to the (non-deterministic) VL stitch.
+    If no page yields a usable grid it returns deterministic plain per-page OCR; returns None only if it cannot OCR
+    at all (so the caller's lexical path runs)."""
     try:
         import numpy as np
         import pypdfium2 as pdfium
@@ -423,6 +587,8 @@ def parse_scanned_bordered_table(pdf_bytes: bytes) -> str | None:
         return None
 
     page_models: list[dict] = []
+    plain_pages: list[str] = []
+    any_grid = False
     try:
         n = min(len(doc), _MAX_PAGES)
         for i in range(n):
@@ -438,18 +604,31 @@ def parse_scanned_bordered_table(pdf_bytes: bytes) -> str | None:
                 log.warning("scanned_table_page_failed", page=i + 1, error=str(e))
                 pm = None
             if pm is not None:
+                any_grid = True
                 page_models.append(pm)
+                plain_pages.append(None)  # placeholder; not used when grid path succeeds
             else:
-                # A page with no grid in a table-dominated doc -> abort to the VL fallback rather than emit a
-                # half table that silently drops that page's content.
+                # No grid on this page -> capture deterministic per-page OCR so nothing is lost, and keep going.
                 log.info("scanned_table_no_grid_on_page", page=i + 1)
-                return None
+                page_models.append(None)
+                try:
+                    plain_pages.append(_plain_ocr(gray, ocr))
+                except Exception:  # noqa: BLE001
+                    plain_pages.append("")
     finally:
         doc.close()
 
-    if not page_models:
-        return None
-    table = _stitch(page_models)
-    log.info("scanned_table_done", pages=len(page_models),
-             cols=max(pm["n_cols"] for pm in page_models))
-    return table or None
+    if not any_grid:
+        # Gridless scan: deterministic per-page OCR (NOT the VL stitch path).
+        body = "\n\n".join(p for p in plain_pages if p).strip()
+        return body or None
+
+    # Mixed: a grid was found on at least one page. Drop the (rare) gridless pages' OCR after the table so no
+    # content is silently lost, while the table itself stays clean and rectangular.
+    grid_models = [pm for pm in page_models if pm is not None]
+    diseases = _assemble(grid_models)
+    table = _render(diseases)
+    leftover = "\n\n".join(p for p in plain_pages if p)
+    out = table + (("\n\n" + leftover) if leftover.strip() else "")
+    log.info("scanned_table_done", pages=len(grid_models), diseases=len(diseases))
+    return out or None

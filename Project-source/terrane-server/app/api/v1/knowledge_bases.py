@@ -380,15 +380,15 @@ async def _parse_by_tier(db: AsyncSession, data: bytes, mime: str, ext: str, tie
                     log.warning("vl_enhance_failed", error=str(e))
         if not text and mime == "application/pdf" and tier != "fast":
             # Scanned (no text layer) PDF dominated by a BORDERED TABLE: per-page OCR flattens cells into
-            # headings and detaches page-spanning rows, and whole-page VL guesses/garbles the grid. PRIMARY path:
-            # derive the grid from the ruling lines with OpenCV and OCR each cell region with RapidOCR, so every
-            # word lands in the cell that geometrically contains it (rectangular table, no cross-disease bleed,
-            # cross-page rows stitched, deterministic). VL stitch is only the fallback if grid detection fails.
+            # headings and detaches page-spanning rows, and whole-page VL guesses/garbles the grid AND is
+            # non-deterministic. AUTHORITATIVE path: derive the grid from the ruling lines with OpenCV and OCR
+            # each cell region with RapidOCR, so every word lands in the cell that geometrically contains it
+            # (rectangular table, fixed column schema, no cross-disease bleed, cross-page rows stitched,
+            # byte-deterministic). It NEVER falls back to the VL stitch: if no grid is found it returns
+            # deterministic plain per-page OCR itself, so this whole branch is byte-stable run-to-run.
             try:
                 if await run_in_threadpool(parse_vl.looks_like_scanned_table, data):
                     text = await run_in_threadpool(parse_scanned_table.parse_scanned_bordered_table, data)
-                    if not text:  # no usable grid found -> fall back to the VL multi-page stitch
-                        text = await parse_vl.parse_pdf_table_stitched(db, data)
             except Exception as e:  # noqa: BLE001
                 log.warning("scanned_table_failed", error=str(e))
         if not text:  # non-PDF, scanned PDF, or structure failed -> lexical
