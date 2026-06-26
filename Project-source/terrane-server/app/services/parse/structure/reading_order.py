@@ -69,6 +69,59 @@ def _density_axis(boxes: list[Box]) -> int:
     return 0 if tau > _DENSITY_TAU else 1
 
 
+_COL_SPAN_FRAC = 0.6      # a column gutter must run >= this fraction of the region height to be a real separator
+_COL_BALANCE_MIN = 0.12   # each side of a clean column split must hold >= this fraction of the boxes
+
+
+def _spanning_column_split(boxes: list[Box]) -> bool:
+    """True iff a CLEAN, (near-)full-height column gutter splits these boxes into balanced column blocks.
+
+    This is the fix for the multi-column reading-order defect: `_density_axis` cuts ROWS first whenever the
+    single column gutter's total whitespace is dwarfed by the many inter-line gaps (the normal case for
+    multi-paragraph body text — one ~35pt gutter vs many ~15pt line gaps), which interleaves the columns
+    (L1,R1,L2,R2,…). When a real full-height gutter exists we must take the VERTICAL (column) split FIRST,
+    regardless of that whitespace-area ratio, so each column is emitted whole (all-left-then-all-right).
+
+    A gutter qualifies only if it is genuinely column-like — NOT a paragraph indent or a stray gap:
+      * it is a vertical valley wide enough to be a real gutter (`_gap_threshold` on axis 0), AND
+      * no box straddles it (guaranteed by `_find_valleys`, which only reports empty bands), AND
+      * the boxes on each side of it vertically OVERLAP the same band — i.e. both columns occupy the
+        full height of the region (col_top<=region_top region and col_bottom>=region_bottom region), so it
+        is a side-by-side column boundary, not the gap between a top block and a bottom block, AND
+      * the split is balanced (neither side is a tiny sliver — rejects a lone wide caption + a paragraph).
+    Single-column pages have no such gutter (or only an unbalanced/short one) -> returns False -> the density
+    heuristic decides as before. Spanning headers are already pre-masked in Stage 1, so they never reach here.
+    """
+    if len(boxes) < 4:
+        return False
+    gutters = [v for v in _find_valleys(boxes, 0) if (v[1] - v[0]) >= _gap_threshold(boxes, 0)]
+    if not gutters:
+        return False
+    region_top = min(b.y0 for b in boxes)
+    region_bot = max(b.y1 for b in boxes)
+    region_h = region_bot - region_top
+    if region_h <= 0:
+        return False
+    n = len(boxes)
+    for gs, ge in gutters:
+        mid = (gs + ge) / 2.0
+        left = [b for b in boxes if b.cx <= mid]
+        right = [b for b in boxes if b.cx > mid]
+        if not left or not right:
+            continue
+        # balance: neither column is a sliver
+        if min(len(left), len(right)) < max(2, int(n * _COL_BALANCE_MIN)):
+            continue
+        # each side must span (near) the full region height -> they sit SIDE BY SIDE, not stacked.
+        def covers(side: list[Box]) -> bool:
+            top = min(b.y0 for b in side)
+            bot = max(b.y1 for b in side)
+            return (bot - top) >= _COL_SPAN_FRAC * region_h
+        if covers(left) and covers(right):
+            return True
+    return False
+
+
 def _xy_cut(boxes: list[Box], axis: int | None, out: list[Box], depth: int = 0) -> None:
     """Recursive XY-cut. Emits boxes into `out` in reading order (pre-order of the cut tree)."""
     if len(boxes) <= 1:
@@ -78,7 +131,12 @@ def _xy_cut(boxes: list[Box], axis: int | None, out: list[Box], depth: int = 0) 
         out.extend(sorted(boxes, key=lambda b: (b.y0, b.x0)))
         return
     if axis is None:
-        axis = _density_axis(boxes)
+        # A clean, full-height column gutter splitting the region into balanced columns takes the VERTICAL
+        # (column) split FIRST — multi-column body text normally has a gutter narrower than the line spacing,
+        # so the whitespace-area ratio in `_density_axis` must not veto a real column split (that ratio bug is
+        # what interleaved the columns). Only when there is no such clean spanning gutter do we fall back to the
+        # density heuristic for the genuinely ambiguous case.
+        axis = 0 if _spanning_column_split(boxes) else _density_axis(boxes)
 
     valleys = [v for v in _find_valleys(boxes, axis) if (v[1] - v[0]) >= _gap_threshold(boxes, axis)]
     if not valleys:

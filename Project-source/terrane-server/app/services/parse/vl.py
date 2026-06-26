@@ -84,16 +84,63 @@ def _longest_run(bits) -> int:
     return best
 
 
-def _bitmap_has_grid(pil) -> bool:
-    """Detect a bordered-table grid in a rendered page bitmap (pure PIL, no numpy).
+def _longest_run_extent(bits) -> tuple[int, int, int]:
+    """Longest consecutive True run as (length, start_index, end_index) — gives a ruling line's span so we can
+    test whether horizontal and vertical rules actually OVERLAP to bound real cells (not just exist apart)."""
+    best = cur = 0
+    bstart = bend = cstart = 0
+    for i, b in enumerate(bits):
+        if b:
+            if cur == 0:
+                cstart = i
+            cur += 1
+            if cur > best:
+                best, bstart, bend = cur, cstart, i
+        else:
+            cur = 0
+    return best, bstart, bend
 
-    Thin ruling lines blur away under area-averaging downscale, so resize with NEAREST (keeps a 1px line as a
-    continuous dark run) and look for a *long continuous dark run* per pixel row/column: >=3 rows with a run
-    covering >=60% of the width (horizontal rules) and >=2 columns with a run covering >=50% of the height
-    (vertical rules). That signature is a ruled table, not prose."""
+
+def _cluster_lines(values: list[int], tol: int) -> list[int]:
+    """Collapse near-identical ruling-line coordinates (within tol px) into one representative position. A thick
+    or double-drawn rule paints several adjacent pixel rows/cols; without clustering they'd count as many lines
+    and a single outer box would masquerade as a dense grid."""
+    if not values:
+        return []
+    vs = sorted(values)
+    groups: list[list[int]] = [[vs[0]]]
+    for v in vs[1:]:
+        if v - groups[-1][-1] <= tol:
+            groups[-1].append(v)
+        else:
+            groups.append([v])
+    return [sum(g) // len(g) for g in groups]
+
+
+_GRID_MIN_LINES = 3       # a real cell lattice needs >= this many DISTINCT horizontal AND vertical rules
+_GRID_MIN_CELLS = 6       # ... that intersect to bound >= this many closed rectangular cells
+_GRID_SPAN_FRAC = 0.55    # a counted rule must span >= this fraction of the table bbox's other dimension
+_GRID_BBOX_FRAC = 0.25    # the rule bbox must cover >= this fraction of the page (reject a tiny corner box)
+
+
+def _bitmap_has_grid(pil) -> bool:
+    """Detect a REAL bordered-table cell lattice in a rendered page bitmap (pure PIL, no numpy).
+
+    The old gate (>=3 long horizontal runs AND >=2 long vertical runs, counted independently) FALSE-FIRED on
+    dense formula/textbook scans and grid/lined notebook paper: dense text rows produce many long horizontal
+    dark runs, a page-margin box or a couple of column rules produce the verticals, and the two were never
+    required to actually intersect into cells. So a page with ZERO tables routed to the per-cell-OCR scanned
+    table path, which flattens dense math.
+
+    This requires evidence of a genuine table border lattice: enough DISTINCT long horizontal AND distinct long
+    vertical rules that INTERSECT — i.e. the verticals span (most of) the table height and the horizontals span
+    (most of) its width within one bounding box — forming >= `_GRID_MIN_CELLS` closed rectangular cells. A bare
+    outer box (2 distinct rules per axis) or a column of margin ticks scores False; only a true >=3x3 ruled grid
+    passes. Thin ruling lines blur away under area-averaging downscale, so resize NEAREST (keeps a 1px line as a
+    continuous dark run)."""
     from PIL import Image
     g = pil.convert("L")
-    W = 800
+    W = 900
     if g.width > W:
         g = g.resize((W, max(1, int(g.height * W / g.width))), Image.NEAREST)
     w, h = g.size
@@ -101,9 +148,47 @@ def _bitmap_has_grid(pil) -> bool:
         return False
     px = g.load()
     thr = 160  # ink darker than this
-    h_lines = sum(1 for y in range(h) if _longest_run(px[x, y] < thr for x in range(w)) >= 0.6 * w)
-    v_lines = sum(1 for x in range(w) if _longest_run(px[x, y] < thr for y in range(h)) >= 0.5 * h)
-    return h_lines >= 3 and v_lines >= 2
+
+    # Long ruling lines WITH their extent (so we can test intersection, not mere existence).
+    h_rules: list[tuple[int, int, int]] = []  # (y, x_start, x_end)
+    for y in range(h):
+        ln, s, e = _longest_run_extent([px[x, y] < thr for x in range(w)])
+        if ln >= 0.55 * w:
+            h_rules.append((y, s, e))
+    v_rules: list[tuple[int, int, int]] = []  # (x, y_start, y_end)
+    for x in range(w):
+        ln, s, e = _longest_run_extent([px[x, y] < thr for y in range(h)])
+        if ln >= 0.45 * h:
+            v_rules.append((x, s, e))
+    if not h_rules or not v_rules:
+        return False
+
+    tol_h = max(3, h // 120)
+    tol_v = max(3, w // 120)
+    hy = _cluster_lines([y for y, _, _ in h_rules], tol_h)   # distinct horizontal line positions
+    vx = _cluster_lines([x for x, _, _ in v_rules], tol_v)   # distinct vertical line positions
+    if len(hy) < _GRID_MIN_LINES or len(vx) < _GRID_MIN_LINES:
+        return False  # a single outer box (2x2) or margin pair is NOT a lattice
+
+    # Bounding box of the rule lattice; reject a tiny localized box (e.g. a stamp/logo frame).
+    y_top, y_bot = min(hy), max(hy)
+    x_left, x_right = min(vx), max(vx)
+    table_h, table_w = y_bot - y_top, x_right - x_left
+    if table_h < _GRID_BBOX_FRAC * h or table_w < _GRID_BBOX_FRAC * w:
+        return False
+
+    # Count rules that actually SPAN the bbox -> they are true table separators that intersect to bound cells.
+    def v_span(xc: int) -> int:
+        return max((min(e, y_bot) - max(s, y_top)) for x, s, e in v_rules if abs(x - xc) <= tol_v)
+
+    def h_span(yc: int) -> int:
+        return max((min(e, x_right) - max(s, x_left)) for y, s, e in h_rules if abs(y - yc) <= tol_h)
+
+    spanning_v = sum(1 for xc in vx if v_span(xc) >= _GRID_SPAN_FRAC * table_h)
+    spanning_h = sum(1 for yc in hy if h_span(yc) >= _GRID_SPAN_FRAC * table_w)
+    closed_cells = max(0, spanning_h - 1) * max(0, spanning_v - 1)
+    return (spanning_h >= _GRID_MIN_LINES and spanning_v >= _GRID_MIN_LINES
+            and closed_cells >= _GRID_MIN_CELLS)
 
 
 def looks_like_scanned_table(pdf_bytes: bytes, max_check: int = 6) -> bool:
