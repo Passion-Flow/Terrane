@@ -1,8 +1,10 @@
-# Terrane API (frontend) -- Python 3.13 + uv. CPU-only (incl. Terrane Parse: PyMuPDF/Office, no GPU).
+# Terrane API (frontend) -- Python 3.13 + uv. CPU-only (incl. Terrane Parse: pypdfium2/pdfplumber/RapidOCR/Office, no GPU).
 FROM python:3.13-slim AS base
 
 # Runtime system dependencies:
-#  - ca/curl + ffmpeg (video parsing: frame/audio-track extraction; the PyMuPDF wheel bundles the rest)
+#  - ca/curl + ffmpeg (video parsing: scene/keyframe + audio-track extraction via PySceneDetect/ffmpeg)
+#  - libgl1 + libglib2.0-0: OpenCV runtime libs. rapidocr-onnxruntime pulls the FULL opencv-python, whose
+#    cv2 imports libGL.so.1 / libglib at load time; without these the container crashes on `import cv2`.
 #  - libreoffice (headless) + CJK fonts: Office (docx/xlsx/pptx) -> PDF -> per-page WebP layout preview
 # At build time, switch to the Aliyun Debian mirror (reliable direct connection / faster; affects the build stage only, the final image carries no apt-source difference).
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' \
@@ -10,6 +12,7 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors
     apt-get -o Acquire::Retries=8 update && \
     apt-get -o Acquire::Retries=8 -o Acquire::http::Pipeline-Depth=0 install -y --no-install-recommends \
         ca-certificates curl ffmpeg \
+        libgl1 libglib2.0-0 \
         libreoffice-impress libreoffice-writer libreoffice-calc \
         fonts-noto-cjk fonts-noto-core \
     && rm -rf /var/lib/apt/lists/*
