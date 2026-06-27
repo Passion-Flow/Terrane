@@ -387,7 +387,7 @@ def _parse_xlsx(path: str) -> str:
         if zf is not None:
             part = sheet_part.get(ws.title)
             if part:
-                block, n_nodes, n_edges = xlsx_drawing.extract_sheet_flow(zf, part)
+                block, n_nodes, n_edges = xlsx_drawing.extract_sheet_flow(zf, part, ws)
                 if block:
                     log.info("xlsx_flow_extracted", sheet=ws.title, nodes=n_nodes, edges=n_edges)
                     section.append(block)
